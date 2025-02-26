@@ -1,152 +1,169 @@
 import { 
-    App,
-    Editor,
-    EditorPosition,
-    EditorSuggest,
-    EditorSuggestContext,
-    EditorSuggestTriggerInfo,
     Plugin,
     MarkdownView
 } from 'obsidian';
 
-interface Article {
-    id: string;
-    title: string;
-    kind: 'Writing' | 'Question' | 'Insight' | 'Subject';
-    ledeHtml: string;
-    authorId: number;
-    orgId: number;
-    isWorkspace: boolean;
-    createdAt: string;
-    updatedAt: string;
-}
-
-interface APIResponse {
-    total: number;
-    limit: number;
-    offset: number;
-    hasMore: boolean;
-    page: number;
-    totalPages: number;
-    nextPage: number;
-    previousPage: number;
-    items: Article[];
-}
-
-class ArticleSuggester extends EditorSuggest<Article> {
-    private plugin: ArticleSuggestPlugin;
-
-    constructor(app: App, plugin: ArticleSuggestPlugin) {
-        super(app);
-        this.plugin = plugin;
-    }
-
-    onTrigger(
-        cursor: EditorPosition,
-        editor: Editor
-    ): EditorSuggestTriggerInfo | null {
-        const line = editor.getLine(cursor.line);
-        const trigger = '\\@';
-        
-        const triggerIndex = line.lastIndexOf(trigger, cursor.ch);
-        if (triggerIndex === -1) return null;
-
-        const query = line.slice(triggerIndex + trigger.length, cursor.ch);
-        return {
-            start: {
-                line: cursor.line,
-                ch: triggerIndex,
-            },
-            end: cursor,
-            query,
-        };
-    }
-
-    async getSuggestions(context: EditorSuggestContext): Promise<Article[]> {
-        const query = context.query.trim();
-        try {
-            const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
-            const url = `http://localhost:8002/api/articles?kind=${kinds}&query=${encodeURIComponent(query)}`;
-            
-            const response = await fetch(url);
-            if (!response.ok) return [];
-
-            const data: APIResponse = await response.json();
-            return data.items || [];
-        } catch (error) {
-            console.error('Error fetching suggestions:', error);
-            return [];
-        }
-    }
-
-    renderSuggestion(article: Article, el: HTMLElement): void {
-        const container = createDiv({
-            cls: 'suggestion-item',
-            parent: el
-        });
-
-        const titleRow = container.createDiv({ cls: 'suggestion-title-row' });
-        
-        titleRow.createDiv({
-            text: article.title,
-            cls: 'suggestion-title'
-        });
-
-        titleRow.createDiv({
-            text: article.kind,
-            cls: 'suggestion-kind'
-        });
-
-        if (article.ledeHtml) {
-            const plainLede = article.ledeHtml.replace(/<[^>]*>/g, '');
-            container.createDiv({
-                text: plainLede.length > 60 ? plainLede.slice(0, 60) + '...' : plainLede,
-                cls: 'suggestion-lede'
-            });
-        }
-    }
-
-    selectSuggestion(article: Article, evt: MouseEvent | KeyboardEvent): void {
-        if (!this.context) return;
-
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        if (!activeView) return;
-
-        activeView.editor.replaceRange(
-            `[[${article.id}]]`,
-            this.context.start,
-            this.context.end
-        );
-    }
-}
-
-export default class ArticleSuggestPlugin extends Plugin {
-    private suggester: ArticleSuggester;
-
+export default class IdealogsArticleSuggestions extends Plugin {
     async onload() {
-        this.suggester = new ArticleSuggester(this.app, this);
-        this.registerEditorSuggest(this.suggester);
+        console.log('Loading Enhanced Link Suggestions plugin');
+
         this.loadStyles();
+
+        // @ts-ignore
+        const defaultLinkSuggester = this.app.workspace.editorSuggest.suggests[0];
+        if (!defaultLinkSuggester) {
+            console.error('Could not find default link suggester');
+            return;
+        }
+
+        // original methods
+        const originalGetSuggestions = defaultLinkSuggester.getSuggestions;
+        const originalRenderSuggestion = defaultLinkSuggester.renderSuggestion;
+        const originalSelectSuggestion = defaultLinkSuggester.selectSuggestion;
+
+        // @ts-ignore
+        defaultLinkSuggester.getSuggestions = async function(context) {
+            const query = context.query;
+            console.log('Link suggestion query:', query);
+
+            if (query && query.startsWith('\\@')) {
+                console.log('Detected \\@ pattern, fetching articles');
+                
+                try {
+                    const searchTerm = query.substring(2);
+                    console.log('Searching for:', searchTerm);
+                    
+                    const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
+                    const url = `http://localhost:8002/api/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        console.error('API request failed:', response.statusText);
+                        return originalGetSuggestions.call(this, context);
+                    }
+
+                    const data = await response.json();
+                    
+                    if (!data.items || !data.items.length) {
+                        console.log('No articles found');
+                        return originalGetSuggestions.call(this, context);
+                    }
+                    
+                    // @ts-ignore
+                    const articleSuggestions = data.items.map(article => ({
+                        type: "special-article",
+                        article: article,
+                        path: article.title,
+                        alias: article.title,
+                        score: 100,  // TODO :: Add our own article score
+                    }));
+                    
+                    
+                    return Promise.resolve(articleSuggestions);
+                } catch (error) {
+                    console.error('Error fetching suggestions:', error);
+                }
+            }
+            
+            return originalGetSuggestions.call(this, context);
+        };
+
+        // @ts-ignore
+        defaultLinkSuggester.renderSuggestion = function(suggestion, el) {
+            if (suggestion.type === "special-article") {
+                
+                const article = suggestion.article;
+                el.addClass('article-suggestion-item');
+                
+                const container = el.createDiv({ cls: 'article-suggestion-container' });
+                
+                const titleRow = container.createDiv({ cls: 'article-title-row' });
+                titleRow.createDiv({ 
+                    cls: 'article-title',
+                    text: article.title
+                });
+                
+                titleRow.createDiv({
+                    cls: 'article-kind',
+                    text: article.kind
+                });
+                
+                return;
+            }
+            
+            originalRenderSuggestion.call(this, suggestion, el);
+        };
+
+        // @ts-ignore
+        defaultLinkSuggester.selectSuggestion = function(suggestion, evt) {
+            if (suggestion.type === "special-article") {
+                console.log('Selected article:', suggestion.article.id);
+                
+                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (!view) return;
+                
+                const editor = view.editor;
+                const cursor = editor.getCursor();
+                
+                const line = editor.getLine(cursor.line);
+                const linkStart = line.lastIndexOf('[[', cursor.ch);
+                
+                if (linkStart >= 0) {
+                    const line = editor.getLine(cursor.line);
+                    const textAfterCursor = line.substring(cursor.ch);
+                    const hasClosingBrackets = textAfterCursor.startsWith(']]');
+                    
+                    let endPos = cursor;
+                    if (hasClosingBrackets) {
+                        endPos = { line: cursor.line, ch: cursor.ch + 2 };
+                    }
+                    
+                    const articleLink = `[[${suggestion.article.id}]]`;
+                    
+                    editor.replaceRange(
+                        articleLink,
+                        { line: cursor.line, ch: linkStart },
+                        endPos
+                    );
+                    
+                    editor.setCursor({
+                        line: cursor.line,
+                        ch: linkStart + articleLink.length
+                    });
+                    
+                    // @ts-ignore
+                    this.close();
+                }
+                
+                return;
+            }
+            
+            originalSelectSuggestion.call(this, suggestion, evt);
+        };
+
+        console.log('Enhanced Link Suggestions plugin loaded');
     }
 
     private loadStyles() {
         const styleEl = document.createElement('style');
         styleEl.textContent = `
-            .suggestion-item {
-                padding: 8px 10px;
-                
+            .article-suggestion-item {
+                padding: 0 !important;
             }
-            .suggestion-title-row {
+            .article-suggestion-container {
+                padding: 8px 10px;
+            }
+            .article-title-row {
                 display: flex;
                 align-items: center;
                 gap: 8px;
                 margin-bottom: 4px;
             }
-            .suggestion-title {
+            .article-title {
                 font-weight: 500;
                 flex-grow: 1;
             }
-            .suggestion-kind {
+            .article-kind {
                 font-size: 0.7em;
                 padding: 2px 6px;
                 border-radius: 4px;
@@ -155,15 +172,16 @@ export default class ArticleSuggestPlugin extends Plugin {
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
             }
-            .suggestion-lede {
+            .article-lede {
                 font-size: 0.85em;
                 color: var(--text-muted);
                 line-height: 1.4;
             }
-            .suggestion-item.is-selected {
-                background-color: var(--background-modifier-hover);
-            }
         `;
         document.head.appendChild(styleEl);
+    }
+
+    onunload() {
+        console.log('Unloading Idealogs Link Suggestions plugin');
     }
 }
