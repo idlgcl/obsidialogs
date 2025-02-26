@@ -1,6 +1,7 @@
 import { 
     Plugin,
-    MarkdownView
+    MarkdownView,
+    normalizePath
 } from 'obsidian';
 
 export default class IdealogsArticleSuggestions extends Plugin {
@@ -9,7 +10,7 @@ export default class IdealogsArticleSuggestions extends Plugin {
 
         this.loadStyles();
 
-        // @ts-ignore
+        // @ts-ignore - Accessing private API
         const defaultLinkSuggester = this.app.workspace.editorSuggest.suggests[0];
         if (!defaultLinkSuggester) {
             console.error('Could not find default link suggester');
@@ -55,7 +56,7 @@ export default class IdealogsArticleSuggestions extends Plugin {
                         article: article,
                         path: article.title,
                         alias: article.title,
-                        score: 100,  // TODO :: Add our own article score
+                        score: 100,  // Hack the score
                     }));
                     
                     
@@ -94,8 +95,11 @@ export default class IdealogsArticleSuggestions extends Plugin {
             originalRenderSuggestion.call(this, suggestion, el);
         };
 
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const pluginRef = this;
+
         // @ts-ignore
-        defaultLinkSuggester.selectSuggestion = function(suggestion, evt) {
+        defaultLinkSuggester.selectSuggestion = async function(suggestion, evt) {
             if (suggestion.type === "special-article") {
                 console.log('Selected article:', suggestion.article.id);
                 
@@ -130,6 +134,12 @@ export default class IdealogsArticleSuggestions extends Plugin {
                         line: cursor.line,
                         ch: linkStart + articleLink.length
                     });
+
+                    try {
+                        await saveArticleToJson.call(pluginRef, suggestion.article);
+                    } catch (error) {
+                        console.error('Error saving article to JSON:', error);
+                    }
                     
                     // @ts-ignore
                     this.close();
@@ -183,5 +193,49 @@ export default class IdealogsArticleSuggestions extends Plugin {
 
     onunload() {
         console.log('Unloading Idealogs Link Suggestions plugin');
+    }
+}
+
+async function saveArticleToJson(article: { id: string; title: string; }) {
+    console.log('Saving article to JSON:', article.id, article.title);
+    
+    const folderPath = '.idealogs';
+    const filePath = normalizePath(`${folderPath}/articles.json`);
+    
+    if (!await this.app.vault.adapter.exists(folderPath)) {
+        console.log(`Creating folder: ${folderPath}`);
+        await this.app.vault.createFolder(folderPath);
+    }
+    
+    const articleData = {
+        id: article.id,
+        title: article.title
+    };
+    
+    let articles = [];
+    
+    if (await this.app.vault.adapter.exists(filePath)) {
+        console.log(`Reading existing file: ${filePath}`);
+        const fileContent = await this.app.vault.adapter.read(filePath);
+        
+        try {
+            articles = JSON.parse(fileContent);
+        } catch (error) {
+            console.error('Error parsing existing JSON file:', error);
+            articles = [];
+        }
+    } else {
+        console.log(`File doesn't exist, will create: ${filePath}`);
+    }
+    
+    const articleExists = articles.some((item: { id: string; }) => item.id === articleData.id);
+    
+    if (!articleExists) {
+        console.log(`Adding new article to list: ${articleData.id}`);
+        articles.push(articleData);
+        
+        console.log(`Writing ${articles.length} articles to file`);
+        await this.app.vault.adapter.write(filePath, JSON.stringify(articles, null, 2));
+        console.log('Successfully saved article to JSON file');
     }
 }
