@@ -1,7 +1,8 @@
 import { 
     Plugin,
     MarkdownView,
-    normalizePath
+    normalizePath,
+    TFile
 } from 'obsidian';
 
 export default class IdealogsArticleSuggestions extends Plugin {
@@ -151,7 +152,49 @@ export default class IdealogsArticleSuggestions extends Plugin {
             originalSelectSuggestion.call(this, suggestion, evt);
         };
 
-        console.log('Enhanced Link Suggestions plugin loaded');
+        this.registerEvent(
+            this.app.workspace.on('file-open', (file) => {
+                if (!file) return;
+                console.log('File opened:', file.path);
+                
+                if (file instanceof TFile && file.extension === 'md') {
+                    this.handleMarkdownFileOpen(file);
+                }
+            })
+        );
+
+        console.log('Idealogs Link Suggestions plugin loaded');
+    }
+
+    private async handleMarkdownFileOpen(file: TFile) {
+
+        const patterns = ['Ix', '0x', 'Tx', 'Fx'];
+        const isIdealogsFile = patterns.some(pattern => file.basename.startsWith(pattern));
+        
+        if (!isIdealogsFile) return;
+
+
+        try {
+            const url = `http://localhost:8002/api/commits/head/${file.basename}/Content`;
+            console.log(`Fetching content from: ${url}`);
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                console.error(`API request failed: ${response.status} ${response.statusText}`);
+                return;
+            }
+            
+            const data = await response.json();
+            
+            if (data && data.content) {
+                await this.app.vault.modify(file, data.content);
+            } else {
+                console.error(`No content received for ${file.basename}`);
+            }
+        } catch (error) {
+            console.error('Error fetching or updating content:', error);
+        }
     }
 
     private loadStyles() {
