@@ -5,6 +5,8 @@ import {
     TFile
 } from 'obsidian';
 
+const API_ENDPOINT = 'http://localhost:8002/api';
+
 export default class IdealogsArticleSuggestions extends Plugin {
     async onload() {
         this.loadStyles();
@@ -30,7 +32,7 @@ export default class IdealogsArticleSuggestions extends Plugin {
                     const searchTerm = query.substring(2);
                     
                     const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
-                    const url = `http://localhost:8002/api/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
+                    const url = `${API_ENDPOINT}/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
                     
                     const response = await fetch(url);
                     if (!response.ok) {
@@ -166,8 +168,8 @@ export default class IdealogsArticleSuggestions extends Plugin {
 
 
         try {
-            const url = `http://localhost:8002/api/commits/head/${file.basename}/Content`;
-            console.log(`Fetching content from: ${url}`);
+            const url = `${API_ENDPOINT}/api/commits/head/${file.basename}/Content`;
+            console.log(`Fetching content for: ${file.basename}`);
             
             const response = await fetch(url);
             
