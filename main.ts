@@ -7,11 +7,9 @@ import {
 
 export default class IdealogsArticleSuggestions extends Plugin {
     async onload() {
-        console.log('Loading Enhanced Link Suggestions plugin');
-
         this.loadStyles();
 
-        // @ts-ignore - Accessing private API
+        // @ts-ignore
         const defaultLinkSuggester = this.app.workspace.editorSuggest.suggests[0];
         if (!defaultLinkSuggester) {
             console.error('Could not find default link suggester');
@@ -26,14 +24,10 @@ export default class IdealogsArticleSuggestions extends Plugin {
         // @ts-ignore
         defaultLinkSuggester.getSuggestions = async function(context) {
             const query = context.query;
-            console.log('Link suggestion query:', query);
 
             if (query && query.startsWith('\\@')) {
-                console.log('Detected \\@ pattern, fetching articles');
-                
                 try {
                     const searchTerm = query.substring(2);
-                    console.log('Searching for:', searchTerm);
                     
                     const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
                     const url = `http://localhost:8002/api/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
@@ -47,7 +41,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
                     const data = await response.json();
                     
                     if (!data.items || !data.items.length) {
-                        console.log('No articles found');
                         return originalGetSuggestions.call(this, context);
                     }
                     
@@ -102,8 +95,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
         // @ts-ignore
         defaultLinkSuggester.selectSuggestion = async function(suggestion, evt) {
             if (suggestion.type === "special-article") {
-                console.log('Selected article:', suggestion.article.id);
-                
                 const view = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (!view) return;
                 
@@ -225,11 +216,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
             }
-            .article-lede {
-                font-size: 0.85em;
-                color: var(--text-muted);
-                line-height: 1.4;
-            }
         `;
         document.head.appendChild(styleEl);
     }
@@ -246,7 +232,6 @@ async function saveArticleToJson(article: { id: string; title: string; }) {
     const filePath = normalizePath(`${folderPath}/articles.json`);
     
     if (!await this.app.vault.adapter.exists(folderPath)) {
-        console.log(`Creating folder: ${folderPath}`);
         await this.app.vault.createFolder(folderPath);
     }
     
@@ -258,7 +243,6 @@ async function saveArticleToJson(article: { id: string; title: string; }) {
     let articles = [];
     
     if (await this.app.vault.adapter.exists(filePath)) {
-        console.log(`Reading existing file: ${filePath}`);
         const fileContent = await this.app.vault.adapter.read(filePath);
         
         try {
@@ -274,10 +258,7 @@ async function saveArticleToJson(article: { id: string; title: string; }) {
     const articleExists = articles.some((item: { id: string; }) => item.id === articleData.id);
     
     if (!articleExists) {
-        console.log(`Adding new article to list: ${articleData.id}`);
         articles.push(articleData);
-        
-        console.log(`Writing ${articles.length} articles to file`);
         await this.app.vault.adapter.write(filePath, JSON.stringify(articles, null, 2));
         console.log('Successfully saved article to JSON file');
     }
