@@ -27,9 +27,9 @@ export default class IdealogsArticleSuggestions extends Plugin {
         defaultLinkSuggester.getSuggestions = async function(context) {
             const query = context.query;
 
-            if (query && query.startsWith('\\@')) {
+            if (query && query.startsWith('@')) {
                 try {
-                    const searchTerm = query.substring(2);
+                    const searchTerm = query.substring(1);
                     
                     const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
                     const url = `${API_ENDPOINT}/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
@@ -168,7 +168,7 @@ export default class IdealogsArticleSuggestions extends Plugin {
 
 
         try {
-            const url = `${API_ENDPOINT}/api/commits/head/${file.basename}/Content`;
+            const url = `${API_ENDPOINT}/commits/head/${file.basename}/Content`;
             console.log(`Fetching content for: ${file.basename}`);
             
             const response = await fetch(url);
