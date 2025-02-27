@@ -8,6 +8,8 @@ import {
 const API_ENDPOINT = 'http://localhost:8002/api';
 
 export default class IdealogsArticleSuggestions extends Plugin {
+    private currentIdealogsFile: TFile | null = null;
+    
     async onload() {
         this.loadStyles();
 
@@ -148,10 +150,53 @@ export default class IdealogsArticleSuggestions extends Plugin {
         this.registerEvent(
             this.app.workspace.on('file-open', (file) => {
                 if (!file) return;
+                
                 console.log('File opened:', file.path);
                 
+                if (this.currentIdealogsFile && 
+                    file instanceof TFile && 
+                    file.path !== this.currentIdealogsFile.path) {
+                    console.log(`Deleting previous Idealogs file after switching: ${this.currentIdealogsFile.path}`);
+                    try {
+                        this.app.vault.delete(this.currentIdealogsFile);
+                    } catch (error) {
+                        console.error('Error deleting Idealogs file:', error);
+                    }
+                    this.currentIdealogsFile = null;
+                }
+                
                 if (file instanceof TFile && file.extension === 'md') {
-                    this.handleMarkdownFileOpen(file);
+                    const patterns = ['Ix', '0x', 'Tx', 'Fx'];
+                    const isIdealogsFile = patterns.some(pattern => file.basename.startsWith(pattern));
+                    
+                    if (isIdealogsFile) {
+                        this.currentIdealogsFile = file;
+                        this.handleMarkdownFileOpen(file);
+                    }
+                }
+            })
+        );
+        
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', () => {
+                if (!this.currentIdealogsFile) return;
+                
+                const stillOpen = this.app.workspace.getLeavesOfType('markdown')
+                    .some(leaf => {
+                        const view = leaf.view;
+                        return view instanceof MarkdownView && 
+                               view.file && 
+                               view.file.path === this.currentIdealogsFile?.path;
+                    });
+                
+                if (!stillOpen) {
+                    console.log(`Deleting closed Idealogs file: ${this.currentIdealogsFile.path}`);
+                    try {
+                        this.app.vault.delete(this.currentIdealogsFile);
+                    } catch (error) {
+                        console.error('Error deleting Idealogs file:', error);
+                    }
+                    this.currentIdealogsFile = null;
                 }
             })
         );
@@ -160,12 +205,10 @@ export default class IdealogsArticleSuggestions extends Plugin {
     }
 
     private async handleMarkdownFileOpen(file: TFile) {
-
         const patterns = ['Ix', '0x', 'Tx', 'Fx'];
         const isIdealogsFile = patterns.some(pattern => file.basename.startsWith(pattern));
         
         if (!isIdealogsFile) return;
-
 
         try {
             const url = `${API_ENDPOINT}/commits/head/${file.basename}/Content`;
@@ -223,6 +266,15 @@ export default class IdealogsArticleSuggestions extends Plugin {
     }
 
     onunload() {
+        if (this.currentIdealogsFile) {
+            try {
+                this.app.vault.delete(this.currentIdealogsFile);
+            } catch (error) {
+                console.error('Error deleting Idealogs file during plugin unload:', error);
+            }
+            this.currentIdealogsFile = null;
+        }
+        
         console.log('Unloading Idealogs Link Suggestions plugin');
     }
 }
