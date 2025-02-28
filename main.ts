@@ -3,7 +3,6 @@ import {
     MarkdownView,
     normalizePath,
     TFile,
-    Notice
 } from 'obsidian';
 
 const API_ENDPOINT = 'http://localhost:8002/api';
@@ -173,6 +172,8 @@ export default class IdealogsArticleSuggestions extends Plugin {
                     if (isIdealogsFile) {
                         this.currentIdealogsFile = file;
                         this.handleMarkdownFileOpen(file);
+                    } else {
+                        this.setViewToEditMode(file);
                     }
                 }
             })
@@ -227,8 +228,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
             if (data && data.content) {
                 await this.app.vault.modify(file, data.content);
                 
-                new Notice('Using read mode for Idealogs article.');
-                
                 this.setViewToReadOnly(file);
             } else {
                 console.error(`No content received for ${file.basename}`);
@@ -248,6 +247,24 @@ export default class IdealogsArticleSuggestions extends Plugin {
                     view.file.path === file.path) {
                     
                     if (view.getMode() !== 'preview') {
+                        // @ts-ignore
+                        this.app.commands.executeCommandById('markdown:toggle-preview');
+                    }
+                }
+            }
+        }, 100);
+    }
+    
+    private setViewToEditMode(file: TFile) {
+        setTimeout(() => {
+            const leaves = this.app.workspace.getLeavesOfType('markdown');
+            for (const leaf of leaves) {
+                const view = leaf.view;
+                if (view instanceof MarkdownView && 
+                    view.file && 
+                    view.file.path === file.path) {
+                    
+                    if (view.getMode() !== 'source') {
                         // @ts-ignore
                         this.app.commands.executeCommandById('markdown:toggle-preview');
                     }
