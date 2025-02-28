@@ -2,7 +2,8 @@ import {
     Plugin,
     MarkdownView,
     normalizePath,
-    TFile
+    TFile,
+    Notice
 } from 'obsidian';
 
 const API_ENDPOINT = 'http://localhost:8002/api';
@@ -225,12 +226,34 @@ export default class IdealogsArticleSuggestions extends Plugin {
             
             if (data && data.content) {
                 await this.app.vault.modify(file, data.content);
+                
+                new Notice('Using read mode for Idealogs article.');
+                
+                this.setViewToReadOnly(file);
             } else {
                 console.error(`No content received for ${file.basename}`);
             }
         } catch (error) {
             console.error('Error fetching or updating content:', error);
         }
+    }
+    
+    private setViewToReadOnly(file: TFile) {
+        setTimeout(() => {
+            const leaves = this.app.workspace.getLeavesOfType('markdown');
+            for (const leaf of leaves) {
+                const view = leaf.view;
+                if (view instanceof MarkdownView && 
+                    view.file && 
+                    view.file.path === file.path) {
+                    
+                    if (view.getMode() !== 'preview') {
+                        // @ts-ignore
+                        this.app.commands.executeCommandById('markdown:toggle-preview');
+                    }
+                }
+            }
+        }, 100);
     }
 
     private loadStyles() {
