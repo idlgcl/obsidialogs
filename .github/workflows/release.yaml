@@ -19,14 +19,18 @@ jobs:
         with:
           node-version: "18.x"
 
-      - name: Update API endpoint
-        run: |
-          sed -i "s|const API_ENDPOINT = 'http://localhost:8002/api';|const API_ENDPOINT = '${{ vars.ARTICLES_URL }}';|g" main.ts
+      - name: Install dependencies
+        run: npm install
 
       - name: Build plugin
+        env:
+          API_ENDPOINT: ${{ vars.ARTICLES_URL }}
+        run: npm run build
+
+      - name: Verify API endpoint
         run: |
-          npm install
-          npm run build
+          echo "Checking compiled main.js for the API endpoint"
+          grep -a "${{ vars.ARTICLES_URL }}" main.js || echo "API endpoint not found in compiled code!"
 
       - name: Create release
         env:
