@@ -152,12 +152,10 @@ export default class IdealogsArticleSuggestions extends Plugin {
             this.app.workspace.on('file-open', (file) => {
                 if (!file) return;
                 
-                console.log('File opened:', file.path);
                 
                 if (this.currentIdealogsFile && 
                     file instanceof TFile && 
                     file.path !== this.currentIdealogsFile.path) {
-                    console.log(`Deleting previous Idealogs file after switching: ${this.currentIdealogsFile.path}`);
                     try {
                         this.app.vault.delete(this.currentIdealogsFile);
                     } catch (error) {
@@ -193,7 +191,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
                     });
                 
                 if (!stillOpen) {
-                    console.log(`Deleting closed Idealogs file: ${this.currentIdealogsFile.path}`);
                     try {
                         this.app.vault.delete(this.currentIdealogsFile);
                     } catch (error) {
@@ -203,8 +200,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
                 }
             })
         );
-
-        console.log('Idealogs Link Suggestions plugin loaded');
     }
 
     private async handleMarkdownFileOpen(file: TFile) {
@@ -215,7 +210,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
 
         try {
             const url = `${API_ENDPOINT}/commits/head/${file.basename}/Content`;
-            console.log(`Fetching content for: ${file.basename}`);
             
             const response = await fetch(url);
             
@@ -286,14 +280,10 @@ export default class IdealogsArticleSuggestions extends Plugin {
             }
             this.currentIdealogsFile = null;
         }
-        
-        console.log('Unloading Idealogs Link Suggestions plugin');
     }
 }
 
 async function saveArticleToJson(article: { id: string; title: string; }) {
-    console.log('Saving article to JSON:', article.id, article.title);
-    
     const folderPath = '.idealogs';
     const filePath = normalizePath(`${folderPath}/articles.json`);
     
@@ -317,8 +307,6 @@ async function saveArticleToJson(article: { id: string; title: string; }) {
             console.error('Error parsing existing JSON file:', error);
             articles = [];
         }
-    } else {
-        console.log(`File doesn't exist, will create: ${filePath}`);
     }
     
     const articleExists = articles.some((item: { id: string; }) => item.id === articleData.id);
@@ -326,6 +314,5 @@ async function saveArticleToJson(article: { id: string; title: string; }) {
     if (!articleExists) {
         articles.push(articleData);
         await this.app.vault.adapter.write(filePath, JSON.stringify(articles, null, 2));
-        console.log('Successfully saved article to JSON file');
     }
 }
