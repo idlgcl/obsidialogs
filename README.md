@@ -1,4 +1,4 @@
-# Idealogs Article Suggestions for Obsidian
+# Idealogs Article Suggestions
 
 Insert and view Idealogs articles directly from Obsidian.
 
@@ -15,5 +15,5 @@ Insert and view Idealogs articles directly from Obsidian.
 
 ## Notes
 
-- This version connects to the Idealogs API endpoint 
+- This plugin connects to the Idealogs API endpoint 
 - Files are automatically cleaned up when no longer in view
