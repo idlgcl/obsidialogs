@@ -275,35 +275,6 @@ export default class IdealogsArticleSuggestions extends Plugin {
     }
 
     private loadStyles() {
-        const styleEl = document.createElement('style');
-        styleEl.textContent = `
-            .article-suggestion-item {
-                padding: 0 !important;
-            }
-            .article-suggestion-container {
-                padding: 8px 10px;
-            }
-            .article-title-row {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 4px;
-            }
-            .article-title {
-                font-weight: 500;
-                flex-grow: 1;
-            }
-            .article-kind {
-                font-size: 0.7em;
-                padding: 2px 6px;
-                border-radius: 4px;
-                background: var(--background-modifier-border);
-                color: var(--text-muted);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-        `;
-        document.head.appendChild(styleEl);
     }
 
     onunload() {
