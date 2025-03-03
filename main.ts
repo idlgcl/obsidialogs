@@ -9,7 +9,7 @@ import {
     TFile
 } from 'obsidian';
 
-// @ts-ignore
+// @ts-ignore - api url updated on build
 const API_ENDPOINT = API_ENDPOINT_VALUE;
 
 interface ArticleResponse {
@@ -204,6 +204,17 @@ export default class ArticleSuggestPlugin extends Plugin {
             })
         );
     }
+
+    onunload() {
+        if (this.currentIdealogsFile) {
+          try {
+            this.app.vault.delete(this.currentIdealogsFile);
+          } catch (error) {
+            console.error('Error deleting Idealogs file during unload:', error);
+          }
+          this.currentIdealogsFile = null;
+        }
+      }
     
     private patchDefaultSuggester() {
         setTimeout(() => {
@@ -250,8 +261,10 @@ export default class ArticleSuggestPlugin extends Plugin {
             const data = await response.json();
             
             if (data && data.content) {
-                await this.app.vault.modify(file, data.content);
-                
+                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (view && view.file && view.file.path === file.path) {
+                    view.editor.setValue(data.content);
+                }
                 this.setViewToReadOnly(file);
             } else {
                 console.error(`No content received for ${file.basename}`);
