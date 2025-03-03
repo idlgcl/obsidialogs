@@ -5,7 +5,7 @@ Insert and view Idealogs articles directly from Obsidian.
 ## Features
 
 - **Idealogs Article Suggestions**: Type `[[@` to get article suggestions from Idealogs
-- **Automatic Content Fetching**: Special handling for Idealogs files (Ix, 0x, Tx, Fx) that automatically fetches content (always opens in read-only)
+- **Automatic Content Fetching**: Special handling for Idealogs files (Ix, 0x, Tx, Fx) that automatically fetches content (always opens in read-only and automatically deleted when not in view)
 
 ## How to Use
 
@@ -15,5 +15,5 @@ Insert and view Idealogs articles directly from Obsidian.
 
 ## Notes
 
-- This plugin connects to the Idealogs API endpoint 
-- Files are automatically cleaned up when no longer in view
+- Network use: This plugin connects to the Idealogs API to fetch articles and its markdown data.
+- Idealogs files are automatically cleaned up when no longer in view
