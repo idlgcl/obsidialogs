@@ -5,7 +5,8 @@ import {
     TFile,
 } from 'obsidian';
 
-const API_ENDPOINT = 'http://localhost:8002/api';
+// @ts-ignore
+const API_ENDPOINT = API_ENDPOINT_VALUE;
 
 export default class IdealogsArticleSuggestions extends Plugin {
     private currentIdealogsFile: TFile | null = null;
