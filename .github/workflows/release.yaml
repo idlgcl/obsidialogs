@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: write
     steps:
@@ -17,6 +18,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "18.x"
+
+      - name: Update API endpoint
+        run: |
+          sed -i "s|const API_ENDPOINT = 'http://localhost:8002/api';|const API_ENDPOINT = '${{ vars.ARTICLES_URL }}';|g" main.ts
 
       - name: Build plugin
         run: |
