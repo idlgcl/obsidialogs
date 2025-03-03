@@ -88,9 +88,9 @@ class ArticleSuggest extends EditorSuggest<Article> {
 
     renderSuggestion(article: Article, el: HTMLElement): void {
         el.empty();
-        el.addClass('article-suggestion-item');
+        el.addClass('idealogs-article');
         
-        const container = el.createDiv({ cls: 'article-suggestion-container' });
+        const container = el.createDiv({ cls: 'idealogs-suggestion-container' });
         
         const titleRow = container.createDiv({ cls: 'article-title-row' });
         
