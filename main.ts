@@ -10,7 +10,6 @@ const API_ENDPOINT = API_ENDPOINT_VALUE;
 
 export default class IdealogsArticleSuggestions extends Plugin {
     private currentIdealogsFile: TFile | null = null;
-    private searchDebounceTimeout: NodeJS.Timeout | null = null;
     
     async onload() {
         this.loadStyles();
@@ -32,43 +31,38 @@ export default class IdealogsArticleSuggestions extends Plugin {
             const query = context.query;
 
             if (query && query.startsWith('@')) {
-                if (this.searchDebounceTimeout) {
-                    clearTimeout(this.searchDebounceTimeout);
-                }
-                return new Promise(resolve => {
-                    this.searchDebounceTimeout = setTimeout(async () => {
-                        try {
-                            const searchTerm = query.substring(1);
-                            const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
-                            const url = `${API_ENDPOINT}/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
-                            
-                            const response = await fetch(url);
-                            if (!response.ok) {
-                                console.error('API request failed:', response.statusText);
-                                return originalGetSuggestions.call(this, context);
-                            }
+                try {
+                    const searchTerm = query.substring(1);
+                    
+                    const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
+                    const url = `${API_ENDPOINT}/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        console.error('API request failed:', response.statusText);
+                        return originalGetSuggestions.call(this, context);
+                    }
 
-                            const data = await response.json();
-                            
-                            if (!data.items || !data.items.length) {
-                                return originalGetSuggestions.call(this, context);
-                            }
-                            
-                            // @ts-ignore
-                            const articleSuggestions = data.items.map(article => ({
-                                type: "special-article",
-                                article: article,
-                                path: article.title,
-                                alias: article.title,
-                                score: 100,  // Hack the score
-                            }));
-                            resolve(articleSuggestions);
-                        } catch (error) {
-                            console.error('Error fetching suggestions:', error);
-                            resolve(originalGetSuggestions.call(this, context));
-                        }
-                    }, 300); 
-                });
+                    const data = await response.json();
+                    
+                    if (!data.items || !data.items.length) {
+                        return originalGetSuggestions.call(this, context);
+                    }
+                    
+                    // @ts-ignore
+                    const articleSuggestions = data.items.map(article => ({
+                        type: "special-article",
+                        article: article,
+                        path: article.title,
+                        alias: article.title,
+                        score: 100,  // Hack the score
+                    }));
+                    
+                    
+                    return Promise.resolve(articleSuggestions);
+                } catch (error) {
+                    console.error('Error fetching suggestions:', error);
+                }
             }
             
             return originalGetSuggestions.call(this, context);
