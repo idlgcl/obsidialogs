@@ -1,152 +1,155 @@
 import { 
-    Plugin,
+    Plugin, 
     MarkdownView,
-    normalizePath,
-    TFile,
+    EditorSuggest,
+    EditorPosition,
+    EditorSuggestContext,
+    EditorSuggestTriggerInfo,
+    Editor,
+    TFile
 } from 'obsidian';
 
 // @ts-ignore
 const API_ENDPOINT = API_ENDPOINT_VALUE;
 
-export default class IdealogsArticleSuggestions extends Plugin {
+interface ArticleResponse {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+    page: number;
+    totalPages: number;
+    nextPage: number;
+    previousPage: number;
+    items: Article[];
+}
+
+interface Article {
+    id: string;
+    title: string;
+    kind: string;
+    ledeHtml?: string;
+    authorId?: number;
+    orgId?: number;
+    isWorkspace?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+class ArticleSuggest extends EditorSuggest<Article> {
+    limit = 100;
+    
+    constructor(plugin: Plugin) {
+        super(plugin.app);
+    }
+
+    onTrigger(cursor: EditorPosition, editor: Editor): EditorSuggestTriggerInfo | null {
+        const line = editor.getLine(cursor.line);
+        const linePrefix = line.substring(0, cursor.ch);
+        
+        const match = linePrefix.match(/\[\[@([^[\]]*?)$/);
+        if (!match) return null;
+        
+        const query = match[1];
+        const startPos = cursor.ch - (match[0].length - 2);
+        
+        return {
+            start: { line: cursor.line, ch: startPos },
+            end: cursor,
+            query: query
+        };
+    }
+
+    async getSuggestions(context: EditorSuggestContext): Promise<Article[]> {
+        const searchTerm = context.query;
+        
+        try {
+            const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
+            const url = `${API_ENDPOINT}/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
+            
+            const response = await fetch(url);
+            if (!response.ok) {
+                console.error('API request failed:', response.statusText);
+                return [];
+            }
+            
+            const data = await response.json() as ArticleResponse;
+            
+            if (!data.items || !data.items.length) {
+                return [];
+            }
+            
+            return data.items;
+        } catch (error) {
+            console.error('Error fetching article suggestions:', error);
+            return [];
+        }
+    }
+
+    renderSuggestion(article: Article, el: HTMLElement): void {
+        el.empty();
+        el.addClass('article-suggestion-item');
+        
+        const container = el.createDiv({ cls: 'article-suggestion-container' });
+        
+        const titleRow = container.createDiv({ cls: 'article-title-row' });
+        
+        titleRow.createDiv({ 
+            cls: 'article-title',
+            text: article.title
+        });
+        
+        titleRow.createDiv({
+            cls: 'article-kind',
+            text: article.kind
+        });
+    }
+
+    selectSuggestion(article: Article): void {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) return;
+        
+        const editor = view.editor;
+        const cursor = editor.getCursor();
+        const line = editor.getLine(cursor.line);
+
+        const textAfterCursor = line.substring(cursor.ch);
+        const hasClosingBrackets = textAfterCursor.startsWith(']]');
+
+        let endPos = cursor;
+        if (hasClosingBrackets) {
+            endPos = { line: cursor.line, ch: cursor.ch + 2 };
+        }
+        
+        const bracketStart = line.lastIndexOf('[[', cursor.ch);
+        
+        if (bracketStart >= 0) {
+            const articleLink = `[[${article.id}]]`;
+            
+            editor.replaceRange(
+                articleLink,
+                { line: cursor.line, ch: bracketStart },
+                endPos
+            );
+            
+            editor.setCursor({
+                line: cursor.line,
+                ch: bracketStart + articleLink.length
+            });
+        }
+    }
+}
+
+export default class ArticleSuggestPlugin extends Plugin {
+    private articleSuggest: ArticleSuggest;
     private currentIdealogsFile: TFile | null = null;
     
     async onload() {
-        this.loadStyles();
+        this.articleSuggest = new ArticleSuggest(this);
+        this.registerEditorSuggest(this.articleSuggest);
+        
+        this.patchDefaultSuggester();
 
-        // @ts-ignore
-        const defaultLinkSuggester = this.app.workspace.editorSuggest.suggests[0];
-        if (!defaultLinkSuggester) {
-            console.error('Could not find default link suggester');
-            return;
-        }
-
-        // original methods
-        const originalGetSuggestions = defaultLinkSuggester.getSuggestions;
-        const originalRenderSuggestion = defaultLinkSuggester.renderSuggestion;
-        const originalSelectSuggestion = defaultLinkSuggester.selectSuggestion;
-
-        // @ts-ignore
-        defaultLinkSuggester.getSuggestions = async function(context) {
-            const query = context.query;
-
-            if (query && query.startsWith('@')) {
-                try {
-                    const searchTerm = query.substring(1);
-                    
-                    const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
-                    const url = `${API_ENDPOINT}/articles?kind=${kinds}&query=${encodeURIComponent(searchTerm)}`;
-                    
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        console.error('API request failed:', response.statusText);
-                        return originalGetSuggestions.call(this, context);
-                    }
-
-                    const data = await response.json();
-                    
-                    if (!data.items || !data.items.length) {
-                        return originalGetSuggestions.call(this, context);
-                    }
-                    
-                    // @ts-ignore
-                    const articleSuggestions = data.items.map(article => ({
-                        type: "special-article",
-                        article: article,
-                        path: article.title,
-                        alias: article.title,
-                        score: 100,  // Hack the score
-                    }));
-                    
-                    
-                    return Promise.resolve(articleSuggestions);
-                } catch (error) {
-                    console.error('Error fetching suggestions:', error);
-                }
-            }
-            
-            return originalGetSuggestions.call(this, context);
-        };
-
-        // @ts-ignore
-        defaultLinkSuggester.renderSuggestion = function(suggestion, el) {
-            if (suggestion.type === "special-article") {
-                
-                const article = suggestion.article;
-                el.addClass('article-suggestion-item');
-                
-                const container = el.createDiv({ cls: 'article-suggestion-container' });
-                
-                const titleRow = container.createDiv({ cls: 'article-title-row' });
-                titleRow.createDiv({ 
-                    cls: 'article-title',
-                    text: article.title
-                });
-                
-                titleRow.createDiv({
-                    cls: 'article-kind',
-                    text: article.kind
-                });
-                
-                return;
-            }
-            
-            originalRenderSuggestion.call(this, suggestion, el);
-        };
-
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-        const pluginRef = this;
-
-        // @ts-ignore
-        defaultLinkSuggester.selectSuggestion = async function(suggestion, evt) {
-            if (suggestion.type === "special-article") {
-                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-                if (!view) return;
-                
-                const editor = view.editor;
-                const cursor = editor.getCursor();
-                
-                const line = editor.getLine(cursor.line);
-                const linkStart = line.lastIndexOf('[[', cursor.ch);
-                
-                if (linkStart >= 0) {
-                    const line = editor.getLine(cursor.line);
-                    const textAfterCursor = line.substring(cursor.ch);
-                    const hasClosingBrackets = textAfterCursor.startsWith(']]');
-                    
-                    let endPos = cursor;
-                    if (hasClosingBrackets) {
-                        endPos = { line: cursor.line, ch: cursor.ch + 2 };
-                    }
-                    
-                    const articleLink = `[[${suggestion.article.id}]]`;
-                    
-                    editor.replaceRange(
-                        articleLink,
-                        { line: cursor.line, ch: linkStart },
-                        endPos
-                    );
-                    
-                    editor.setCursor({
-                        line: cursor.line,
-                        ch: linkStart + articleLink.length
-                    });
-
-                    try {
-                        await saveArticleToJson.call(pluginRef, suggestion.article);
-                    } catch (error) {
-                        console.error('Error saving article to JSON:', error);
-                    }
-                    
-                    // @ts-ignore
-                    this.close();
-                }
-                
-                return;
-            }
-            
-            originalSelectSuggestion.call(this, suggestion, evt);
-        };
 
         this.registerEvent(
             this.app.workspace.on('file-open', (file) => {
@@ -201,7 +204,33 @@ export default class IdealogsArticleSuggestions extends Plugin {
             })
         );
     }
+    
+    private patchDefaultSuggester() {
+        setTimeout(() => {
+            // @ts-ignore 
+            const suggesters = this.app.workspace.editorSuggest?.suggests;
+            if (!suggesters || !suggesters.length) return;
+            
+            const defaultLinkSuggester = suggesters[0];
+            if (!defaultLinkSuggester) return;
+            
+            const originalOnTrigger = defaultLinkSuggester.onTrigger;
+            
+            // @ts-ignore
+            defaultLinkSuggester.onTrigger = function(cursor, editor, scope) {
+                const line = editor.getLine(cursor.line);
+                const textBeforeCursor = line.substring(0, cursor.ch);
+                
+                if (textBeforeCursor.match(/\[\[@[^[\]]*?$/)) {
+                    return null;
+                }
+                
+                return originalOnTrigger.call(this, cursor, editor, scope);
+            };
+        }, 1000); 
+    }
 
+    
     private async handleMarkdownFileOpen(file: TFile) {
         const patterns = ['Ix', '0x', 'Tx', 'Fx'];
         const isIdealogsFile = patterns.some(pattern => file.basename.startsWith(pattern));
@@ -231,7 +260,7 @@ export default class IdealogsArticleSuggestions extends Plugin {
             console.error('Error fetching or updating content:', error);
         }
     }
-    
+
     private setViewToReadOnly(file: TFile) {
         setTimeout(() => {
             const leaves = this.app.workspace.getLeavesOfType('markdown');
@@ -249,7 +278,7 @@ export default class IdealogsArticleSuggestions extends Plugin {
             }
         }, 100);
     }
-    
+
     private setViewToEditMode(file: TFile) {
         setTimeout(() => {
             const leaves = this.app.workspace.getLeavesOfType('markdown');
@@ -266,53 +295,5 @@ export default class IdealogsArticleSuggestions extends Plugin {
                 }
             }
         }, 100);
-    }
-
-    private loadStyles() {
-    }
-
-    onunload() {
-        if (this.currentIdealogsFile) {
-            try {
-                this.app.vault.delete(this.currentIdealogsFile);
-            } catch (error) {
-                console.error('Error deleting Idealogs file during plugin unload:', error);
-            }
-            this.currentIdealogsFile = null;
-        }
-    }
-}
-
-async function saveArticleToJson(article: { id: string; title: string; }) {
-    const folderPath = '.idealogs';
-    const filePath = normalizePath(`${folderPath}/articles.json`);
-    
-    if (!await this.app.vault.adapter.exists(folderPath)) {
-        await this.app.vault.createFolder(folderPath);
-    }
-    
-    const articleData = {
-        id: article.id,
-        title: article.title
-    };
-    
-    let articles = [];
-    
-    if (await this.app.vault.adapter.exists(filePath)) {
-        const fileContent = await this.app.vault.adapter.read(filePath);
-        
-        try {
-            articles = JSON.parse(fileContent);
-        } catch (error) {
-            console.error('Error parsing existing JSON file:', error);
-            articles = [];
-        }
-    }
-    
-    const articleExists = articles.some((item: { id: string; }) => item.id === articleData.id);
-    
-    if (!articleExists) {
-        articles.push(articleData);
-        await this.app.vault.adapter.write(filePath, JSON.stringify(articles, null, 2));
     }
 }
