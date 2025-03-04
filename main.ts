@@ -160,7 +160,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                     file instanceof TFile && 
                     file.path !== this.currentIdealogsFile.path) {
                     try {
-                        this.app.vault.delete(this.currentIdealogsFile);
+                        this.app.fileManager.trashFile(this.currentIdealogsFile);
                     } catch (error) {
                         console.error('Error deleting Idealogs file:', error);
                     }
@@ -195,7 +195,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                 
                 if (!stillOpen) {
                     try {
-                        this.app.vault.delete(this.currentIdealogsFile);
+                        this.app.fileManager.trashFile(this.currentIdealogsFile);
                     } catch (error) {
                         console.error('Error deleting Idealogs file:', error);
                     }
@@ -208,7 +208,7 @@ export default class ArticleSuggestPlugin extends Plugin {
     onunload() {
         if (this.currentIdealogsFile) {
           try {
-            this.app.vault.delete(this.currentIdealogsFile);
+            this.app.fileManager.trashFile(this.currentIdealogsFile);
           } catch (error) {
             console.error('Error deleting Idealogs file during unload:', error);
           }
