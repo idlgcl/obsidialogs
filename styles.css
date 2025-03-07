@@ -150,3 +150,54 @@ span[data-word-index]:hover {
 .idl-tab-content-active {
     display: block;
 }
+
+.idl-comment-body {
+    width: 100%;
+    min-height: 80px;
+    resize: vertical;
+}
+
+.idl-range-field {
+    display: flex;
+    gap: 16px;
+}
+
+.idl-start-field, .idl-end-field {
+    flex: 1;
+}
+
+.idl-save-button {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.idl-save-button:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
+
+.idl-form-field select {
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    appearance: menulist;
+    -webkit-appearance: menulist;
+    cursor: pointer;
+}
+
+.idl-form-field option {
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.theme-dark .idl-form-field select,
+.theme-dark .idl-form-field option {
+    background-color: var(--background-secondary);
+    border-color: var(--background-modifier-border);
+}

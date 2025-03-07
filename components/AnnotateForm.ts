@@ -1,4 +1,5 @@
 import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { Comment } from 'types/interfaces';
 
 export const ANNOTATE_FORM_VIEW_TYPE = 'idl-annotate-form-view';
 
@@ -13,6 +14,7 @@ export class AnnotateFormView extends ItemView {
     private commentsContainer: HTMLElement;
     private notesContainer: HTMLElement;
     private onSaveCallback: ((data: AnnotateFormData) => void) | null = null;
+    private comments: Comment[] = [];
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -74,9 +76,66 @@ export class AnnotateFormView extends ItemView {
     
     private setupCommentsTab(): void {
         this.commentsContainer.empty();
-        this.commentsContainer.createEl('h3', { text: 'Comments' });
         
-        this.commentsContainer.createEl('p', { text: 'Comments tab content' });
+        const commentSelectField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
+        commentSelectField.createEl('label', { text: 'Select Comment' });
+        const commentSelect = commentSelectField.createEl('select', { cls: 'idl-comment-select' });
+
+        
+        this.comments.forEach((comment, index) => {
+            commentSelect.createEl('option', {
+                text: comment.title,
+                attr: { value: index.toString() }
+            });
+        });
+        
+        const bodyField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
+        bodyField.createEl('label', { text: 'Comment Body' });
+        const bodyTextarea = bodyField.createEl('textarea', { 
+            cls: 'idl-comment-body',
+            attr: { rows: '4', readonly: 'true' }
+        });
+        
+        const targetField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
+        targetField.createEl('label', { text: 'Target' });
+        const typeSelect = targetField.createEl('select');
+        
+        ['Test', 'Test 1', 'Test 2', 'Test 3'].forEach(dummy => {
+            typeSelect.createEl('option', { text: dummy });
+        });
+        
+        const displayField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
+        displayField.createEl('label', { text: 'Text Display' });
+        displayField.createEl('input', { type: 'text' });
+        
+        const rangeField = this.commentsContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
+        
+        const startField = rangeField.createDiv({ cls: 'idl-start-field' });
+        startField.createEl('label', { text: 'Text Start' });
+        startField.createEl('input', { type: 'text' });
+        
+        const endField = rangeField.createDiv({ cls: 'idl-end-field' });
+        endField.createEl('label', { text: 'Text End' });
+        endField.createEl('input', { type: 'text' });
+        
+        const buttonContainer = this.commentsContainer.createDiv({ cls: 'idl-form-buttons' });
+        buttonContainer.createEl('button', { text: 'Save', cls: 'idl-save-button' });
+        
+        commentSelect.addEventListener('change', (e) => {
+            const select = e.target as HTMLSelectElement;
+            const index = parseInt(select.value);
+            
+            if (!isNaN(index) && index >= 0 && this.comments[index]) {
+                bodyTextarea.value = this.comments[index].body;
+            } else {
+                bodyTextarea.value = '';
+            }
+        });
+    }
+
+    setComments(comments: Comment[]): void {
+        this.comments = comments;
+        this.setupCommentsTab()
     }
     
     private setupNotesTab(): void {
