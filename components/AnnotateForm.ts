@@ -81,6 +81,10 @@ export class AnnotateFormView extends ItemView {
         commentSelectField.createEl('label', { text: 'Select Comment' });
         const commentSelect = commentSelectField.createEl('select', { cls: 'idl-comment-select' });
 
+        commentSelect.createEl('option', {
+            text: 'Select Comment',
+            attr: { value: '', selected: 'selected' }
+        });
         
         this.comments.forEach((comment, index) => {
             commentSelect.createEl('option', {
@@ -88,6 +92,7 @@ export class AnnotateFormView extends ItemView {
                 attr: { value: index.toString() }
             });
         });
+
         
         const bodyField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
         bodyField.createEl('label', { text: 'Comment Body' });
@@ -98,37 +103,73 @@ export class AnnotateFormView extends ItemView {
         
         const targetField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
         targetField.createEl('label', { text: 'Target' });
-        const typeSelect = targetField.createEl('select');
+        const targetSelect = targetField.createEl('select', { attr: {'disabled': 'true'}});
         
-        ['Test', 'Test 1', 'Test 2', 'Test 3'].forEach(dummy => {
-            typeSelect.createEl('option', { text: dummy });
+        targetSelect.createEl('option', {
+            text: 'Select Target',
+            attr: { value: '' }
         });
-        
+
+        const mdFiles = this.app.vault.getMarkdownFiles();
+        mdFiles.forEach(file => {
+            targetSelect.createEl('option', {
+                text: file.basename,
+                attr: { value: file.path }
+            });
+        });
+
         const displayField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
         displayField.createEl('label', { text: 'Text Display' });
-        displayField.createEl('input', { type: 'text' });
+        const displayInput = displayField.createEl('input', { 
+            type: 'text',
+            attr: { disabled: 'true' }
+        });
         
         const rangeField = this.commentsContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
         
         const startField = rangeField.createDiv({ cls: 'idl-start-field' });
         startField.createEl('label', { text: 'Text Start' });
-        startField.createEl('input', { type: 'text' });
+        const startInput = startField.createEl('input', { 
+            type: 'text',
+            attr: { disabled: 'true' }
+        });
         
         const endField = rangeField.createDiv({ cls: 'idl-end-field' });
         endField.createEl('label', { text: 'Text End' });
-        endField.createEl('input', { type: 'text' });
+        const endInput = endField.createEl('input', { 
+            type: 'text',
+            attr: { disabled: 'true' }
+        });
         
         const buttonContainer = this.commentsContainer.createDiv({ cls: 'idl-form-buttons' });
-        buttonContainer.createEl('button', { text: 'Save', cls: 'idl-save-button' });
+        const saveButton = buttonContainer.createEl('button', { 
+            text: 'Save', 
+            cls: 'idl-save-button',
+            attr: { disabled: 'true' }
+        });
         
         commentSelect.addEventListener('change', (e) => {
             const select = e.target as HTMLSelectElement;
-            const index = parseInt(select.value);
+            const value = select.value;
             
-            if (!isNaN(index) && index >= 0 && this.comments[index]) {
-                bodyTextarea.value = this.comments[index].body;
-            } else {
+            if (value === '') {
                 bodyTextarea.value = '';
+                targetSelect.setAttribute('disabled', 'true');
+                displayInput.setAttribute('disabled', 'true');
+                startInput.setAttribute('disabled', 'true');
+                endInput.setAttribute('disabled', 'true');
+                saveButton.setAttribute('disabled', 'true');
+            } else {
+                const index = parseInt(value);
+                if (!isNaN(index) && index >= 0 && this.comments[index]) {
+                    bodyTextarea.value = this.comments[index].body;
+                    
+                    targetSelect.removeAttribute('disabled');
+                    displayInput.removeAttribute('disabled');
+                    startInput.removeAttribute('disabled');
+                    endInput.removeAttribute('disabled');
+                    saveButton.removeAttribute('disabled');
+                }
             }
         });
     }
