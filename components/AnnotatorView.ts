@@ -5,7 +5,7 @@ import {
     MarkdownRenderer,
 } from 'obsidian';
 import { WordProcessor } from './WordProcessor';
-import { ANNOTATE_FORM_VIEW_TYPE } from './AnnotateForm';
+import { ANNOTATE_FORM_VIEW_TYPE, AnnotateFormView } from './AnnotateForm';
 import { Comment } from 'types/interfaces';
 
 export const ANNOTATOR_VIEW_TYPE = 'idl-annotator-view';
@@ -45,7 +45,10 @@ export class AnnotatorView extends ItemView {
             const existingFormLeaves = this.app.workspace.getLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
             
             if (existingFormLeaves.length > 0) {
-                this.app.workspace.revealLeaf(existingFormLeaves[0]);
+                const leaf = existingFormLeaves[0];
+                this.app.workspace.revealLeaf(leaf);
+                const formView = leaf.view as AnnotateFormView;
+                formView.setComments(this.comments);
             } else {
                 const rightLeaf = this.app.workspace.getRightLeaf(false) || 
                                  this.app.workspace.getLeaf('split', 'vertical');
@@ -57,6 +60,11 @@ export class AnnotatorView extends ItemView {
                     });
                     
                     this.app.workspace.revealLeaf(rightLeaf);
+                    
+                    setTimeout(() => {
+                        const formView = rightLeaf.view as AnnotateFormView;
+                        formView.setComments(this.comments);
+                    }, 10);
                 }
             }
         });
