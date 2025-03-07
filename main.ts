@@ -2,7 +2,8 @@ import {
     Plugin, 
     MarkdownView,
     TFile,
-    MarkdownPostProcessorContext
+    MarkdownPostProcessorContext,
+    Notice
 } from 'obsidian';
 
 import { ArticleSuggest } from './components/ArticleSuggest';
@@ -15,6 +16,7 @@ import {
 } from './services/viewManager';
 import { patchDefaultSuggester } from './services/suggesterPatcher';
 import { idlFileIfExists } from './utils/fileUtils';
+import { ANNOTATOR_VIEW_TYPE, AnnotatorView } from 'components/AnnotatorView';
 
 export default class IdealogsMDPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
@@ -36,12 +38,56 @@ export default class IdealogsMDPlugin extends Plugin {
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', this.handleLeafChange.bind(this))
         );
+        
+        this.registerView(
+            ANNOTATOR_VIEW_TYPE,
+            (leaf) => new AnnotatorView(leaf)
+        );
+        
+        this.addCommand({
+            id: 'open-in-idealogs-annotator',
+            name: 'Open in Idealogs Annotator',
+            checkCallback: (checking) => {
+                const file = this.app.workspace.getActiveFile();
+                if (file && file.extension === 'md') {
+                    if (!checking) {
+                        this.openFileInAnnotator(file);
+                    }
+                    return true;
+                }
+                return false;
+            }
+        });
     }
 
     onunload() {
         idlFileIfExists(this.app, this.currentIdealogsFile);
         this.currentIdealogsFile = null;
         this.wordProcessor = null;
+        
+        this.app.workspace.detachLeavesOfType(ANNOTATOR_VIEW_TYPE);
+    }
+    
+    async openFileInAnnotator(file: TFile) {
+        const leaf = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE)[0] || 
+                     this.app.workspace.getLeaf('tab');
+        
+        if (!leaf) {
+            new Notice('Failed to create Annotator view');
+            return;
+        }
+        
+        if (leaf.getViewState().type !== ANNOTATOR_VIEW_TYPE) {
+            await leaf.setViewState({
+                type: ANNOTATOR_VIEW_TYPE,
+                active: true
+            });
+        }
+        
+        const view = leaf.view as AnnotatorView;
+        await view.setFile(file);
+        
+        this.app.workspace.revealLeaf(leaf);
     }
     
     private customMarkdownProcessor(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
