@@ -24,10 +24,32 @@
     letter-spacing: 0.5px;
 }
 
+/* Annotator View Styles */
+.idl-annotator-toolbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.idl-open-form-button {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.idl-open-form-button:hover {
+    background-color: var(--interactive-accent-hover);
+}
+
 .idl-annotator-content-container {
     padding: 0px 20px 20px 20px;
     overflow-y: auto;
-    height: 100%;
+    height: calc(100% - 50px);
 }
 
 .idl-annotator-render-container {
@@ -56,4 +78,75 @@
     align-items: center;
     color: var(--text-muted);
     font-size: 1.2em;
+}
+
+.idl-annotate-form {
+    padding: 0 16px;
+}
+
+.idl-form-field {
+    margin-bottom: 16px;
+}
+
+.idl-form-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.idl-form-field input,
+.idl-form-field textarea {
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--background-primary);
+}
+
+.idl-form-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+span[data-word-index] {
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background-color 0.1s ease;
+}
+
+span[data-word-index]:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+/* Tab Styles */
+.idl-tabs-container {
+    display: flex;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 16px;
+}
+
+.idl-tab {
+    padding: 8px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+}
+
+.idl-tab:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.idl-tab-active {
+    border-bottom: 2px solid var(--interactive-accent);
+    color: var(--interactive-accent);
+}
+
+.idl-tab-content {
+    display: none;
+    padding: 0 16px;
+}
+
+.idl-tab-content-active {
+    display: block;
 }

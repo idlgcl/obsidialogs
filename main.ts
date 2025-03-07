@@ -3,7 +3,8 @@ import {
     MarkdownView,
     TFile,
     MarkdownPostProcessorContext,
-    Notice
+    Notice,
+    WorkspaceLeaf
 } from 'obsidian';
 
 import { ArticleSuggest } from './components/ArticleSuggest';
@@ -17,11 +18,13 @@ import {
 import { patchDefaultSuggester } from './services/suggesterPatcher';
 import { idlFileIfExists } from './utils/fileUtils';
 import { ANNOTATOR_VIEW_TYPE, AnnotatorView } from 'components/AnnotatorView';
+import { ANNOTATE_FORM_VIEW_TYPE, AnnotateFormView } from 'components/AnnotateForm';
 
 export default class IdealogsMDPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
     private currentIdealogsFile: TFile | null = null;
     private wordProcessor: WordProcessor | null = null;
+    private annotateFormLeaf: WorkspaceLeaf | null = null;
     
     async onload() {
         this.articleSuggest = new ArticleSuggest(this);
@@ -44,6 +47,14 @@ export default class IdealogsMDPlugin extends Plugin {
             (leaf) => new AnnotatorView(leaf)
         );
         
+        this.registerView(
+            ANNOTATE_FORM_VIEW_TYPE,
+            (leaf) => {
+                const view = new AnnotateFormView(leaf);
+                return view;
+            }
+        );
+        
         this.addCommand({
             id: 'open-in-idealogs-annotator',
             name: 'Open in Idealogs Annotator',
@@ -58,6 +69,10 @@ export default class IdealogsMDPlugin extends Plugin {
                 return false;
             }
         });
+        
+        this.registerEvent(
+            this.app.workspace.on('layout-change', this.handleLayoutChange.bind(this))
+        );
     }
 
     onunload() {
@@ -66,6 +81,8 @@ export default class IdealogsMDPlugin extends Plugin {
         this.wordProcessor = null;
         
         this.app.workspace.detachLeavesOfType(ANNOTATOR_VIEW_TYPE);
+        this.app.workspace.detachLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
+        this.annotateFormLeaf = null;
     }
     
     async openFileInAnnotator(file: TFile) {
@@ -88,6 +105,24 @@ export default class IdealogsMDPlugin extends Plugin {
         await view.setFile(file);
         
         this.app.workspace.revealLeaf(leaf);
+    }
+    
+
+    private async closeAnnotateForm() {
+        const formLeaves = this.app.workspace.getLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
+        for (const leaf of formLeaves) {
+            leaf.detach();
+        }
+        this.annotateFormLeaf = null;
+    }
+    
+
+    private handleLayoutChange() {
+        const hasAnnotatorView = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE).length > 0;
+        
+        if (!hasAnnotatorView) {
+            this.closeAnnotateForm();
+        }
     }
     
     private customMarkdownProcessor(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {

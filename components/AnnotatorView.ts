@@ -5,10 +5,11 @@ import {
     MarkdownRenderer,
 } from 'obsidian';
 import { WordProcessor } from './WordProcessor';
+import { ANNOTATE_FORM_VIEW_TYPE } from './AnnotateForm';
 
 export const ANNOTATOR_VIEW_TYPE = 'idl-annotator-view';
 
-interface Comment {
+export interface Comment {
     title: string;
     body: string;
     indices: number[];
@@ -18,6 +19,7 @@ export class AnnotatorView extends ItemView {
     private contentContainer: HTMLElement;
     private wordProcessor: WordProcessor | null = null;
     private currentFile: TFile | null = null;
+    private comments: Comment[] = [];
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -34,6 +36,35 @@ export class AnnotatorView extends ItemView {
     async onOpen(): Promise<void> {
         const { containerEl } = this;
         containerEl.empty();
+        
+        const toolbar = containerEl.createDiv({
+            cls: 'idl-annotator-toolbar'
+        });
+        
+        const openFormButton = toolbar.createEl('button', {
+            text: 'Annotate',
+            cls: 'idl-open-form-button'
+        });
+        
+        openFormButton.addEventListener('click', () => {
+            const existingFormLeaves = this.app.workspace.getLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
+            
+            if (existingFormLeaves.length > 0) {
+                this.app.workspace.revealLeaf(existingFormLeaves[0]);
+            } else {
+                const rightLeaf = this.app.workspace.getRightLeaf(false) || 
+                                 this.app.workspace.getLeaf('split', 'vertical');
+                
+                if (rightLeaf) {
+                    rightLeaf.setViewState({
+                        type: ANNOTATE_FORM_VIEW_TYPE,
+                        active: true
+                    });
+                    
+                    this.app.workspace.revealLeaf(rightLeaf);
+                }
+            }
+        });
         
         this.contentContainer = containerEl.createDiv({
             cls: 'idl-annotator-content-container'
@@ -64,8 +95,7 @@ export class AnnotatorView extends ItemView {
         
         const content = await this.app.vault.read(this.currentFile);
         
-        const comments = this.parseComments(content);
-        console.log('Parsed comments:', comments);
+        this.comments = this.parseComments(content);
         
         const renderContainer = this.contentContainer.createDiv({
             cls: 'idl-annotator-render-container'
@@ -159,5 +189,6 @@ export class AnnotatorView extends ItemView {
         this.contentContainer.empty();
         this.currentFile = null;
         this.wordProcessor = null;
+        this.comments = [];
     }
 }
