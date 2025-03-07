@@ -6,7 +6,8 @@ import {
     EditorSuggestContext,
     EditorSuggestTriggerInfo,
     Editor,
-    TFile
+    TFile,
+    MarkdownPostProcessorContext
 } from 'obsidian';
 
 // @ts-ignore - api url updated on build
@@ -34,6 +35,99 @@ interface Article {
     isWorkspace?: boolean;
     createdAt?: string;
     updatedAt?: string;
+}
+
+// Custom Word Processor
+interface WordProcessorOptions {
+    articleId: string;
+}
+
+class WordProcessor {
+    private wordCount = 0;
+    private articleId: string;
+    private wordRegex = /(\s*)(\S+)(\s*)/g;
+
+    constructor(options: WordProcessorOptions) {
+        this.articleId = options.articleId;
+    }
+
+    processMarkdown(element: HTMLElement): void {
+        const paragraphs = element.querySelectorAll('p');
+        paragraphs.forEach(paragraph => {
+            this.processElement(paragraph);
+        });
+    }
+
+    private processElement(element: HTMLElement): void {
+        const fragment = document.createDocumentFragment();
+        
+        Array.from(element.childNodes).forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE && node.textContent) {
+                this.processTextNode(node.textContent, fragment);
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                const el = node as HTMLElement;
+                const newEl = document.createElement(el.tagName);
+                
+                Array.from(el.attributes).forEach(attr => {
+                    newEl.setAttribute(attr.name, attr.value);
+                });
+                
+                this.processElement(el);
+                
+                while (el.firstChild) {
+                    newEl.appendChild(el.firstChild);
+                }
+                
+                fragment.appendChild(newEl);
+            } else {
+                fragment.appendChild(node.cloneNode(true));
+            }
+        });
+        
+        element.innerHTML = '';
+        element.appendChild(fragment);
+    }
+
+    private processTextNode(text: string, parent: DocumentFragment): void {
+        let match;
+        let lastIndex = 0;
+        
+        this.wordRegex.lastIndex = 0;
+        
+        while ((match = this.wordRegex.exec(text)) !== null) {
+            const [, leadingSpace, word, trailingSpace] = match;
+            
+            if (leadingSpace) {
+                const spaceSpan = document.createElement('span');
+                spaceSpan.textContent = leadingSpace;
+                parent.appendChild(spaceSpan);
+            }
+            
+            if (word) {
+                const wordSpan = document.createElement('span');
+                wordSpan.setAttribute('data-article-id', this.articleId);
+                wordSpan.setAttribute('data-word-index', this.wordCount.toString());
+                wordSpan.setAttribute('id', `${this.articleId}-${this.wordCount}`);
+                wordSpan.textContent = word;
+                parent.appendChild(wordSpan);
+                this.wordCount++;
+            }
+            
+            if (trailingSpace) {
+                const spaceSpan = document.createElement('span');
+                spaceSpan.textContent = trailingSpace;
+                parent.appendChild(spaceSpan);
+            }
+            
+            lastIndex = this.wordRegex.lastIndex;
+        }
+        
+        if (lastIndex < text.length) {
+            const remainingSpan = document.createElement('span');
+            remainingSpan.textContent = text.substring(lastIndex);
+            parent.appendChild(remainingSpan);
+        }
+    }
 }
 
 class ArticleSuggest extends EditorSuggest<Article> {
@@ -140,9 +234,10 @@ class ArticleSuggest extends EditorSuggest<Article> {
     }
 }
 
-export default class ArticleSuggestPlugin extends Plugin {
+export default class IdealogsMDPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
     private currentIdealogsFile: TFile | null = null;
+    private wordProcessor: WordProcessor | null = null;
     
     async onload() {
         this.articleSuggest = new ArticleSuggest(this);
@@ -150,11 +245,11 @@ export default class ArticleSuggestPlugin extends Plugin {
         
         this.patchDefaultSuggester();
 
+        this.registerMarkdownPostProcessor(this.customMarkdownProcessor.bind(this));
 
         this.registerEvent(
             this.app.workspace.on('file-open', (file) => {
                 if (!file) return;
-                
                 
                 if (this.currentIdealogsFile && 
                     file instanceof TFile && 
@@ -173,8 +268,12 @@ export default class ArticleSuggestPlugin extends Plugin {
                     
                     if (isIdealogsFile) {
                         this.currentIdealogsFile = file;
+                        this.wordProcessor = new WordProcessor({
+                            articleId: file.basename
+                        });
                         this.handleMarkdownFileOpen(file);
                     } else {
+                        this.wordProcessor = null;
                         this.setViewToEditMode(file);
                     }
                 }
@@ -200,6 +299,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                         console.error('Error deleting Idealogs file:', error);
                     }
                     this.currentIdealogsFile = null;
+                    this.wordProcessor = null;
                 }
             })
         );
@@ -213,8 +313,25 @@ export default class ArticleSuggestPlugin extends Plugin {
             console.error('Error deleting Idealogs file during unload:', error);
           }
           this.currentIdealogsFile = null;
+          this.wordProcessor = null;
         }
-      }
+    }
+    
+    private customMarkdownProcessor(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
+        // TODO
+        if (this.wordProcessor) {
+            const file = ctx.sourcePath ? this.app.vault.getAbstractFileByPath(ctx.sourcePath) : null;
+            
+            if (file instanceof TFile) {
+                const patterns = ['Ix', '0x', 'Tx', 'Fx'];
+                const isIdealogsFile = patterns.some(pattern => file.basename.startsWith(pattern));
+                
+                if (isIdealogsFile) {
+                    this.wordProcessor.processMarkdown(el);
+                }
+            }
+        }
+    }
     
     private patchDefaultSuggester() {
         setTimeout(() => {
