@@ -15,9 +15,14 @@ export class AnnotatorView extends ItemView {
     private wordProcessor: WordProcessor | null = null;
     private currentFile: TFile | null = null;
     private comments: Comment[] = [];
+    private originalFile: TFile | null = null;
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
+    }
+
+    getCurrentFile(): TFile | null {
+        return this.currentFile;
     }
     
     getViewType(): string {
@@ -49,6 +54,9 @@ export class AnnotatorView extends ItemView {
                 this.app.workspace.revealLeaf(leaf);
                 const formView = leaf.view as AnnotateFormView;
                 formView.setComments(this.comments);
+                if (this.originalFile) {
+                    formView.setOriginalFile(this.originalFile);
+                }
             } else {
                 const rightLeaf = this.app.workspace.getRightLeaf(false) || 
                                  this.app.workspace.getLeaf('split', 'vertical');
@@ -64,6 +72,9 @@ export class AnnotatorView extends ItemView {
                     setTimeout(() => {
                         const formView = rightLeaf.view as AnnotateFormView;
                         formView.setComments(this.comments);
+                        if (this.originalFile) {
+                            formView.setOriginalFile(this.originalFile);
+                        }
                     }, 10);
                 }
             }
@@ -82,6 +93,10 @@ export class AnnotatorView extends ItemView {
     }
     
     async setFile(file: TFile): Promise<void> {
+        if (!this.originalFile) {
+            this.originalFile = file;
+        }
+        
         this.currentFile = file;
         
         this.wordProcessor = new WordProcessor({
@@ -191,6 +206,7 @@ export class AnnotatorView extends ItemView {
     async onClose(): Promise<void> {
         this.contentContainer.empty();
         this.currentFile = null;
+        this.originalFile = null;
         this.wordProcessor = null;
         this.comments = [];
     }

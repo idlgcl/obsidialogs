@@ -105,8 +105,7 @@
 
 .idl-form-buttons {
     display: flex;
-    gap: 8px;
-    justify-content: flex-end;
+    justify-content: space-between;
 }
 
 span[data-word-index] {
@@ -166,7 +165,7 @@ span[data-word-index]:hover {
     flex: 1;
 }
 
-.idl-save-button {
+.idl-button {
     background-color: var(--interactive-accent);
     color: var(--text-on-accent);
     padding: 8px 16px;
