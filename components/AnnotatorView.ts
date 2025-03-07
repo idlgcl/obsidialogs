@@ -6,8 +6,13 @@ import {
 } from 'obsidian';
 import { WordProcessor } from './WordProcessor';
 
-
 export const ANNOTATOR_VIEW_TYPE = 'idl-annotator-view';
+
+interface Comment {
+    title: string;
+    body: string;
+    indices: number[];
+}
 
 export class AnnotatorView extends ItemView {
     private contentContainer: HTMLElement;
@@ -59,6 +64,9 @@ export class AnnotatorView extends ItemView {
         
         const content = await this.app.vault.read(this.currentFile);
         
+        const comments = this.parseComments(content);
+        console.log('Parsed comments:', comments);
+        
         const renderContainer = this.contentContainer.createDiv({
             cls: 'idl-annotator-render-container'
         });
@@ -82,6 +90,50 @@ export class AnnotatorView extends ItemView {
         }
         
         this.setupLinkClickHandlers(renderContainer);
+    }
+    
+    private parseComments(text: string): Comment[] {
+        const segments = text.split('\n');
+        const pattern = /^(.*?)\.\s+(.*)$/;
+        const results: Comment[] = [];
+        let counter = 0;
+
+        for (const segment of segments) {
+            if (segment.startsWith('## ')) {
+                continue;
+            }
+
+            if (!segment.endsWith(':')) {
+                const words = segment.split(/\s+/).filter(w => w.length > 0);
+                counter += words.length;
+                continue;
+            }
+
+            const match = segment.match(pattern);
+            
+            if (!match) {
+                const words = segment.split(/\s+/).filter(w => w.length > 0);
+                counter += words.length;
+                continue;
+            }
+
+            const indices = [];
+            const [, title, description] = match;
+
+            const words = (title + ' ' + description).split(/\s+/).filter(w => w.length > 0);
+            for (let i = 0; i < words.length; i++) {
+                indices.push(counter);
+                counter++;
+            }
+
+            results.push({
+                title: title.trim() + '.',
+                body: description.trim(),
+                indices: indices,
+            });
+        }
+
+        return results;
     }
     
     private setupLinkClickHandlers(element: HTMLElement): void {
