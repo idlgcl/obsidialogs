@@ -6,14 +6,9 @@ import {
 } from 'obsidian';
 import { WordProcessor } from './WordProcessor';
 import { ANNOTATE_FORM_VIEW_TYPE } from './AnnotateForm';
+import { Comment } from 'types/interfaces';
 
 export const ANNOTATOR_VIEW_TYPE = 'idl-annotator-view';
-
-export interface Comment {
-    title: string;
-    body: string;
-    indices: number[];
-}
 
 export class AnnotatorView extends ItemView {
     private contentContainer: HTMLElement;

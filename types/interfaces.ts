@@ -25,3 +25,9 @@ export interface Article {
 export interface WordProcessorOptions {
     articleId: string;
 }
+
+export interface Comment {
+    title: string;
+    body: string;
+    indices: number[];
+}
