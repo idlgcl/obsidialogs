@@ -19,18 +19,23 @@ import { patchDefaultSuggester } from './services/suggesterPatcher';
 import { idlFileIfExists } from './utils/fileUtils';
 import { ANNOTATOR_VIEW_TYPE, AnnotatorView } from 'components/AnnotatorView';
 import { ANNOTATE_FORM_VIEW_TYPE, AnnotateFormView } from 'components/AnnotateForm';
+import { AnnotationService } from 'services/annotationService';
 
 export default class IdealogsMDPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
     private currentIdealogsFile: TFile | null = null;
     private wordProcessor: WordProcessor | null = null;
     private annotateFormLeaf: WorkspaceLeaf | null = null;
+    private annotationService: AnnotationService;
     
     async onload() {
+        this.annotationService = new AnnotationService(this.app);
         this.articleSuggest = new ArticleSuggest(this);
         this.registerEditorSuggest(this.articleSuggest);
         
         patchDefaultSuggester(this.app);
+
+        await this.annotationService.ensureAnnotationsDirectory();
 
         this.registerMarkdownPostProcessor(this.customMarkdownProcessor.bind(this));
 
