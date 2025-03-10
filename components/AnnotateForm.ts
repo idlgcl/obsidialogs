@@ -17,6 +17,9 @@ export class AnnotateFormView extends ItemView {
     private onSaveCallback: ((data: AnnotateFormData) => void) | null = null;
     private comments: Comment[] = [];
     private originalFile: TFile | null = null;
+    private sourceFullText = '';
+    private sourceRange: number[] = [];
+    private sourceDisplayIndices: number[] = [];
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -304,9 +307,238 @@ export class AnnotateFormView extends ItemView {
     
     private setupNotesTab(): void {
         this.notesContainer.empty();
-        this.notesContainer.createEl('h3', { text: 'Notes' });
         
-        this.notesContainer.createEl('p', { text: 'Notes tab content' });
+        const textDisplayField = this.notesContainer.createDiv({ cls: 'idl-form-field' });
+        textDisplayField.createEl('label', { text: 'Text Display' });
+        const textDisplayInput = textDisplayField.createEl('input', { type: 'text' });
+        
+        const rangeField = this.notesContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
+        
+        const startField = rangeField.createDiv({ cls: 'idl-start-field' });
+        startField.createEl('label', { text: 'Text Start' });
+        const startInput = startField.createEl('input', { type: 'text' });
+        
+        const endField = rangeField.createDiv({ cls: 'idl-end-field' });
+        endField.createEl('label', { text: 'Text End' });
+        const endInput = endField.createEl('input', { type: 'text' });
+        
+        const targetSection = this.notesContainer.createDiv({ cls: 'idl-target-section' });
+        targetSection.style.display = 'none';
+        
+        const targetField = targetSection.createDiv({ cls: 'idl-form-field' });
+        targetField.createEl('label', { text: 'Target Article' });
+        const targetSelect = targetField.createEl('select');
+        
+        targetSelect.createEl('option', {
+            text: 'Select Article',
+            attr: { value: '' }
+        });
+
+        const mdFiles = this.app.vault.getMarkdownFiles();
+        mdFiles.forEach(file => {
+            targetSelect.createEl('option', {
+                text: file.basename,
+                attr: { value: file.path }
+            });
+        });
+        
+        const targetDisplayField = targetSection.createDiv({ cls: 'idl-form-field' });
+        targetDisplayField.createEl('label', { text: 'Target Text Display' });
+        const targetDisplayInput = targetDisplayField.createEl('input', { type: 'text' });
+        
+        const targetRangeField = targetSection.createDiv({ cls: 'idl-form-field idl-range-field' });
+        
+        const targetStartField = targetRangeField.createDiv({ cls: 'idl-start-field' });
+        targetStartField.createEl('label', { text: 'Target Text Start' });
+        const targetStartInput = targetStartField.createEl('input', { type: 'text' });
+        
+        const targetEndField = targetRangeField.createDiv({ cls: 'idl-end-field' });
+        targetEndField.createEl('label', { text: 'Target Text End' });
+        const targetEndInput = targetEndField.createEl('input', { type: 'text' });
+        
+        const buttonContainer = this.notesContainer.createDiv({ cls: 'idl-form-buttons' });
+        
+        const switchButton = buttonContainer.createEl('button', { 
+            text: 'Switch Article', 
+            cls: 'idl-button'
+        });
+        switchButton.style.display = 'none'; 
+        
+        const saveButton = buttonContainer.createEl('button', { 
+            text: 'Save', 
+            cls: 'idl-button'
+        });
+        
+        saveButton.addEventListener('click', async () => {
+            const textDisplay = textDisplayInput.value.trim();
+            const textStart = startInput.value.trim();
+            const textEnd = endInput.value.trim();
+            
+            const isTargetPhase = targetSection.style.display === 'block';
+            
+            if (isTargetPhase) {
+                const targetPath = targetSelect.value;
+                const targetDisplayText = targetDisplayInput.value.trim();
+                const targetStartText = targetStartInput.value.trim();
+                const targetEndText = targetEndInput.value.trim();
+                
+                if (!targetPath || !targetDisplayText || !targetStartText || !targetEndText) {
+                    return;
+                }
+                
+                const annotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE);
+                if (annotatorLeaves.length === 0) return;
+                
+                const annotatorView = annotatorLeaves[0].view as AnnotatorView;
+                const wordSpans = annotatorView.getAllWordSpans();
+                
+                if (!wordSpans || wordSpans.length === 0) {
+                    console.log('No word spans found in target document');
+                    return;
+                }
+                
+                const targetStartIndex = this.findTextIndex(wordSpans, targetStartText);
+                if (targetStartIndex === -1) {
+                    console.log('Target start text not found');
+                    return;
+                }
+                
+                const targetEndIndex = this.findTextIndex(wordSpans, targetEndText, 
+                    targetStartIndex + targetStartText.split(/\s+/).filter(w => w.length > 0).length);
+                if (targetEndIndex === -1) {
+                    console.log('Target end text not found');
+                    return;
+                }
+                
+                const targetFullText = this.getTextBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
+                if (!targetFullText.includes(targetDisplayText)) {
+                    console.log('Target display text not found in the range');
+                    return;
+                }
+                
+                const targetRange = this.getWordIndicesBetween(wordSpans, targetStartIndex, targetEndIndex);
+                const targetDisplayIndices = this.findDisplayTextIndices(
+                    wordSpans, targetRange, targetDisplayText, targetFullText);
+                
+                const sourcePath = this.originalFile?.path;
+                
+                const result = {
+                    src: sourcePath,
+                    src_txt_display: textDisplay,
+                    src_txt_start: textStart,
+                    src_txt_end: textEnd, 
+                    src_txt: this.sourceFullText,
+                    src_range: this.sourceRange,
+                    src_txt_display_range: this.sourceDisplayIndices,
+                    target: targetPath,
+                    target_txt_display: targetDisplayText,
+                    target_txt_start: targetStartText,
+                    target_txt_end: targetEndText,
+                    target_txt: targetFullText,
+                    target_range: targetRange,
+                    target_txt_display_range: targetDisplayIndices
+                };
+                
+                console.log(result);
+                
+                annotatorView.highlightWords(targetDisplayIndices);
+            } else {
+                if (!textDisplay || !textStart || !textEnd) {
+                    return;
+                }
+                
+                const annotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE);
+                if (annotatorLeaves.length === 0) return;
+                
+                const annotatorView = annotatorLeaves[0].view as AnnotatorView;
+                
+                const wordSpans = annotatorView.getAllWordSpans();
+                if (!wordSpans || wordSpans.length === 0) return;
+                
+                const startIndex = this.findTextIndex(wordSpans, textStart);
+                if (startIndex === -1) {
+                    console.log('Start text not found');
+                    return;
+                }
+                
+                const endIndex = this.findTextIndex(wordSpans, textEnd, 
+                    startIndex + textStart.split(/\s+/).filter(w => w.length > 0).length);
+                if (endIndex === -1) {
+                    console.log('End text not found');
+                    return;
+                }
+                
+                const fullText = this.getTextBetweenIndices(wordSpans, startIndex, endIndex);
+                if (!fullText.includes(textDisplay)) {
+                    console.log('Display text not found in the range');
+                    return;
+                }
+                
+                const sourceRange = this.getWordIndicesBetween(wordSpans, startIndex, endIndex);
+                
+                const displayIndices = this.findDisplayTextIndices(wordSpans, sourceRange, textDisplay, fullText);
+                
+                this.sourceFullText = fullText;
+                this.sourceRange = sourceRange;
+                this.sourceDisplayIndices = displayIndices;
+                
+                console.log('Source Text Found:');
+                console.log('Start Index:', startIndex);
+                console.log('End Index:', endIndex);
+                console.log('Full Text:', fullText);
+                console.log('Source Range:', sourceRange);
+                console.log('Display Indices:', displayIndices);
+                
+                annotatorView.highlightWords(displayIndices);
+                
+                targetSection.style.display = 'block';
+                switchButton.style.display = 'inline-block';
+                
+                saveButton.setText('Save Annotation');
+            }
+        });
+        
+        targetSelect.addEventListener('change', async (e) => {
+            const select = e.target as HTMLSelectElement;
+            const targetPath = select.value;
+            
+            if (targetPath === '') return;
+            
+            const targetFile = this.app.vault.getAbstractFileByPath(targetPath);
+            if (!(targetFile instanceof TFile)) return;
+            
+            const annotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE);
+            if (annotatorLeaves.length === 0) return;
+            
+            const annotatorView = annotatorLeaves[0].view as AnnotatorView;
+            await annotatorView.setFile(targetFile);
+            
+            switchButton.setText('Back to Source');
+        });
+        
+        switchButton.addEventListener('click', async () => {
+            const annotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE);
+            if (annotatorLeaves.length === 0) return;
+            
+            const annotatorView = annotatorLeaves[0].view as AnnotatorView;
+            const currentFile = annotatorView.getCurrentFile();
+            
+            if (!currentFile) return;
+            
+            if (this.originalFile && currentFile.path !== this.originalFile.path) {
+                await annotatorView.setFile(this.originalFile);
+                switchButton.setText('View Target');
+            } else {
+                const targetPath = targetSelect.value;
+                if (!targetPath) return;
+                
+                const targetFile = this.app.vault.getAbstractFileByPath(targetPath);
+                if (!(targetFile instanceof TFile)) return;
+                
+                await annotatorView.setFile(targetFile);
+                switchButton.setText('Back to Source');
+            }
+        });
     }
     
     setOnSave(callback: (data: AnnotateFormData) => void): this {
