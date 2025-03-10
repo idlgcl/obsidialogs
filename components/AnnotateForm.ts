@@ -1,6 +1,7 @@
-import { ItemView, TFile, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import { Comment } from 'types/interfaces';
 import { ANNOTATOR_VIEW_TYPE, AnnotatorView } from './AnnotatorView';
+import { AnnotationData, AnnotationService } from 'services/annotationService';
 
 export const ANNOTATE_FORM_VIEW_TYPE = 'idl-annotate-form-view';
 
@@ -20,11 +21,12 @@ export class AnnotateFormView extends ItemView {
     private sourceFullText = '';
     private sourceRange: number[] = [];
     private sourceDisplayIndices: number[] = [];
+    private annotationService: AnnotationService | null = null;
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
+        this.annotationService = new AnnotationService(this.app);
     }
-    
     getViewType(): string {
         return ANNOTATE_FORM_VIEW_TYPE;
     }
@@ -240,7 +242,7 @@ export class AnnotateFormView extends ItemView {
             }
         });
 
-        saveButton.addEventListener('click', () => {
+        saveButton.addEventListener('click', async () => {
             const commentSelectValue = commentSelect.value;
             const targetPath = targetSelect.value;
             const startText = startInput.value.trim();
@@ -280,8 +282,11 @@ export class AnnotateFormView extends ItemView {
             const result = {
                 src: this.originalFile?.path,
                 src_txt_display: selectedComment.title,
+                src_txt_start: selectedComment.title,
+                src_txt_end: selectedComment.body,
                 src_txt: selectedComment.title + ' ' + selectedComment.body,
-                src_txt_range: selectedComment.indices,
+                src_range: selectedComment.indices,
+                src_txt_display_range: selectedComment.indices,
                 target: targetPath,
                 target_txt_display: displayText,
                 target_txt_start: startText,
@@ -289,9 +294,17 @@ export class AnnotateFormView extends ItemView {
                 target_txt: fullText,
                 target_range: targetRange,
                 target_txt_display_range: displayIndices
-            };
+            } as AnnotationData;
             
-            console.log(result);
+            if (this.annotationService) {
+                try {
+                    const id = await this.annotationService.saveAnnotation(result, 'comment');
+                    new Notice(`Comment saved with ID: ${id}`);
+                } catch (error) {
+                    console.error('Error saving comment:', error);
+                    new Notice('Failed to save comment');
+                }
+            }
             
             annotatorView.highlightWords(displayIndices);
         });
@@ -437,9 +450,17 @@ export class AnnotateFormView extends ItemView {
                     target_txt: targetFullText,
                     target_range: targetRange,
                     target_txt_display_range: targetDisplayIndices
-                };
+                } as AnnotationData;
                 
-                console.log(result);
+                if (this.annotationService) {
+                    try {
+                        const id = await this.annotationService.saveAnnotation(result, 'note');
+                        new Notice(`Note saved with ID: ${id}`);
+                    } catch (error) {
+                        console.error('Error saving note:', error);
+                        new Notice('Failed to save note');
+                    }
+                }
                 
                 annotatorView.highlightWords(targetDisplayIndices);
             } else {
@@ -478,6 +499,7 @@ export class AnnotateFormView extends ItemView {
                 
                 const displayIndices = this.findDisplayTextIndices(wordSpans, sourceRange, textDisplay, fullText);
                 
+                // Store the information for later use in the target phase
                 this.sourceFullText = fullText;
                 this.sourceRange = sourceRange;
                 this.sourceDisplayIndices = displayIndices;
