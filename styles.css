@@ -200,3 +200,8 @@ span[data-word-index]:hover {
     background-color: var(--background-secondary);
     border-color: var(--background-modifier-border);
 }
+
+
+.idl-highlighted-word {
+    font-weight: bolder;
+}

@@ -236,8 +236,63 @@ export class AnnotateFormView extends ItemView {
                 }
             }
         });
-    }
 
+        saveButton.addEventListener('click', () => {
+            const commentSelectValue = commentSelect.value;
+            const targetPath = targetSelect.value;
+            const startText = startInput.value.trim();
+            const endText = endInput.value.trim();
+            const displayText = displayInput.value.trim();
+            
+            if (!commentSelectValue || !targetPath || !startText || !endText || !displayText) {
+                return;
+            }
+            
+            const selectedCommentIndex = parseInt(commentSelectValue);
+            const selectedComment = this.comments[selectedCommentIndex];
+            
+            if (!selectedComment) return;
+            
+            const annotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE);
+            if (annotatorLeaves.length === 0) return;
+            
+            const annotatorView = annotatorLeaves[0].view as AnnotatorView;
+            
+            const wordSpans = annotatorView.getAllWordSpans();
+            if (!wordSpans || wordSpans.length === 0) return;
+            
+            const startIndex = this.findTextIndex(wordSpans, startText);
+            if (startIndex === -1) return;
+            
+            const endIndex = this.findTextIndex(wordSpans, endText, startIndex + startText.split(/\s+/).filter(w => w.length > 0).length);
+            if (endIndex === -1) return;
+            
+            const fullText = this.getTextBetweenIndices(wordSpans, startIndex, endIndex);
+            if (!fullText.includes(displayText)) return;
+            
+            const targetRange = this.getWordIndicesBetween(wordSpans, startIndex, endIndex);
+            
+            const displayIndices = this.findDisplayTextIndices(wordSpans, targetRange, displayText, fullText);
+            
+            const result = {
+                src: this.originalFile?.path,
+                src_txt_display: selectedComment.title,
+                src_txt: selectedComment.title + ' ' + selectedComment.body,
+                src_txt_range: selectedComment.indices,
+                target: targetPath,
+                target_txt_display: displayText,
+                target_txt_start: startText,
+                target_txt_end: endText,
+                target_txt: fullText,
+                target_range: targetRange,
+                target_txt_display_range: displayIndices
+            };
+            
+            console.log(result);
+            
+            annotatorView.highlightWords(displayIndices);
+        });
+    }
     setComments(comments: Comment[]): void {
         this.comments = comments;
         this.setupCommentsTab()
@@ -261,6 +316,66 @@ export class AnnotateFormView extends ItemView {
     
     resetForm(): void {
         
+    }
+
+    findTextIndex(spans: HTMLElement[], text: string, startFrom = 0): number {
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 0) return -1;
+        
+        for (let i = startFrom; i <= spans.length - words.length; i++) {
+            let found = true;
+            for (let j = 0; j < words.length; j++) {
+                if (spans[i + j].textContent !== words[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) return i;
+        }
+        return -1;
+    }
+    
+    getTextBetweenIndices(spans: HTMLElement[], startIndex: number, endIndex: number): string {
+        let text = '';
+        for (let i = startIndex; i <= endIndex; i++) {
+            text += (text ? ' ' : '') + spans[i].textContent;
+        }
+        return text;
+    }
+    
+    getWordIndicesBetween(spans: HTMLElement[], startIndex: number, endIndex: number): number[] {
+        const indices: number[] = [];
+        for (let i = startIndex; i <= endIndex; i++) {
+            const indexAttr = spans[i].getAttribute('data-word-index');
+            if (indexAttr) {
+                indices.push(parseInt(indexAttr));
+            }
+        }
+        return indices;
+    }
+    
+    findDisplayTextIndices(spans: HTMLElement[], range: number[], displayText: string, fullText: string): number[] {
+        const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
+        const fullWords = fullText.split(/\s+/).filter(w => w.length > 0);
+        
+        let displayStartPos = -1;
+        for (let i = 0; i <= fullWords.length - displayWords.length; i++) {
+            let match = true;
+            for (let j = 0; j < displayWords.length; j++) {
+                if (fullWords[i + j] !== displayWords[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                displayStartPos = i;
+                break;
+            }
+        }
+        
+        if (displayStartPos === -1) return [];
+        
+        return range.slice(displayStartPos, displayStartPos + displayWords.length);
     }
     
     async onClose(): Promise<void> {
