@@ -86,7 +86,7 @@ export class AnnotatorView extends ItemView {
         
         if (!this.currentFile) {
             this.contentContainer.createEl('div', {
-                text: 'Open in Idealogs Annotator',
+                text: 'Idealogs Annotator',
                 cls: 'idl-annotator-placeholder'
             });
         }
@@ -200,6 +200,26 @@ export class AnnotatorView extends ItemView {
                     'tab'
                 );
             });
+        });
+    }
+
+    getAllWordSpans(): HTMLElement[] {
+        if (!this.contentContainer) return [];
+        const spans = this.contentContainer.querySelectorAll('span[data-word-index]');
+        return Array.from(spans) as HTMLElement[];
+    }
+    
+    highlightWords(indices: number[]): void {
+        const allWordSpans = this.getAllWordSpans();
+        allWordSpans.forEach(span => {
+            span.classList.remove('idl-highlighted-word');
+        });
+        
+        indices.forEach(index => {
+            const span = this.contentContainer.querySelector(`span[data-word-index="${index}"]`);
+            if (span) {
+                span.classList.add('idl-highlighted-word');
+            }
         });
     }
     
