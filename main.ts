@@ -60,7 +60,7 @@ export default class IdealogsMDPlugin extends Plugin {
             name: 'Open in Idealogs Annotator',
             checkCallback: (checking) => {
                 const file = this.app.workspace.getActiveFile();
-                if (file && file.extension === 'md') {
+                if (file && file.extension === 'md' && file.basename.startsWith('Tx')) {
                     if (!checking) {
                         this.openFileInAnnotator(file);
                     }
