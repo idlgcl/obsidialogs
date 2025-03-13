@@ -7,6 +7,7 @@ import {
 import { WordProcessor } from './WordProcessor';
 import { ANNOTATE_FORM_VIEW_TYPE, AnnotateFormView } from './AnnotateForm';
 import { Comment } from 'types/interfaces';
+import { AnnotationService } from '../services/annotationService';
 
 export const ANNOTATOR_VIEW_TYPE = 'idl-annotator-view';
 
@@ -18,9 +19,11 @@ export class AnnotatorView extends ItemView {
     private originalFile: TFile | null = null;
     private mode: 'display' | 'annotate' = 'display';
     private annotateButton: HTMLElement | null = null;
+    private annotationService: AnnotationService;
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
+        this.annotationService = new AnnotationService(this.app);
     }
 
     getCurrentFile(): TFile | null {
@@ -128,7 +131,6 @@ export class AnnotatorView extends ItemView {
             this.originalFile = file;
         }
         
-        // In display mode, always use original file
         if (this.mode === 'display') {
             this.currentFile = this.originalFile;
         } else {
@@ -140,6 +142,10 @@ export class AnnotatorView extends ItemView {
         });
         
         await this.loadContent();
+        
+        if (this.currentFile && this.currentFile.basename.startsWith('Tx') && this.mode === 'display') {
+            await this.loadAnnotations();
+        }
     }
     
     async loadContent(): Promise<void> {
@@ -277,18 +283,102 @@ export class AnnotatorView extends ItemView {
         return Array.from(spans) as HTMLElement[];
     }
     
-    highlightWords(indices: number[]): void {
-        const allWordSpans = this.getAllWordSpans();
-        allWordSpans.forEach(span => {
-            span.classList.remove('idl-highlighted-word');
+    // TODO: wont work when we load annotation that targets this article
+    private annotationsByWordIndex: Map<number, {text: string, type: 'comment' | 'note'}[]> = new Map();
+
+    highlightWords(indices: number[], targetText?: string, type: 'comment' | 'note' = 'note'): void {
+        if (!targetText) return;
+        
+        indices.forEach(index => {
+            if (!this.annotationsByWordIndex.has(index)) {
+                this.annotationsByWordIndex.set(index, []);
+            }
+            this.annotationsByWordIndex.get(index)?.push({text: targetText, type});
         });
         
         indices.forEach(index => {
             const span = this.contentContainer.querySelector(`span[data-word-index="${index}"]`);
-            if (span) {
-                span.classList.add('idl-highlighted-word');
+            if (!span) return;
+            
+            span.classList.add('idl-highlighted-word');
+            
+            if (!span.hasAttribute('data-has-annotations')) {
+                span.setAttribute('data-has-annotations', 'true');
+                
+                span.addEventListener('click', (e) => {
+                    this.toggleAnnotationsForWord(index, span as HTMLElement);
+                    e.stopPropagation();
+                });
             }
         });
+    }
+    
+    private toggleAnnotationsForWord(wordIndex: number, element: HTMLElement): void {
+        
+        const existingContainer = this.contentContainer.querySelector(`.idl-annotations-container[data-for-word="${wordIndex}"]`);
+        
+        if (existingContainer) {
+            existingContainer.remove();
+            return;
+        }
+        
+        const annotations = this.annotationsByWordIndex.get(wordIndex);
+        if (!annotations || annotations.length === 0) return;
+        
+        const container = document.createElement('div');
+        container.className = 'idl-annotations-container';
+        container.setAttribute('data-for-word', wordIndex.toString());
+        
+        annotations.forEach(({text, type}, i) => {
+            const annotationEl = document.createElement('div');
+            annotationEl.className = 'idl-annotation-item';
+            const textEl = document.createElement('div');
+            textEl.textContent = text;
+            
+            annotationEl.appendChild(textEl);
+            container.appendChild(annotationEl);
+        });
+        
+        element.after(container);
+    }
+    
+    private async loadAnnotations(): Promise<void> {
+        if (!this.currentFile) return;
+        
+        try {
+            const allWordSpans = this.getAllWordSpans();
+            allWordSpans.forEach(span => {
+                span.classList.remove('idl-highlighted-word');
+                span.removeAttribute('data-has-annotations');
+                
+                const newSpan = span.cloneNode(true) as HTMLElement;
+                span.parentNode?.replaceChild(newSpan, span);
+            });
+            
+            const existingContainers = this.contentContainer.querySelectorAll('.idl-annotations-container');
+            existingContainers.forEach(el => el.remove());
+            
+            this.annotationsByWordIndex.clear();
+            
+            const annotations = await this.annotationService.loadAnnotations(this.currentFile.path);
+            
+            for (const commentId in annotations.comments) {
+                const comment = annotations.comments[commentId];
+                if (comment.src_txt_display_range && comment.src_txt_display_range.length > 0) {
+                    this.highlightWords(comment.src_txt_display_range, comment.target_txt, 'comment');
+                }
+            }
+            
+            for (const noteId in annotations.notes) {
+                const note = annotations.notes[noteId];
+                if (note.src_txt_display_range && note.src_txt_display_range.length > 0) {
+                    this.highlightWords(note.src_txt_display_range, note.target_txt, 'note');
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error loading annotations:', error);
+        }
     }
     
     async onClose(): Promise<void> {

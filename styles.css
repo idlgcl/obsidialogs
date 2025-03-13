@@ -204,4 +204,13 @@ span[data-word-index]:hover {
 
 .idl-highlighted-word {
     font-weight: bolder;
+    cursor: pointer;
+}
+
+.idl-annotation-item {
+    background-color: var(--background-secondary);
+    border-radius: 4px;
+    border-left: 3px solid var(--interactive-accent);
+    padding: 5px;
+    margin: 5px 0px;
 }
