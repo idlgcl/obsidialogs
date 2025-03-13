@@ -92,6 +92,8 @@ export class AnnotatorView extends ItemView {
                 this.annotateButton.setText('Back to Display Mode');
             }
             
+            this.clearAnnotations();
+            
             const existingFormLeaves = this.app.workspace.getLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
             
             if (existingFormLeaves.length > 0) {
@@ -124,6 +126,22 @@ export class AnnotatorView extends ItemView {
                 }
             }
         }
+    }
+
+    private clearAnnotations(): void {
+        const allWordSpans = this.getAllWordSpans();
+        allWordSpans.forEach(span => {
+            span.classList.remove('idl-highlighted-word');
+            span.removeAttribute('data-has-annotations');
+            
+            const newSpan = span.cloneNode(true) as HTMLElement;
+            span.parentNode?.replaceChild(newSpan, span);
+        });
+        
+        const existingContainers = this.contentContainer.querySelectorAll('.idl-annotations-container');
+        existingContainers.forEach(el => el.remove());
+        
+        this.annotationsByWordIndex.clear();
     }
     
     async setFile(file: TFile): Promise<void> {
