@@ -16,6 +16,8 @@ export class AnnotatorView extends ItemView {
     private currentFile: TFile | null = null;
     private comments: Comment[] = [];
     private originalFile: TFile | null = null;
+    private mode: 'display' | 'annotate' = 'display';
+    private annotateButton: HTMLElement | null = null;
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -41,12 +43,52 @@ export class AnnotatorView extends ItemView {
             cls: 'idl-annotator-toolbar'
         });
         
-        const openFormButton = toolbar.createEl('button', {
+        this.annotateButton = toolbar.createEl('button', {
             text: 'Annotate',
             cls: 'idl-open-form-button'
         });
         
-        openFormButton.addEventListener('click', () => {
+        this.annotateButton.addEventListener('click', () => {
+            if (this.mode === 'display') {
+                this.setMode('annotate');
+            } else {
+                this.setMode('display');
+            }
+        });
+        
+        this.contentContainer = containerEl.createDiv({
+            cls: 'idl-annotator-content-container'
+        });
+        
+        if (!this.currentFile) {
+            this.contentContainer.createEl('div', {
+                text: 'Idealogs Annotator',
+                cls: 'idl-annotator-placeholder'
+            });
+        }
+    }
+    
+    setMode(mode: 'display' | 'annotate'): void {
+        this.mode = mode;
+        
+        if (mode === 'display') {
+            if (this.annotateButton) {
+                this.annotateButton.setText('Annotate');
+            }
+            
+            if (this.originalFile) {
+                this.setFile(this.originalFile);
+            }
+            
+            const existingFormLeaves = this.app.workspace.getLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
+            existingFormLeaves.forEach(leaf => {
+                leaf.detach();
+            });
+        } else {
+            if (this.annotateButton) {
+                this.annotateButton.setText('Back to Display Mode');
+            }
+            
             const existingFormLeaves = this.app.workspace.getLeavesOfType(ANNOTATE_FORM_VIEW_TYPE);
             
             if (existingFormLeaves.length > 0) {
@@ -78,17 +120,6 @@ export class AnnotatorView extends ItemView {
                     }, 10);
                 }
             }
-        });
-        
-        this.contentContainer = containerEl.createDiv({
-            cls: 'idl-annotator-content-container'
-        });
-        
-        if (!this.currentFile) {
-            this.contentContainer.createEl('div', {
-                text: 'Idealogs Annotator',
-                cls: 'idl-annotator-placeholder'
-            });
         }
     }
     
@@ -97,10 +128,15 @@ export class AnnotatorView extends ItemView {
             this.originalFile = file;
         }
         
-        this.currentFile = file;
+        // In display mode, always use original file
+        if (this.mode === 'display') {
+            this.currentFile = this.originalFile;
+        } else {
+            this.currentFile = file;
+        }
         
         this.wordProcessor = new WordProcessor({
-            articleId: file.basename
+            articleId: this.currentFile.basename
         });
         
         await this.loadContent();
