@@ -149,8 +149,6 @@ export class AnnotatorView extends ItemView {
         
         const content = await this.app.vault.read(this.currentFile);
         
-        this.comments = this.parseComments(content);
-        
         const renderContainer = this.contentContainer.createDiv({
             cls: 'idl-annotator-render-container'
         });
@@ -171,53 +169,87 @@ export class AnnotatorView extends ItemView {
         
         if (this.wordProcessor) {
             this.wordProcessor.processMarkdown(renderContainer);
+            this.comments = this.parseComments(content, renderContainer);
         }
         
         this.setupLinkClickHandlers(renderContainer);
     }
     
-    private parseComments(text: string): Comment[] {
+    private parseComments(text: string, container: HTMLElement): Comment[] {
         const segments = text.split('\n');
         const pattern = /^(.*?)\.\s+(.*)$/;
         const results: Comment[] = [];
-        let counter = 0;
-
+        
+        const wordSpans = container.querySelectorAll('span[data-word-index]');
+        
         for (const segment of segments) {
             if (segment.startsWith('## ')) {
                 continue;
             }
 
             if (!segment.endsWith(':')) {
-                const words = segment.split(/\s+/).filter(w => w.length > 0);
-                counter += words.length;
                 continue;
             }
 
             const match = segment.match(pattern);
             
             if (!match) {
-                const words = segment.split(/\s+/).filter(w => w.length > 0);
-                counter += words.length;
                 continue;
             }
 
-            const indices = [];
             const [, title, description] = match;
-
-            const words = (title + ' ' + description).split(/\s+/).filter(w => w.length > 0);
-            for (let i = 0; i < words.length; i++) {
-                indices.push(counter);
-                counter++;
+            const fullText = title.trim() + '. ' + description.trim();
+            
+            const foundIndices = this.findCommentIndices(wordSpans, fullText);
+            
+            if (foundIndices.length > 0) {
+                results.push({
+                    title: title.trim() + '.',
+                    body: description.trim(),
+                    indices: foundIndices
+                });
             }
-
-            results.push({
-                title: title.trim() + '.',
-                body: description.trim(),
-                indices: indices,
-            });
         }
 
         return results;
+    }
+    
+    private findCommentIndices(wordSpans: NodeListOf<Element>, commentText: string): number[] {
+        const commentWords = commentText.split(/\s+/).filter(w => w.length > 0);
+        const indices: number[] = [];
+        
+        if (commentWords.length === 0) {
+            return indices;
+        }
+        
+        const spans = Array.from(wordSpans) as HTMLElement[];
+        
+        for (let i = 0; i <= spans.length - commentWords.length; i++) {
+            let allWordsMatched = true;
+            const tempIndices: number[] = [];
+            
+            for (let j = 0; j < commentWords.length; j++) {
+                const span = spans[i + j];
+                if (!span || span.textContent !== commentWords[j]) {
+                    allWordsMatched = false;
+                    break;
+                }
+                
+                const indexAttr = span.getAttribute('data-word-index');
+                if (indexAttr) {
+                    tempIndices.push(parseInt(indexAttr));
+                } else {
+                    allWordsMatched = false;
+                    break;
+                }
+            }
+            
+            if (allWordsMatched) {
+                return tempIndices;
+            }
+        }
+        
+        return indices;
     }
     
     private setupLinkClickHandlers(element: HTMLElement): void {
