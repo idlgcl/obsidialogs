@@ -266,18 +266,43 @@ export class AnnotateFormView extends ItemView {
             const wordSpans = annotatorView.getAllWordSpans();
             if (!wordSpans || wordSpans.length === 0) return;
             
-            const startIndex = this.findTextIndex(wordSpans, startText);
-            if (startIndex === -1) return;
+            const startSpans = this.findTextSpans(wordSpans, startText);
+            if (startSpans.length === 0) {
+                new Notice("Start text not found");
+                return;
+            }
             
-            const endIndex = this.findTextIndex(wordSpans, endText, startIndex + startText.split(/\s+/).filter(w => w.length > 0).length);
-            if (endIndex === -1) return;
+            const endSpans = this.findTextSpans(wordSpans, endText);
+            if (endSpans.length === 0) {
+                new Notice("End text not found");
+                return;
+            }
             
-            const fullText = this.getTextBetweenIndices(wordSpans, startIndex, endIndex);
-            if (!fullText.includes(displayText)) return;
+            const startIndex = parseInt(startSpans[0].getAttribute('data-word-index') || '0');
+            const endIndex = parseInt(endSpans[endSpans.length - 1].getAttribute('data-word-index') || '0');
             
-            const targetRange = this.getWordIndicesBetween(wordSpans, startIndex, endIndex);
+            const rangeSpans = this.getSpansBetweenIndices(wordSpans, startIndex, endIndex);
             
-            const displayIndices = this.findDisplayTextIndices(wordSpans, targetRange, displayText, fullText);
+            const fullText = this.getTextFromSpans(rangeSpans);
+            
+            if (!fullText.includes(displayText)) {
+                new Notice("Display text not found in the selected range");
+                return;
+            }
+            
+            const targetRange = rangeSpans.map(span => 
+                parseInt(span.getAttribute('data-word-index') || '0')
+            );
+            
+            const displaySpans = this.findTextSpansInRange(rangeSpans, displayText);
+            if (displaySpans.length === 0) {
+                new Notice("Could not locate display text within range");
+                return;
+            }
+            
+            const displayIndices = displaySpans.map(span => 
+                parseInt(span.getAttribute('data-word-index') || '0')
+            );
             
             const result = {
                 src: this.originalFile?.path,
@@ -410,28 +435,43 @@ export class AnnotateFormView extends ItemView {
                     return;
                 }
                 
-                const targetStartIndex = this.findTextIndex(wordSpans, targetStartText);
-                if (targetStartIndex === -1) {
-                    console.log('Target start text not found');
+                const targetStartSpans = this.findTextSpans(wordSpans, targetStartText);
+                if (targetStartSpans.length === 0) {
+                    new Notice("Target start text not found");
                     return;
                 }
                 
-                const targetEndIndex = this.findTextIndex(wordSpans, targetEndText, 
-                    targetStartIndex + targetStartText.split(/\s+/).filter(w => w.length > 0).length);
-                if (targetEndIndex === -1) {
-                    console.log('Target end text not found');
+                const targetEndSpans = this.findTextSpans(wordSpans, targetEndText);
+                if (targetEndSpans.length === 0) {
+                    new Notice("Target end text not found");
                     return;
                 }
                 
-                const targetFullText = this.getTextBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
+                const targetStartIndex = parseInt(targetStartSpans[0].getAttribute('data-word-index') || '0');
+                const targetEndIndex = parseInt(targetEndSpans[targetEndSpans.length - 1].getAttribute('data-word-index') || '0');
+                
+                const targetRangeSpans = this.getSpansBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
+                
+                const targetFullText = this.getTextFromSpans(targetRangeSpans);
+                
                 if (!targetFullText.includes(targetDisplayText)) {
-                    console.log('Target display text not found in the range');
+                    new Notice("Target display text not found in the selected range");
                     return;
                 }
                 
-                const targetRange = this.getWordIndicesBetween(wordSpans, targetStartIndex, targetEndIndex);
-                const targetDisplayIndices = this.findDisplayTextIndices(
-                    wordSpans, targetRange, targetDisplayText, targetFullText);
+                const targetRange = targetRangeSpans.map(span => 
+                    parseInt(span.getAttribute('data-word-index') || '0')
+                );
+                
+                const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetDisplayText);
+                if (targetDisplaySpans.length === 0) {
+                    new Notice("Could not locate target display text within range");
+                    return;
+                }
+                
+                const targetDisplayIndices = targetDisplaySpans.map(span => 
+                    parseInt(span.getAttribute('data-word-index') || '0')
+                );
                 
                 const sourcePath = this.originalFile?.path;
                 
@@ -476,30 +516,44 @@ export class AnnotateFormView extends ItemView {
                 const wordSpans = annotatorView.getAllWordSpans();
                 if (!wordSpans || wordSpans.length === 0) return;
                 
-                const startIndex = this.findTextIndex(wordSpans, textStart);
-                if (startIndex === -1) {
-                    console.log('Start text not found');
+                const startSpans = this.findTextSpans(wordSpans, textStart);
+                if (startSpans.length === 0) {
+                    new Notice("Start text not found");
                     return;
                 }
                 
-                const endIndex = this.findTextIndex(wordSpans, textEnd, 
-                    startIndex + textStart.split(/\s+/).filter(w => w.length > 0).length);
-                if (endIndex === -1) {
-                    console.log('End text not found');
+                const endSpans = this.findTextSpans(wordSpans, textEnd);
+                if (endSpans.length === 0) {
+                    new Notice("End text not found");
                     return;
                 }
                 
-                const fullText = this.getTextBetweenIndices(wordSpans, startIndex, endIndex);
+                const startIndex = parseInt(startSpans[0].getAttribute('data-word-index') || '0');
+                const endIndex = parseInt(endSpans[endSpans.length - 1].getAttribute('data-word-index') || '0');
+                
+                const rangeSpans = this.getSpansBetweenIndices(wordSpans, startIndex, endIndex);
+                
+                const fullText = this.getTextFromSpans(rangeSpans);
+                
                 if (!fullText.includes(textDisplay)) {
-                    console.log('Display text not found in the range');
+                    new Notice("Display text not found in the selected range");
                     return;
                 }
                 
-                const sourceRange = this.getWordIndicesBetween(wordSpans, startIndex, endIndex);
+                const sourceRange = rangeSpans.map(span => 
+                    parseInt(span.getAttribute('data-word-index') || '0')
+                );
                 
-                const displayIndices = this.findDisplayTextIndices(wordSpans, sourceRange, textDisplay, fullText);
+                const displaySpans = this.findTextSpansInRange(rangeSpans, textDisplay);
+                if (displaySpans.length === 0) {
+                    new Notice("Could not locate display text within range");
+                    return;
+                }
                 
-                // Store the information for later use in the target phase
+                const displayIndices = displaySpans.map(span => 
+                    parseInt(span.getAttribute('data-word-index') || '0')
+                );
+                
                 this.sourceFullText = fullText;
                 this.sourceRange = sourceRange;
                 this.sourceDisplayIndices = displayIndices;
@@ -572,64 +626,81 @@ export class AnnotateFormView extends ItemView {
         
     }
 
-    findTextIndex(spans: HTMLElement[], text: string, startFrom = 0): number {
+    findTextSpans(spans: HTMLElement[], text: string): HTMLElement[] {
         const words = text.split(/\s+/).filter(w => w.length > 0);
-        if (words.length === 0) return -1;
+        if (words.length === 0) return [];
         
-        for (let i = startFrom; i <= spans.length - words.length; i++) {
+        if (words.length === 1) {
+            return spans.filter(span => span.textContent === words[0]);
+        }
+        
+        const result: HTMLElement[] = [];
+        let currentSequence: HTMLElement[] = [];
+        
+        for (let i = 0; i < spans.length; i++) {
+            if (spans[i].textContent === words[currentSequence.length]) {
+                currentSequence.push(spans[i]);
+                
+                if (currentSequence.length === words.length) {
+                    result.push(...currentSequence);
+                    currentSequence = [];
+                }
+            } else {
+                if (spans[i].textContent === words[0]) {
+                    currentSequence = [spans[i]];
+                } else {
+                    currentSequence = [];
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    findTextSpansInRange(rangeSpans: HTMLElement[], text: string): HTMLElement[] {
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 0) return [];
+        
+        if (words.length === 1) {
+            return rangeSpans.filter(span => span.textContent === words[0]);
+        }
+        
+        const result: HTMLElement[] = [];
+        
+        for (let i = 0; i <= rangeSpans.length - words.length; i++) {
             let found = true;
+            const sequence: HTMLElement[] = [];
+            
             for (let j = 0; j < words.length; j++) {
-                if (spans[i + j].textContent !== words[j]) {
+                if (rangeSpans[i + j].textContent !== words[j]) {
                     found = false;
                     break;
                 }
+                sequence.push(rangeSpans[i + j]);
             }
-            if (found) return i;
-        }
-        return -1;
-    }
-    
-    getTextBetweenIndices(spans: HTMLElement[], startIndex: number, endIndex: number): string {
-        let text = '';
-        for (let i = startIndex; i <= endIndex; i++) {
-            text += (text ? ' ' : '') + spans[i].textContent;
-        }
-        return text;
-    }
-    
-    getWordIndicesBetween(spans: HTMLElement[], startIndex: number, endIndex: number): number[] {
-        const indices: number[] = [];
-        for (let i = startIndex; i <= endIndex; i++) {
-            const indexAttr = spans[i].getAttribute('data-word-index');
-            if (indexAttr) {
-                indices.push(parseInt(indexAttr));
-            }
-        }
-        return indices;
-    }
-    
-    findDisplayTextIndices(spans: HTMLElement[], range: number[], displayText: string, fullText: string): number[] {
-        const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
-        const fullWords = fullText.split(/\s+/).filter(w => w.length > 0);
-        
-        let displayStartPos = -1;
-        for (let i = 0; i <= fullWords.length - displayWords.length; i++) {
-            let match = true;
-            for (let j = 0; j < displayWords.length; j++) {
-                if (fullWords[i + j] !== displayWords[j]) {
-                    match = false;
-                    break;
-                }
-            }
-            if (match) {
-                displayStartPos = i;
-                break;
+            
+            if (found) {
+                result.push(...sequence);
+                break; 
             }
         }
         
-        if (displayStartPos === -1) return [];
-        
-        return range.slice(displayStartPos, displayStartPos + displayWords.length);
+        return result;
+    }
+    
+    getTextFromSpans(spans: HTMLElement[]): string {
+        return spans.map(span => span.textContent).join(' ');
+    }
+    
+    getSpansBetweenIndices(allSpans: HTMLElement[], startIndex: number, endIndex: number): HTMLElement[] {
+        return allSpans.filter(span => {
+            const indexAttr = parseInt(span.getAttribute('data-word-index') || '-1');
+            return indexAttr >= startIndex && indexAttr <= endIndex;
+        }).sort((a, b) => {
+            const indexA = parseInt(a.getAttribute('data-word-index') || '0');
+            const indexB = parseInt(b.getAttribute('data-word-index') || '0');
+            return indexA - indexB;
+        });
     }
     
     async onClose(): Promise<void> {
