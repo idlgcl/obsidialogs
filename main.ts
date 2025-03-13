@@ -2,7 +2,6 @@ import {
     Plugin, 
     MarkdownView,
     TFile,
-    MarkdownPostProcessorContext,
     Notice,
     WorkspaceLeaf
 } from 'obsidian';
@@ -36,8 +35,6 @@ export default class IdealogsMDPlugin extends Plugin {
         patchDefaultSuggester(this.app);
 
         await this.annotationService.ensureAnnotationsDirectory();
-
-        this.registerMarkdownPostProcessor(this.customMarkdownProcessor.bind(this));
 
         this.registerEvent(
             this.app.workspace.on('file-open', this.handleFileOpen.bind(this))
@@ -130,16 +127,6 @@ export default class IdealogsMDPlugin extends Plugin {
         }
     }
     
-    private customMarkdownProcessor(el: HTMLElement, ctx: MarkdownPostProcessorContext): void {
-        if (!this.wordProcessor) return;
-        
-        const file = ctx.sourcePath ? this.app.vault.getAbstractFileByPath(ctx.sourcePath) : null;
-        
-        if (file instanceof TFile && isIdealogsFile(file)) {
-            this.wordProcessor.processMarkdown(el);
-        }
-    }
-    
     private async handleFileOpen(file: TFile | null) {
         if (!file) return;
         
@@ -189,6 +176,16 @@ export default class IdealogsMDPlugin extends Plugin {
             const view = this.app.workspace.getActiveViewOfType(MarkdownView);
             if (view && view.file && view.file.path === file.path) {
                 view.editor.setValue(content);
+                if (file.basename.startsWith('Tx')) {
+                    setTimeout(() => {
+                        if (this.wordProcessor && view) {
+                            const previewEl = view.previewMode?.containerEl;
+                            if (previewEl) {
+                                this.wordProcessor.processMarkdown(previewEl);
+                            }
+                        }
+                    }, 200);
+                }
             }
             setViewToReadOnly(this.app, file);
         }
