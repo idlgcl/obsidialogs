@@ -214,3 +214,40 @@ span[data-word-index]:hover {
     padding: 5px;
     margin: 5px 0px;
 }
+
+
+.idl-annotations-list {
+    margin-bottom: 20px;
+}
+
+.idl-annotation-list-item {
+    padding: 8px;
+    margin: 8px 0;
+}
+
+.idl-annotation-link {
+    cursor: pointer;
+    color: var(--text-accent);
+    text-decoration: none;
+}
+
+.idl-annotation-buttons {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.idl-back-button-container {
+    margin-bottom: 16px;
+}
+
+.idl-back-button {
+    background-color: var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+.idl-no-annotations {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 10px 0;
+}

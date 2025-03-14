@@ -22,11 +22,15 @@ export class AnnotateFormView extends ItemView {
     private sourceRange: number[] = [];
     private sourceDisplayIndices: number[] = [];
     private annotationService: AnnotationService | null = null;
+    private viewMode: 'list' | 'form' = 'list';
+    private currentAnnotationType: 'comment' | 'note' = 'comment';
+    private currentAnnotationId: string | null = null;
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
         this.annotationService = new AnnotationService(this.app);
     }
+    
     getViewType(): string {
         return ANNOTATE_FORM_VIEW_TYPE;
     }
@@ -58,21 +62,30 @@ export class AnnotateFormView extends ItemView {
         this.commentsContainer = containerEl.createDiv({ cls: 'idl-tab-content idl-tab-content-active' });
         this.notesContainer = containerEl.createDiv({ cls: 'idl-tab-content' });
         
-        this.commentsTab.addEventListener('click', () => this.selectTab('comments'));
-        this.notesTab.addEventListener('click', () => this.selectTab('notes'));
+        this.commentsTab.addEventListener('click', () => {
+            this.selectTab('comment');
+            this.viewMode = 'list';
+            this.renderView();
+        });
         
-        this.setupCommentsTab();
+        this.notesTab.addEventListener('click', () => {
+            this.selectTab('note');
+            this.viewMode = 'list';
+            this.renderView();
+        });
         
-        this.setupNotesTab();
+        this.renderView();
     }
     
-    private selectTab(tabName: 'comments' | 'notes'): void {
+    private selectTab(tabName: 'comment' | 'note'): void {
         this.commentsTab.removeClass('idl-tab-active');
         this.notesTab.removeClass('idl-tab-active');
         this.commentsContainer.removeClass('idl-tab-content-active');
         this.notesContainer.removeClass('idl-tab-content-active');
         
-        if (tabName === 'comments') {
+        this.currentAnnotationType = tabName;
+        
+        if (tabName === 'comment') {
             this.commentsTab.addClass('idl-tab-active');
             this.commentsContainer.addClass('idl-tab-content-active');
         } else {
@@ -81,8 +94,180 @@ export class AnnotateFormView extends ItemView {
         }
     }
     
-    private setupCommentsTab(): void {
+    private async renderView(): Promise<void> {
+        if (!this.originalFile) return;
+        
         this.commentsContainer.empty();
+        this.notesContainer.empty();
+        
+        if (this.viewMode === 'list') {
+            await this.renderAnnotationsList();
+        } else {
+            if (this.currentAnnotationType === 'comment') {
+                this.setupCommentsForm();
+                if (this.currentAnnotationId) {
+                    await this.loadAnnotationIntoForm(this.currentAnnotationId, 'comment');
+                }
+            } else {
+                this.setupNotesForm();
+                if (this.currentAnnotationId) {
+                    await this.loadAnnotationIntoForm(this.currentAnnotationId, 'note');
+                }
+            }
+        }
+    }
+    
+    private async renderAnnotationsList(): Promise<void> {
+        if (!this.originalFile || !this.annotationService) return;
+        
+        const annotations = await this.annotationService.loadAnnotations(this.originalFile.path);
+        
+        const commentsListContainer = this.commentsContainer.createDiv({ cls: 'idl-annotations-list' });
+        
+        if (Object.keys(annotations.comments).length === 0) {
+            commentsListContainer.createEl('p', { text: 'No comments found', cls: 'idl-no-annotations' });
+        } else {
+            for (const id in annotations.comments) {
+                const comment = annotations.comments[id];
+                const item = commentsListContainer.createDiv({ cls: 'idl-annotation-list-item' });
+                
+                const link = item.createEl('a', { 
+                    text: comment.src_txt_display,
+                    cls: 'idl-annotation-link' 
+                });
+                
+                link.addEventListener('click', () => {
+                    this.viewMode = 'form';
+                    this.currentAnnotationId = id;
+                    this.currentAnnotationType = 'comment';
+                    this.renderView();
+                });
+            }
+        }
+        
+        const commentButtons = this.commentsContainer.createDiv({ cls: 'idl-annotation-buttons' });
+        const newCommentButton = commentButtons.createEl('button', { 
+            text: 'New Comment', 
+            cls: 'idl-button' 
+        });
+        
+        newCommentButton.addEventListener('click', () => {
+            this.viewMode = 'form';
+            this.currentAnnotationId = null;
+            this.currentAnnotationType = 'comment';
+            this.renderView();
+        });
+        
+        const notesListContainer = this.notesContainer.createDiv({ cls: 'idl-annotations-list' });
+        
+        if (Object.keys(annotations.notes).length === 0) {
+            notesListContainer.createEl('p', { text: 'No notes found', cls: 'idl-no-annotations' });
+        } else {
+            for (const id in annotations.notes) {
+                const note = annotations.notes[id];
+                const item = notesListContainer.createDiv({ cls: 'idl-annotation-list-item' });
+                
+                const link = item.createEl('a', { 
+                    text: note.src_txt_display,
+                    cls: 'idl-annotation-link' 
+                });
+                
+                link.addEventListener('click', () => {
+                    this.viewMode = 'form';
+                    this.currentAnnotationId = id;
+                    this.currentAnnotationType = 'note';
+                    this.renderView();
+                });
+            }
+        }
+        
+        const noteButtons = this.notesContainer.createDiv({ cls: 'idl-annotation-buttons' });
+        const newNoteButton = noteButtons.createEl('button', { 
+            text: 'New Note', 
+            cls: 'idl-button' 
+        });
+        
+        newNoteButton.addEventListener('click', () => {
+            this.viewMode = 'form';
+            this.currentAnnotationId = null;
+            this.currentAnnotationType = 'note';
+            this.renderView();
+        });
+    }
+    
+    private async loadAnnotationIntoForm(id: string, type: 'comment' | 'note'): Promise<void> {
+        if (!this.originalFile || !this.annotationService) return;
+        
+        try {
+            const annotations = await this.annotationService.loadAnnotations(this.originalFile.path);
+            const annotation = type === 'comment' ? annotations.comments[id] : annotations.notes[id];
+            
+            if (!annotation) return;
+            
+            if (type === 'comment') {
+                const commentSelect = this.commentsContainer.querySelector('.idl-comment-select') as HTMLSelectElement;
+                const bodyTextarea = this.commentsContainer.querySelector('.idl-comment-body') as HTMLTextAreaElement;
+                const targetSelect = this.commentsContainer.querySelector('select[name="target"]') as HTMLSelectElement;
+                const displayInput = this.commentsContainer.querySelector('input[name="display"]') as HTMLInputElement;
+                const startInput = this.commentsContainer.querySelector('input[name="start"]') as HTMLInputElement;
+                const endInput = this.commentsContainer.querySelector('input[name="end"]') as HTMLInputElement;
+                
+                if (commentSelect) commentSelect.value = '';
+                if (bodyTextarea) bodyTextarea.value = annotation.target_txt || '';
+                if (targetSelect) targetSelect.value = annotation.target || '';
+                if (displayInput) displayInput.value = annotation.target_txt_display || '';
+                if (startInput) startInput.value = annotation.target_txt_start || '';
+                if (endInput) endInput.value = annotation.target_txt_end || '';
+                
+                if (targetSelect) targetSelect.removeAttribute('disabled');
+                if (displayInput) displayInput.removeAttribute('disabled');
+                if (startInput) startInput.removeAttribute('disabled');
+                if (endInput) endInput.removeAttribute('disabled');
+                
+                const saveButton = this.commentsContainer.querySelector('button[data-action="save"]') as HTMLButtonElement;
+                if (saveButton) saveButton.removeAttribute('disabled');
+            } else {
+                const textDisplayInput = this.notesContainer.querySelector('input[name="textDisplay"]') as HTMLInputElement;
+                const startInput = this.notesContainer.querySelector('input[name="start"]') as HTMLInputElement;
+                const endInput = this.notesContainer.querySelector('input[name="end"]') as HTMLInputElement;
+                
+                if (textDisplayInput) textDisplayInput.value = annotation.src_txt_display || '';
+                if (startInput) startInput.value = annotation.src_txt_start || '';
+                if (endInput) endInput.value = annotation.src_txt_end || '';
+                
+                const targetSection = this.notesContainer.querySelector('.idl-target-section') as HTMLElement;
+                const targetSelect = this.notesContainer.querySelector('select[name="target"]') as HTMLSelectElement;
+                const targetDisplayInput = this.notesContainer.querySelector('input[name="targetDisplay"]') as HTMLInputElement;
+                const targetStartInput = this.notesContainer.querySelector('input[name="targetStart"]') as HTMLInputElement;
+                const targetEndInput = this.notesContainer.querySelector('input[name="targetEnd"]') as HTMLInputElement;
+                
+                if (targetSection) targetSection.style.display = 'block';
+                if (targetSelect) targetSelect.value = annotation.target || '';
+                if (targetDisplayInput) targetDisplayInput.value = annotation.target_txt_display || '';
+                if (targetStartInput) targetStartInput.value = annotation.target_txt_start || '';
+                if (targetEndInput) targetEndInput.value = annotation.target_txt_end || '';
+                
+                const switchButton = this.notesContainer.querySelector('button[data-action="switch"]') as HTMLButtonElement;
+                if (switchButton) switchButton.style.display = 'inline-block';
+            }
+        } catch (error) {
+            console.error('Error loading annotation:', error);
+        }
+    }
+    
+    private setupCommentsForm(): void {
+        this.commentsContainer.empty();
+        
+        const backButtonContainer = this.commentsContainer.createDiv({ cls: 'idl-back-button-container' });
+        const backButton = backButtonContainer.createEl('button', {
+            text: 'Back to List',
+            cls: 'idl-button idl-back-button'
+        });
+        
+        backButton.addEventListener('click', () => {
+            this.viewMode = 'list';
+            this.renderView();
+        });
         
         const commentSelectField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
         commentSelectField.createEl('label', { text: 'Select Comment' });
@@ -105,12 +290,12 @@ export class AnnotateFormView extends ItemView {
         bodyField.createEl('label', { text: 'Comment Body' });
         const bodyTextarea = bodyField.createEl('textarea', { 
             cls: 'idl-comment-body',
-            attr: { rows: '4', readonly: 'true' }
+            attr: { rows: '4', readonly: 'true', name: 'body' }
         });
         
         const targetField = this.commentsContainer.createDiv({ cls: 'idl-form-field' });
         targetField.createEl('label', { text: 'Target Article' });
-        const targetSelect = targetField.createEl('select', { attr: {'disabled': 'true'}});
+        const targetSelect = targetField.createEl('select', { attr: {'disabled': 'true', name: 'target'}});
         
         targetSelect.createEl('option', {
             text: 'Select Article',
@@ -129,7 +314,7 @@ export class AnnotateFormView extends ItemView {
         displayField.createEl('label', { text: 'Text Display' });
         const displayInput = displayField.createEl('input', { 
             type: 'text',
-            attr: { disabled: 'true' }
+            attr: { disabled: 'true', name: 'display' }
         });
         
         const rangeField = this.commentsContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
@@ -138,27 +323,27 @@ export class AnnotateFormView extends ItemView {
         startField.createEl('label', { text: 'Text Start' });
         const startInput = startField.createEl('input', { 
             type: 'text',
-            attr: { disabled: 'true' }
+            attr: { disabled: 'true', name: 'start' }
         });
         
         const endField = rangeField.createDiv({ cls: 'idl-end-field' });
         endField.createEl('label', { text: 'Text End' });
         const endInput = endField.createEl('input', { 
             type: 'text',
-            attr: { disabled: 'true' }
+            attr: { disabled: 'true', name: 'end' }
         });
         
         const buttonContainer = this.commentsContainer.createDiv({ cls: 'idl-form-buttons' });
         const switchButton = buttonContainer.createEl('button', { 
             text: 'Switch Article', 
             cls: 'idl-button',
-            attr: { disabled: 'true' }
+            attr: { disabled: 'true', 'data-action': 'switch' }
         });
         
         const saveButton = buttonContainer.createEl('button', { 
             text: 'Save', 
             cls: 'idl-button',
-            attr: { disabled: 'true' }
+            attr: { disabled: 'true', 'data-action': 'save' }
         });
        
         commentSelect.addEventListener('change', (e) => {
@@ -249,14 +434,17 @@ export class AnnotateFormView extends ItemView {
             const endText = endInput.value.trim();
             const displayText = displayInput.value.trim();
             
-            if (!commentSelectValue || !targetPath || !startText || !endText || !displayText) {
+            if (!targetPath || !startText || !endText || !displayText) {
                 return;
             }
             
-            const selectedCommentIndex = parseInt(commentSelectValue);
-            const selectedComment = this.comments[selectedCommentIndex];
+            let selectedComment: Comment | null = null;
             
-            if (!selectedComment) return;
+            if (commentSelectValue) {
+                const selectedCommentIndex = parseInt(commentSelectValue);
+                selectedComment = this.comments[selectedCommentIndex];
+                if (!selectedComment) return;
+            }
             
             const annotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW_TYPE);
             if (annotatorLeaves.length === 0) return;
@@ -304,14 +492,15 @@ export class AnnotateFormView extends ItemView {
                 parseInt(span.getAttribute('data-word-index') || '0')
             );
             
-            const result = {
-                src: this.originalFile?.path,
-                src_txt_display: selectedComment.title,
-                src_txt_start: selectedComment.title,
-                src_txt_end: selectedComment.body,
-                src_txt: selectedComment.title + ' ' + selectedComment.body,
-                src_txt_display_range: selectedComment.indices.slice(0, selectedComment.title.split(' ').length),
-                src_range: selectedComment.indices,
+            const result: Omit<AnnotationData, 'id' | 'timestamp'> = {
+                src: this.originalFile?.path || '',
+                src_txt_display: selectedComment ? selectedComment.title : '',
+                src_txt_start: selectedComment ? selectedComment.title : '',
+                src_txt_end: selectedComment ? selectedComment.body : '',
+                src_txt: selectedComment ? selectedComment.title + ' ' + selectedComment.body : '',
+                src_txt_display_range: selectedComment ? 
+                    selectedComment.indices.slice(0, selectedComment.title.split(' ').length) : [],
+                src_range: selectedComment ? selectedComment.indices : [],
                 target: targetPath,
                 target_txt_display: displayText,
                 target_txt_start: startText,
@@ -319,12 +508,22 @@ export class AnnotateFormView extends ItemView {
                 target_txt: fullText,
                 target_range: targetRange,
                 target_txt_display_range: displayIndices
-            } as AnnotationData;
+            };
             
             if (this.annotationService) {
                 try {
+                    if (this.currentAnnotationId) {
+                        await this.annotationService.deleteAnnotation(
+                            this.originalFile?.path || '', 
+                            this.currentAnnotationId, 
+                            'comment'
+                        );
+                    }
+                    
                     const id = await this.annotationService.saveAnnotation(result, 'comment');
                     new Notice(`Comment saved with ID: ${id}`);
+                    this.viewMode = 'list';
+                    this.renderView();
                 } catch (error) {
                     console.error('Error saving comment:', error);
                     new Notice('Failed to save comment');
@@ -334,38 +533,52 @@ export class AnnotateFormView extends ItemView {
             annotatorView.highlightWords(displayIndices);
         });
     }
-    setComments(comments: Comment[]): void {
-        this.comments = comments;
-        this.setupCommentsTab()
-    }
-
-    setOriginalFile(file: TFile): void {
-        this.originalFile = file;
-    }
     
-    private setupNotesTab(): void {
+    private setupNotesForm(): void {
         this.notesContainer.empty();
+        
+        const backButtonContainer = this.notesContainer.createDiv({ cls: 'idl-back-button-container' });
+        const backButton = backButtonContainer.createEl('button', {
+            text: 'Back to List',
+            cls: 'idl-button idl-back-button'
+        });
+        
+        backButton.addEventListener('click', () => {
+            this.viewMode = 'list';
+            this.renderView();
+        });
         
         const textDisplayField = this.notesContainer.createDiv({ cls: 'idl-form-field' });
         textDisplayField.createEl('label', { text: 'Text Display' });
-        const textDisplayInput = textDisplayField.createEl('input', { type: 'text' });
+        const textDisplayInput = textDisplayField.createEl('input', { 
+            type: 'text',
+            attr: { name: 'textDisplay' }
+        });
         
         const rangeField = this.notesContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
         
         const startField = rangeField.createDiv({ cls: 'idl-start-field' });
         startField.createEl('label', { text: 'Text Start' });
-        const startInput = startField.createEl('input', { type: 'text' });
+        const startInput = startField.createEl('input', { 
+            type: 'text',
+            attr: { name: 'start' }
+        });
         
         const endField = rangeField.createDiv({ cls: 'idl-end-field' });
         endField.createEl('label', { text: 'Text End' });
-        const endInput = endField.createEl('input', { type: 'text' });
+        const endInput = endField.createEl('input', { 
+            type: 'text',
+            attr: { name: 'end' }
+        });
         
         const targetSection = this.notesContainer.createDiv({ cls: 'idl-target-section' });
         targetSection.style.display = 'none';
         
         const targetField = targetSection.createDiv({ cls: 'idl-form-field' });
         targetField.createEl('label', { text: 'Target Article' });
-        const targetSelect = targetField.createEl('select');
+        const targetSelect = targetField.createEl('select', { 
+            attr: { name: 'target' }
+        });
         
         targetSelect.createEl('option', {
             text: 'Select Article',
@@ -382,29 +595,40 @@ export class AnnotateFormView extends ItemView {
         
         const targetDisplayField = targetSection.createDiv({ cls: 'idl-form-field' });
         targetDisplayField.createEl('label', { text: 'Target Text Display' });
-        const targetDisplayInput = targetDisplayField.createEl('input', { type: 'text' });
+        const targetDisplayInput = targetDisplayField.createEl('input', { 
+            type: 'text',
+            attr: { name: 'targetDisplay' } 
+        });
         
         const targetRangeField = targetSection.createDiv({ cls: 'idl-form-field idl-range-field' });
         
         const targetStartField = targetRangeField.createDiv({ cls: 'idl-start-field' });
         targetStartField.createEl('label', { text: 'Target Text Start' });
-        const targetStartInput = targetStartField.createEl('input', { type: 'text' });
+        const targetStartInput = targetStartField.createEl('input', { 
+            type: 'text',
+            attr: { name: 'targetStart' }
+        });
         
         const targetEndField = targetRangeField.createDiv({ cls: 'idl-end-field' });
         targetEndField.createEl('label', { text: 'Target Text End' });
-        const targetEndInput = targetEndField.createEl('input', { type: 'text' });
+        const targetEndInput = targetEndField.createEl('input', { 
+            type: 'text',
+            attr: { name: 'targetEnd' }
+        });
         
         const buttonContainer = this.notesContainer.createDiv({ cls: 'idl-form-buttons' });
         
         const switchButton = buttonContainer.createEl('button', { 
             text: 'Switch Article', 
-            cls: 'idl-button'
+            cls: 'idl-button',
+            attr: { 'data-action': 'switch' }
         });
         switchButton.style.display = 'none'; 
         
         const saveButton = buttonContainer.createEl('button', { 
             text: 'Save', 
-            cls: 'idl-button'
+            cls: 'idl-button',
+            attr: { 'data-action': 'save' }
         });
         
         saveButton.addEventListener('click', async () => {
@@ -475,8 +699,8 @@ export class AnnotateFormView extends ItemView {
                 
                 const sourcePath = this.originalFile?.path;
                 
-                const result = {
-                    src: sourcePath,
+                const result: Omit<AnnotationData, 'id' | 'timestamp'> = {
+                    src: sourcePath || '',
                     src_txt_display: textDisplay,
                     src_txt_start: textStart,
                     src_txt_end: textEnd, 
@@ -490,12 +714,22 @@ export class AnnotateFormView extends ItemView {
                     target_txt: targetFullText,
                     target_range: targetRange,
                     target_txt_display_range: targetDisplayIndices
-                } as AnnotationData;
+                };
                 
                 if (this.annotationService) {
                     try {
+                        if (this.currentAnnotationId) {
+                            await this.annotationService.deleteAnnotation(
+                                this.originalFile?.path || '', 
+                                this.currentAnnotationId, 
+                                'note'
+                            );
+                        }
+                        
                         const id = await this.annotationService.saveAnnotation(result, 'note');
                         new Notice(`Note saved with ID: ${id}`);
+                        this.viewMode = 'list';
+                        this.renderView();
                     } catch (error) {
                         console.error('Error saving note:', error);
                         new Notice('Failed to save note');
@@ -558,13 +792,6 @@ export class AnnotateFormView extends ItemView {
                 this.sourceRange = sourceRange;
                 this.sourceDisplayIndices = displayIndices;
                 
-                console.log('Source Text Found:');
-                console.log('Start Index:', startIndex);
-                console.log('End Index:', endIndex);
-                console.log('Full Text:', fullText);
-                console.log('Source Range:', sourceRange);
-                console.log('Display Indices:', displayIndices);
-                
                 annotatorView.highlightWords(displayIndices);
                 
                 targetSection.style.display = 'block';
@@ -617,13 +844,26 @@ export class AnnotateFormView extends ItemView {
         });
     }
     
+    setComments(comments: Comment[]): void {
+        this.comments = comments;
+        this.renderView();
+    }
+
+    setOriginalFile(file: TFile): void {
+        this.originalFile = file;
+        this.viewMode = 'list';
+        this.renderView();
+    }
+    
     setOnSave(callback: (data: AnnotateFormData) => void): this {
         this.onSaveCallback = callback;
         return this;
     }
     
     resetForm(): void {
-        
+        this.currentAnnotationId = null;
+        this.viewMode = 'list';
+        this.renderView();
     }
 
     findTextSpans(spans: HTMLElement[], text: string): HTMLElement[] {
