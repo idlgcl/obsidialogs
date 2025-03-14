@@ -255,9 +255,12 @@ export class AnnotateFormView extends ItemView {
         }
     }
     
-    private setupCommentsForm(): void {
+    private async setupCommentsForm(): Promise<void> {
         this.commentsContainer.empty();
-        
+
+        const annotations = await this.annotationService?.loadAnnotations(this.originalFile?.path || '') || { comments: {}, notes: {} };
+        const usedCommentRanges = Object.values(annotations.comments).map(comment => comment.src_txt_display_range);
+
         const backButtonContainer = this.commentsContainer.createDiv({ cls: 'idl-back-button-container' });
         const backButton = backButtonContainer.createEl('button', {
             text: 'Back to List',
@@ -277,8 +280,18 @@ export class AnnotateFormView extends ItemView {
             text: 'Select Comment',
             attr: { value: '', selected: 'selected' }
         });
+
+        const unusedComments = this.comments.filter(comment => {
+            const titleWordCount = comment.title.split(/\s+/).filter(w => w.length > 0).length;
+            const titleIndices = comment.indices.slice(0, titleWordCount);
+            
+            return !usedCommentRanges.some(range => 
+                range && titleIndices.length === range.length && 
+                range.every((val, idx) => val === titleIndices[idx])
+            );
+        });
         
-        this.comments.forEach((comment, index) => {
+        unusedComments.forEach((comment, index) => {
             commentSelect.createEl('option', {
                 text: comment.title,
                 attr: { value: index.toString() }
