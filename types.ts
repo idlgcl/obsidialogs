@@ -21,3 +21,7 @@ export interface Article {
     createdAt?: string;
     updatedAt?: string;
 }
+
+export interface WordProcessorOptions {
+    articleId: string;
+}
