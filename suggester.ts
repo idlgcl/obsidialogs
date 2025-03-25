@@ -1,14 +1,15 @@
 import { 
-    Plugin, 
+    Plugin,
     MarkdownView,
     EditorSuggest,
     EditorPosition,
     EditorSuggestContext,
     EditorSuggestTriggerInfo,
-    Editor
+    Editor,
 } from 'obsidian';
 import { Article } from './types';
 import { ApiService } from './api';
+import { ArticleView, ARTICLE_VIEW_TYPE } from './components/article-view';
 
 export class ArticleSuggest extends EditorSuggest<Article> {
     limit = 100;
@@ -72,7 +73,7 @@ export class ArticleSuggest extends EditorSuggest<Article> {
         });
     }
 
-    selectSuggestion(article: Article): void {
+    async selectSuggestion(article: Article): Promise<void> {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (!view) return;
         
@@ -103,6 +104,27 @@ export class ArticleSuggest extends EditorSuggest<Article> {
                 line: cursor.line,
                 ch: bracketStart + articleLink.length
             });
+            
+            try {
+                const leaf = this.app.workspace.getLeaf('split');
+                
+                await leaf.setViewState({
+                    type: ARTICLE_VIEW_TYPE,
+                    active: true,
+                    state: { articleId: article.id }
+                });
+                
+                const articleView = leaf.view as ArticleView;
+                
+                try {
+                    const content = await this.apiService.fetchFileContent(article.id);
+                    await articleView.setContent(content);
+                } catch (error) {
+                    console.error('Error fetching article content:', error);
+                }
+            } catch (error) {
+                console.error('Error opening article in new pane:', error);
+            }
         }
     }
 }
