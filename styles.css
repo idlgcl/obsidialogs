@@ -33,16 +33,36 @@
     margin: 0 auto;
 }
 
-.idealogs-notes-content {
-    padding: 20px;
-    overflow-y: auto;
+
+.idl-form-field {
+    margin-bottom: 16px;
 }
 
-.notes-placeholder {
-    margin-top: 20px;
-    padding: 15px;
-    background-color: var(--background-secondary);
-    border-radius: 5px;
-    color: var(--text-muted);
-    font-style: italic;
+.idl-form-field label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.idl-form-field input,
+.idl-form-field textarea {
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--background-primary);
+}
+
+.idl-range-field {
+    display: flex;
+    gap: 16px;
+}
+
+.idl-start-field, .idl-end-field {
+    flex: 1;
+}
+
+.idl-btns {
+    display: flex;
+    justify-content: end;
 }
