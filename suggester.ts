@@ -10,6 +10,7 @@ import {
 import { Article } from './types';
 import { ApiService } from './api';
 import { ArticleView, ARTICLE_VIEW_TYPE } from './components/article-view';
+import { NOTES_VIEW_TYPE } from './components/notes-view';
 
 export class ArticleSuggest extends EditorSuggest<Article> {
     limit = 100;
@@ -106,15 +107,30 @@ export class ArticleSuggest extends EditorSuggest<Article> {
             });
             
             try {
-                const leaf = this.app.workspace.getLeaf('split');
+                const articleLeaf = this.app.workspace.getLeaf('split');
                 
-                await leaf.setViewState({
+                await articleLeaf.setViewState({
                     type: ARTICLE_VIEW_TYPE,
                     active: true,
                     state: { articleId: article.id }
                 });
                 
-                const articleView = leaf.view as ArticleView;
+                const articleView = articleLeaf.view as ArticleView;
+                
+                const notesLeaf = this.app.workspace.getRightLeaf(false);
+                
+                if (notesLeaf) {
+                    notesLeaf.setViewState({
+                        type: NOTES_VIEW_TYPE,
+                        active: false,
+                        state: { articleId: article.id }
+                    });
+
+                    this.app.workspace.revealLeaf(notesLeaf);
+                } else {
+                    console.error('Failed to setup Notes view')
+                }
+                    
                 
                 try {
                     const content = await this.apiService.fetchFileContent(article.id);
@@ -123,7 +139,7 @@ export class ArticleSuggest extends EditorSuggest<Article> {
                     console.error('Error fetching article content:', error);
                 }
             } catch (error) {
-                console.error('Error opening article in new pane:', error);
+                console.error('Error opening views:', error);
             }
         }
     }
