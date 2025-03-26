@@ -66,3 +66,9 @@
     display: flex;
     justify-content: end;
 }
+
+
+.idl-highlighted-word {
+    font-weight: bolder;
+    cursor: pointer;
+}
