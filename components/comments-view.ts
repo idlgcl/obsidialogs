@@ -4,6 +4,7 @@ import { ArticleAutocompleteField } from './article-input';
 import { Article } from '../types';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
 import { ApiService } from '../api';
+import { AnnotationService } from 'utils/annotation-service';
 
 export const COMMENTS_VIEW_TYPE = 'idealogs-comments-view';
 
@@ -16,16 +17,19 @@ export class CommentsView extends ItemView {
     private articleAutocomplete: ArticleAutocompleteField | null = null;
     private selectedArticle: Article | null = null;
     private apiService: ApiService;
+    private annotationService: AnnotationService;
     
     private selectedComment: Comment;
     private targetTextStartInput: HTMLInputElement;
     private targetTextEndInput: HTMLInputElement;
     private targetTextDisplayInput: HTMLInputElement;
+    private sourceFilePath: string | null = null;
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
         this.component = new Component();
         this.apiService = new ApiService();
+        this.annotationService = new AnnotationService(this.app);
         
         this.listContentEl = this.contentEl.createDiv({ cls: 'idealogs-comments-list' });
         this.formContentEl = this.contentEl.createDiv({ cls: 'idealogs-comments-form' });
@@ -61,6 +65,8 @@ export class CommentsView extends ItemView {
             this.renderCommentsList();
             return;
         }
+
+        this.sourceFilePath = activeView.file?.path || null;
         
         const editor = activeView.editor;
         const content = editor.getValue();
@@ -165,8 +171,7 @@ export class CommentsView extends ItemView {
         
         const saveButtonContainer = formContainer.createDiv({ cls: 'idl-btns' });
         const saveButton = saveButtonContainer.createEl('button', { text: 'Save' });
-        saveButton.addEventListener('click', () => this.handleSave({
-            commentIndex,
+        saveButton.addEventListener('click', () => this.handleSave(commentIndex, {
             textDisplay: textDisplay.value,
             commentBody: commentTextarea.value,
             targetArticle: this.selectedArticle ? this.selectedArticle.id : '',
@@ -298,18 +303,35 @@ export class CommentsView extends ItemView {
         });
     }
     
-    private handleSave(formData: {
+    private async handleSave(
         commentIndex: number,
-        textDisplay: string,
-        commentBody: string,
-        targetArticle: string,
-        targetTextStart: string,
-        targetTextEnd: string,
-        targetTextDisplay: string
-    }): void {
+        formData: {
+            textDisplay: string,
+            commentBody: string,
+            targetArticle: string,
+            targetTextStart: string,
+            targetTextEnd: string,
+            targetTextDisplay: string
+        }
+    ): Promise<void> {
+        if (!this.sourceFilePath) {
+            new Notice('Source document not available');
+            return;
+        }
+        
+        if (!formData.targetArticle) {
+            new Notice('Please select a target article');
+            return;
+        }
+        
+        if (!formData.targetTextStart || !formData.targetTextEnd || !formData.targetTextDisplay) {
+            new Notice('Please fill in all target text fields');
+            return;
+        }
+        
         const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
         if (articleLeaves.length === 0) {
-            console.error('No article view found');
+            new Notice('No article view found');
             return;
         }
         
@@ -317,7 +339,7 @@ export class CommentsView extends ItemView {
         const wordSpans = this.getAllWordSpansFromArticleView(articleView);
         
         if (!wordSpans || wordSpans.length === 0) {
-            console.error('No word spans found in article view');
+            new Notice('No word spans found in article view');
             return;
         }
         
@@ -337,7 +359,7 @@ export class CommentsView extends ItemView {
             const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
             
             if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
-                console.error('Could not find target text ranges');
+                new Notice('Could not find target text ranges');
                 return;
             }
             
@@ -349,14 +371,14 @@ export class CommentsView extends ItemView {
             targetFullText = this.getTextFromSpans(targetRangeSpans);
             
             if (!targetFullText.includes(targetTextDisplay)) {
-                console.error('Target display text not found in the selected range');
+                new Notice('Target display text not found in the selected range');
                 return;
             }
             
             const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
             
             if (targetDisplaySpans.length === 0) {
-                console.error('Could not locate target display text within range');
+                new Notice('Could not locate target display text within range');
                 return;
             }
 
@@ -368,19 +390,34 @@ export class CommentsView extends ItemView {
             );
             
             this.highlightWords(targetDisplaySpans, articleView);
+        } else {
+            new Notice('Please fill in all target text fields');
+            return;
         }
         
-        console.log('Comment form saved with values:', {
-            ...formData,
-            targetStartIndex,
-            targetEndIndex,
-            targetFullText,
-            targetRangeIndices,
-            targetDisplayIndices,
-            srcIndices,
-        });
-        
-        new Notice('Comment is saved.')
+        try {
+            await this.annotationService.saveComment({
+                commentIndex,
+                textDisplay: formData.textDisplay,
+                commentBody: formData.commentBody,
+                targetArticle: formData.targetArticle,
+                targetTextStart: targetTextStart,
+                targetTextEnd: targetTextEnd,
+                targetTextDisplay: targetTextDisplay,
+                targetStartIndex,
+                targetEndIndex,
+                targetFullText,
+                targetRangeIndices,
+                targetDisplayIndices,
+                srcIndices,
+                sourceFilePath: this.sourceFilePath
+            });
+            
+            new Notice('Comment saved successfully');
+            // this.showCommentsList();
+        } catch (error) {
+            new Notice(`Error saving comment: ${error.message}`);
+        }
     }
     
     private showCommentsList(): void {
