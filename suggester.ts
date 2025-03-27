@@ -77,6 +77,8 @@ export class ArticleSuggest extends EditorSuggest<Article> {
     async selectSuggestion(article: Article): Promise<void> {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (!view) return;
+
+        const sourceFilePath = view.file?.path;
         
         const editor = view.editor;
         const cursor = editor.getCursor();
@@ -123,7 +125,10 @@ export class ArticleSuggest extends EditorSuggest<Article> {
                     notesLeaf.setViewState({
                         type: NOTES_VIEW_TYPE,
                         active: false,
-                        state: { articleId: article.id }
+                        state: { 
+                            articleId: article.id,
+                            sourceFilePath: sourceFilePath
+                        }
                     });
 
                     this.app.workspace.revealLeaf(notesLeaf);
