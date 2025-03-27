@@ -129,7 +129,6 @@ export class AnnotationService {
             target_txt_display_range: targetTxtDisplayRange
         };
         
-        console.log('TARGET ARTICLE', commentData.targetArticle)
         const annotations = await this.loadAnnotations(commentData.targetArticle);
         
         annotations.comments[id] = annotationData;
