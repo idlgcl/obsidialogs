@@ -1,5 +1,9 @@
-import { ItemView, WorkspaceLeaf, Component, MarkdownView } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Component, MarkdownView, Notice } from 'obsidian';
 import { Comment, parseComments } from '../utils/comment-parser';
+import { ArticleAutocompleteField } from './article-input';
+import { Article } from '../types';
+import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
+import { ApiService } from '../api';
 
 export const COMMENTS_VIEW_TYPE = 'idealogs-comments-view';
 
@@ -9,10 +13,19 @@ export class CommentsView extends ItemView {
     private component: Component;
     private showingList = true;
     private comments: Comment[] = [];
+    private articleAutocomplete: ArticleAutocompleteField | null = null;
+    private selectedArticle: Article | null = null;
+    private apiService: ApiService;
+    
+    // Track form fields for target text
+    private targetTextStartInput: HTMLInputElement;
+    private targetTextEndInput: HTMLInputElement;
+    private targetTextDisplayInput: HTMLInputElement;
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
         this.component = new Component();
+        this.apiService = new ApiService();
         
         this.listContentEl = this.contentEl.createDiv({ cls: 'idealogs-comments-list' });
         this.formContentEl = this.contentEl.createDiv({ cls: 'idealogs-comments-form' });
@@ -115,9 +128,16 @@ export class CommentsView extends ItemView {
         
         const targetArticleField = formContainer.createDiv({ cls: 'idl-form-field' });
         targetArticleField.createEl('label', { text: 'Target Article' });
-        const targetArticle = targetArticleField.createEl('input', { 
-            type: 'text'
+        
+        this.articleAutocomplete = new ArticleAutocompleteField({
+            container: targetArticleField,
+            placeholder: 'Search for an article...',
+            onChange: (article) => {
+                this.selectedArticle = article;
+                this.openArticleView(article);
+            }
         });
+        this.component.addChild(this.articleAutocomplete);
         
         const textRangeFields = formContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
         
@@ -126,18 +146,21 @@ export class CommentsView extends ItemView {
         const targetTextStart = startField.createEl('input', { 
             type: 'text'
         });
+        this.targetTextStartInput = targetTextStart;
         
         const endField = textRangeFields.createDiv({ cls: 'idl-end-field' });
         endField.createEl('label', { text: 'Target Text End' });
         const targetTextEnd = endField.createEl('input', { 
             type: 'text'
         });
+        this.targetTextEndInput = targetTextEnd;
         
         const targetDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
         targetDisplayField.createEl('label', { text: 'Target Text Display' });
         const targetTextDisplay = targetDisplayField.createEl('input', { 
             type: 'text'
         });
+        this.targetTextDisplayInput = targetTextDisplay;
         
         const saveButtonContainer = formContainer.createDiv({ cls: 'idl-btns' });
         const saveButton = saveButtonContainer.createEl('button', { text: 'Save' });
@@ -145,11 +168,133 @@ export class CommentsView extends ItemView {
             commentIndex,
             textDisplay: textDisplay.value,
             commentBody: commentTextarea.value,
-            targetArticle: targetArticle.value,
+            targetArticle: this.selectedArticle ? this.selectedArticle.id : '',
             targetTextStart: targetTextStart.value, 
             targetTextEnd: targetTextEnd.value,
             targetTextDisplay: targetTextDisplay.value
         }));
+    }
+    
+    private async openArticleView(article: Article): Promise<void> {
+        try {
+            const articleLeaf = this.app.workspace.getLeaf('split');
+            
+            await articleLeaf.setViewState({
+                type: ARTICLE_VIEW_TYPE,
+                active: true,
+                state: { articleId: article.id }
+            });
+            
+            const articleView = articleLeaf.view as ArticleView;
+            
+            try {
+                const content = await this.apiService.fetchFileContent(article.id);
+                await articleView.setContent(content);
+            } catch (error) {
+                console.error('Error fetching article content:', error);
+            }
+        } catch (error) {
+            console.error('Error opening article view:', error);
+        }
+    }
+    
+    private getAllWordSpansFromArticleView(articleView: ArticleView): HTMLElement[] {
+        const contentEl = articleView.contentEl;
+        if (!contentEl) return [];
+        
+        const articleContentEl = contentEl.querySelector('.idealogs-article-content');
+        if (!articleContentEl) return [];
+        
+        const spans = articleContentEl.querySelectorAll('span[data-word-index]');
+        return Array.from(spans) as HTMLElement[];
+    }
+    
+    private findTextSpans(spans: HTMLElement[], text: string): HTMLElement[] {
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 0) return [];
+        
+        if (words.length === 1) {
+            return spans.filter(span => span.textContent === words[0]);
+        }
+        
+        const result: HTMLElement[] = [];
+        let currentSequence: HTMLElement[] = [];
+        
+        for (let i = 0; i < spans.length; i++) {
+            if (spans[i].textContent === words[currentSequence.length]) {
+                currentSequence.push(spans[i]);
+                
+                if (currentSequence.length === words.length) {
+                    result.push(...currentSequence);
+                    currentSequence = [];
+                }
+            } else {
+                if (spans[i].textContent === words[0]) {
+                    currentSequence = [spans[i]];
+                } else {
+                    currentSequence = [];
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    private findTextSpansInRange(rangeSpans: HTMLElement[], text: string): HTMLElement[] {
+        const words = text.split(/\s+/).filter(w => w.length > 0);
+        if (words.length === 0) return [];
+        
+        if (words.length === 1) {
+            return rangeSpans.filter(span => span.textContent === words[0]);
+        }
+        
+        const result: HTMLElement[] = [];
+        
+        for (let i = 0; i <= rangeSpans.length - words.length; i++) {
+            let found = true;
+            const sequence: HTMLElement[] = [];
+            
+            for (let j = 0; j < words.length; j++) {
+                if (rangeSpans[i + j].textContent !== words[j]) {
+                    found = false;
+                    break;
+                }
+                sequence.push(rangeSpans[i + j]);
+            }
+            
+            if (found) {
+                result.push(...sequence);
+                break; 
+            }
+        }
+        
+        return result;
+    }
+    
+    private getTextFromSpans(spans: HTMLElement[]): string {
+        return spans.map(span => span.textContent).join(' ');
+    }
+    
+    private getSpansBetweenIndices(allSpans: HTMLElement[], startIndex: number, endIndex: number): HTMLElement[] {
+        return allSpans.filter(span => {
+            const indexAttr = parseInt(span.getAttribute('data-word-index') || '-1');
+            return indexAttr >= startIndex && indexAttr <= endIndex;
+        }).sort((a, b) => {
+            const indexA = parseInt(a.getAttribute('data-word-index') || '0');
+            const indexB = parseInt(b.getAttribute('data-word-index') || '0');
+            return indexA - indexB;
+        });
+    }
+    
+    private highlightWords(spans: HTMLElement[], articleView: ArticleView): void {
+        const allSpans = this.getAllWordSpansFromArticleView(articleView);
+        allSpans.forEach(span => {
+            span.classList.remove('idl-highlighted-word');
+        });
+        
+        spans.forEach(span => {
+            span.classList.add('idl-highlighted-word');
+        });
     }
     
     private handleSave(formData: {
@@ -161,15 +306,92 @@ export class CommentsView extends ItemView {
         targetTextEnd: string,
         targetTextDisplay: string
     }): void {
-        console.log('Comment form saved:', formData);
+        const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
+        if (articleLeaves.length === 0) {
+            console.error('No article view found');
+            return;
+        }
         
-        this.showCommentsList();
+        const articleView = articleLeaves[0].view as ArticleView;
+        const wordSpans = this.getAllWordSpansFromArticleView(articleView);
+        
+        if (!wordSpans || wordSpans.length === 0) {
+            console.error('No word spans found in article view');
+            return;
+        }
+        
+        // Process text start and end spans
+        let targetStartIndex;
+        let targetEndIndex;
+        let targetFullText;
+        let targetRangeIndices;
+        let targetDisplayIndices;
+        
+        const targetTextStart = formData.targetTextStart;
+        const targetTextEnd = formData.targetTextEnd;
+        const targetTextDisplay = formData.targetTextDisplay;
+        
+        if (targetTextStart && targetTextEnd && targetTextDisplay) {
+            const targetStartSpans = this.findTextSpans(wordSpans, targetTextStart);
+            const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
+            
+            if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
+                console.error('Could not find target text ranges');
+                return;
+            }
+            
+            targetStartIndex = parseInt(targetStartSpans[0].getAttribute('data-word-index') || '0');
+            targetEndIndex = parseInt(targetEndSpans[targetEndSpans.length - 1].getAttribute('data-word-index') || '0');
+            
+            const targetRangeSpans = this.getSpansBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
+            
+            targetFullText = this.getTextFromSpans(targetRangeSpans);
+            
+            if (!targetFullText.includes(targetTextDisplay)) {
+                console.error('Target display text not found in the selected range');
+                return;
+            }
+            
+            const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
+            
+            if (targetDisplaySpans.length === 0) {
+                console.error('Could not locate target display text within range');
+                return;
+            }
+
+            targetRangeIndices = targetRangeSpans.map(span => 
+                parseInt(span.getAttribute('data-word-index') || '0')
+            );
+            targetDisplayIndices = targetDisplaySpans.map(span => 
+                parseInt(span.getAttribute('data-word-index') || '0')
+            );
+            
+            this.highlightWords(targetDisplaySpans, articleView);
+        }
+        
+        console.log('Comment form saved with values:', {
+            ...formData,
+            targetStartIndex,
+            targetEndIndex,
+            targetFullText,
+            targetRangeIndices,
+            targetDisplayIndices,
+        });
+        
+        new Notice('Comment is saved.')
     }
     
     private showCommentsList(): void {
         this.showingList = true;
         this.formContentEl.hide();
         this.listContentEl.show();
+        
+        if (this.articleAutocomplete) {
+            this.component.removeChild(this.articleAutocomplete);
+            this.articleAutocomplete = null;
+        }
+        
+        this.selectedArticle = null;
     }
     
     async onClose() {
