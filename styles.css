@@ -118,3 +118,41 @@
     min-height: 100px;
     resize: vertical;
 }
+
+
+/* Article Autocomplete */
+.article-autocomplete-field {
+    margin-bottom: 16px;
+}
+
+.article-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.article-search-icon {
+    position: absolute;
+    right: 8px;
+    color: var(--text-muted);
+}
+
+.article-suggestions {
+    position: absolute;
+    z-index: 1000;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    width: auto;
+}
+
+.article-suggestion-item {
+    cursor: pointer;
+}
+
+.article-suggestion-item:hover {
+    background-color: var(--background-secondary);
+}
