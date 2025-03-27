@@ -1,5 +1,9 @@
 import { ItemView, WorkspaceLeaf, Component, MarkdownView, Notice } from 'obsidian';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
+import { AnnotationService } from '../utils/annotation-service';
+
+import { v4 as uuidv4 } from 'uuid';
+
 
 export const NOTES_VIEW_TYPE = 'idealogs-notes-view';
 
@@ -8,6 +12,7 @@ export class NotesView extends ItemView {
     private formContainer: HTMLElement;
     private articleId: string;
     private component: Component;
+    private annotationService: AnnotationService;
 
     private textStart: HTMLInputElement;
     private textEnd: HTMLInputElement;
@@ -24,6 +29,7 @@ export class NotesView extends ItemView {
         super(leaf);
         this.articleId = '';
         this.component = new Component();
+        this.annotationService = new AnnotationService(this.app);
         this.notesContentEl = this.contentEl.createDiv({ cls: 'idealogs-notes-content' });
     }
     
@@ -117,7 +123,6 @@ export class NotesView extends ItemView {
     private async findTargetText(text: string, type: 'start' | 'end'): Promise<void> {
         if (!text.trim()) return;
         
-
         const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
         if (articleLeaves.length === 0) return;
         
@@ -237,7 +242,7 @@ export class NotesView extends ItemView {
         });
     }
     
-    private handleSave(): void {
+    private async handleSave(): Promise<void> {
         if (!this.sourceMarkdownView) {
             new Notice('Source document not available');
             return;
@@ -252,7 +257,6 @@ export class NotesView extends ItemView {
             return;
         }
         
-
         const content = this.sourceMarkdownView.editor.getValue();
         const startPos = content.indexOf(textStart);
         const endPos = content.indexOf(textEnd) + textEnd.length;
@@ -274,7 +278,6 @@ export class NotesView extends ItemView {
             return;
         }
 
-
         const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
         if (articleLeaves.length === 0) return;
         
@@ -287,67 +290,82 @@ export class NotesView extends ItemView {
         const targetTextStart = this.targetTextStart.value.trim();
         const targetTextEnd = this.targetTextEnd.value.trim();
         const targetTextDisplay = this.targetTextDisplay.value.trim();
-        let targetStartIndex;
-        let targetEndIndex;
-        let targetFullText;
-        let targetRangeIndices;
-        let targetDisplayIndices;
         
-        if (targetTextStart && targetTextEnd && targetTextDisplay) {
-            this.findTargetText(targetTextStart, 'start');
-            this.findTargetText(targetTextEnd, 'end');
-            
-            const targetStartSpans = this.findTextSpans(wordSpans, targetTextStart);
-            const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
-            
-            if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
-                new Notice('Could not find target text ranges');
-                return;
-            }
-            
-            targetStartIndex = parseInt(targetStartSpans[0].getAttribute('data-word-index') || '0');
-            targetEndIndex = parseInt(targetEndSpans[targetEndSpans.length - 1].getAttribute('data-word-index') || '0');
-            
-            const targetRangeSpans = this.getSpansBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
-            
-            targetFullText = this.getTextFromSpans(targetRangeSpans);
-            
-            if (!targetFullText.includes(targetTextDisplay)) {
-                new Notice('Target display text not found in the selected range');
-                return;
-            }
-            
-            const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
-            
-            if (targetDisplaySpans.length === 0) {
-                new Notice('Could not locate target display text within range');
-                return;
-            }
-
-            targetRangeIndices = targetRangeSpans.map(span => 
-                parseInt(span.getAttribute('data-word-index') || '0')
-            );
-            targetDisplayIndices = targetDisplaySpans.map(span => 
-                parseInt(span.getAttribute('data-word-index') || '0')
-            );
-            
-            this.highlightWords(targetDisplaySpans, articleView);
+        if (!targetArticlePath || !targetTextStart || !targetTextEnd || !targetTextDisplay) {
+            new Notice('Please fill all target fields');
+            return;
         }
         
-        console.log('Form saved with values:', {
-            textStart,
-            textEnd,
-            textDisplay,
-            targetArticle: targetArticlePath,
-            targetTextStart,
-            targetTextEnd,
-            targetTextDisplay,
-            targetStartIndex,
-            targetEndIndex,
-            targetFullText,
-            targetRangeIndices,
-            targetDisplayIndices,
-        });
+        this.findTargetText(targetTextStart, 'start');
+        this.findTargetText(targetTextEnd, 'end');
+        
+        const targetStartSpans = this.findTextSpans(wordSpans, targetTextStart);
+        const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
+        
+        if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
+            new Notice('Could not find target text ranges');
+            return;
+        }
+        
+        const targetStartIndex = parseInt(targetStartSpans[0].getAttribute('data-word-index') || '0');
+        const targetEndIndex = parseInt(targetEndSpans[targetEndSpans.length - 1].getAttribute('data-word-index') || '0');
+        
+        const targetRangeSpans = this.getSpansBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
+        
+        const targetFullText = this.getTextFromSpans(targetRangeSpans);
+        
+        if (!targetFullText.includes(targetTextDisplay)) {
+            new Notice('Target display text not found in the selected range');
+            return;
+        }
+        
+        const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
+        
+        if (targetDisplaySpans.length === 0) {
+            new Notice('Could not locate target display text within range');
+            return;
+        }
+
+        const targetRangeIndices = targetRangeSpans.map(span => 
+            parseInt(span.getAttribute('data-word-index') || '0')
+        );
+        const targetDisplayIndices = targetDisplaySpans.map(span => 
+            parseInt(span.getAttribute('data-word-index') || '0')
+        );
+        
+        this.highlightWords(targetDisplaySpans, articleView);
+        
+        try {
+            const noteId = uuidv4();
+            
+            await this.annotationService.saveNote({
+                id: noteId,
+                sourceFilePath: this.sourceFilePath || '',
+                textStart,
+                textEnd,
+                textDisplay,
+                targetArticle: targetArticlePath,
+                targetTextStart,
+                targetTextEnd,
+                targetTextDisplay,
+                targetStartIndex,
+                targetEndIndex,
+                targetFullText,
+                targetRangeIndices,
+                targetDisplayIndices
+            });
+            
+            new Notice('Note saved successfully');
+            
+            this.textStart.value = '';
+            this.textEnd.value = '';
+            this.textDisplay.value = '';
+            this.targetTextStart.value = '';
+            this.targetTextEnd.value = '';
+            this.targetTextDisplay.value = '';
+        } catch (error) {
+            new Notice(`Error saving note: ${error.message}`);
+        }
     }
 
     getViewType(): string {
