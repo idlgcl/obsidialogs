@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Component } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Component, MarkdownView, Notice } from 'obsidian';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
 
 export const NOTES_VIEW_TYPE = 'idealogs-notes-view';
@@ -17,6 +17,9 @@ export class NotesView extends ItemView {
     private targetTextEnd: HTMLInputElement;
     private targetTextDisplay: HTMLInputElement;
 
+    private sourceFilePath: string | null = null;
+    private sourceMarkdownView: MarkdownView | null = null;
+
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
         this.articleId = '';
@@ -27,22 +30,36 @@ export class NotesView extends ItemView {
     async setState(state: any, result: any): Promise<void> {
         if (state && state.articleId) {
             this.articleId = state.articleId;
+            
+            if (state.sourceFilePath) {
+                this.sourceFilePath = state.sourceFilePath;
+                this.findSourceMarkdownView();
+            }
+            
             this.notesContentEl.empty();
-            
             this.notesContentEl.createEl('h3', { text: 'Add Note' });
-            
             this.createForm();
+        }
+    }
+
+    private findSourceMarkdownView(): void {
+        if (!this.sourceFilePath) return;
+        
+        const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
+        
+        for (const leaf of markdownLeaves) {
+            const view = leaf.view;
+            if (view instanceof MarkdownView && 
+                view.file && 
+                view.file.path === this.sourceFilePath) {
+                this.sourceMarkdownView = view;
+                return;
+            }
         }
     }
 
     private createForm(): void {
         this.formContainer = this.notesContentEl.createDiv({ cls: 'idl-notes-form' });
-        
-        const textDisplayField = this.formContainer.createDiv({ cls: 'idl-form-field' });
-        textDisplayField.createEl('label', { text: 'Text Display' });
-        this.textDisplay = textDisplayField.createEl('input', { 
-            type: 'text'
-        });
         
         const srcRangeFields = this.formContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
         
@@ -55,6 +72,12 @@ export class NotesView extends ItemView {
         const endField = srcRangeFields.createDiv({ cls: 'idl-end-field' });
         endField.createEl('label', { text: 'Text End' });
         this.textEnd = endField.createEl('input', { 
+            type: 'text'
+        });
+
+        const textDisplayField = this.formContainer.createDiv({ cls: 'idl-form-field' });
+        textDisplayField.createEl('label', { text: 'Text Display' });
+        this.textDisplay = textDisplayField.createEl('input', { 
             type: 'text'
         });
 
@@ -215,6 +238,43 @@ export class NotesView extends ItemView {
     }
     
     private handleSave(): void {
+        if (!this.sourceMarkdownView) {
+            new Notice('Source document not available');
+            return;
+        }
+
+        const textStart = this.textStart.value.trim();
+        const textEnd = this.textEnd.value.trim();
+        const textDisplay = this.textDisplay.value.trim();
+        
+        if (!textStart || !textEnd || !textDisplay) {
+            new Notice('Please fill all required fields');
+            return;
+        }
+        
+
+        const content = this.sourceMarkdownView.editor.getValue();
+        const startPos = content.indexOf(textStart);
+        const endPos = content.indexOf(textEnd) + textEnd.length;
+        
+        if (startPos === -1 || endPos === -1) {
+            new Notice("Text start or end not found in the source document");
+            return;
+        }
+        
+        if (startPos >= endPos) {
+            new Notice("Text start must appear before text end");
+            return;
+        }
+        
+        const textBetween = content.substring(startPos, endPos);
+        
+        if (!textBetween.includes(textDisplay)) {
+            new Notice(`"${textDisplay}" not found between start and end text`);
+            return;
+        }
+
+
         const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
         if (articleLeaves.length === 0) return;
         
@@ -222,16 +282,7 @@ export class NotesView extends ItemView {
         const wordSpans = this.getAllWordSpansFromArticleView(articleView);
         
         if (!wordSpans || wordSpans.length === 0) return;
-        
-        const textStart = this.textStart.value.trim();
-        const textEnd = this.textEnd.value.trim();
-        const textDisplay = this.textDisplay.value.trim();
-        
-        if (!textStart || !textEnd || !textDisplay) {
-            console.error('Missing required fields');
-            return;
-        }
-        
+  
         const targetArticlePath = this.targetArticle.value.trim();
         const targetTextStart = this.targetTextStart.value.trim();
         const targetTextEnd = this.targetTextEnd.value.trim();
