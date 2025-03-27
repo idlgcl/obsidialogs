@@ -72,3 +72,49 @@
     font-weight: bolder;
     cursor: pointer;
 }
+
+.idealogs-comments-list,
+.idealogs-comments-form {
+    padding: 0 16px;
+}
+
+.comment-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    background-color: var(--background-secondary);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    color: var(--text-accent);
+}
+
+.comment-item:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.comment-empty-state {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.form-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.form-header h3 {
+    margin: 0 0 0 12px;
+    flex-grow: 1;
+}
+
+.idl-form textarea {
+    width: 100%;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--background-primary);
+    min-height: 100px;
+    resize: vertical;
+}
