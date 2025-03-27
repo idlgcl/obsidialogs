@@ -17,6 +17,7 @@ export class CommentsView extends ItemView {
     private selectedArticle: Article | null = null;
     private apiService: ApiService;
     
+    private selectedComment: Comment;
     private targetTextStartInput: HTMLInputElement;
     private targetTextEndInput: HTMLInputElement;
     private targetTextDisplayInput: HTMLInputElement;
@@ -87,6 +88,7 @@ export class CommentsView extends ItemView {
             commentEl.setText(comment.title);
             
             commentEl.addEventListener('click', () => {
+                this.selectedComment = comment;
                 this.showCommentForm(index);
             });
         });
@@ -324,6 +326,7 @@ export class CommentsView extends ItemView {
         let targetFullText;
         let targetRangeIndices;
         let targetDisplayIndices;
+        const srcIndices = this.selectedComment.indices;
         
         const targetTextStart = formData.targetTextStart;
         const targetTextEnd = formData.targetTextEnd;
@@ -374,6 +377,7 @@ export class CommentsView extends ItemView {
             targetFullText,
             targetRangeIndices,
             targetDisplayIndices,
+            srcIndices,
         });
         
         new Notice('Comment is saved.')
