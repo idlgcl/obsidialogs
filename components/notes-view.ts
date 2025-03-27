@@ -301,7 +301,7 @@ export class NotesView extends ItemView {
             const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
             
             if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
-                console.error('Could not find target text ranges');
+                new Notice('Could not find target text ranges');
                 return;
             }
             
@@ -313,14 +313,14 @@ export class NotesView extends ItemView {
             targetFullText = this.getTextFromSpans(targetRangeSpans);
             
             if (!targetFullText.includes(targetTextDisplay)) {
-                console.error('Target display text not found in the selected range');
+                new Notice('Target display text not found in the selected range');
                 return;
             }
             
             const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
             
             if (targetDisplaySpans.length === 0) {
-                console.error('Could not locate target display text within range');
+                new Notice('Could not locate target display text within range');
                 return;
             }
 
