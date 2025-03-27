@@ -5,16 +5,21 @@ import { patchDefaultSuggester } from './suggester-patcher';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './components/article-view';
 import { NOTES_VIEW_TYPE, NotesView } from './components/notes-view';
 import { COMMENTS_VIEW_TYPE, CommentsView } from './components/comments-view';
+import { AnnotationService } from './utils/annotation-service';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
     private fileHandler: FileHandler;
+    public annotationService: AnnotationService;
     
     async onload() {
         this.articleSuggest = new ArticleSuggest(this);
         this.registerEditorSuggest(this.articleSuggest);
         
         this.fileHandler = new FileHandler(this.app);
+        this.annotationService = new AnnotationService(this.app);
+        
+        await this.annotationService.ensureAnnotationsDirectory();
         
         this.registerView(ARTICLE_VIEW_TYPE, (leaf) => {
             return new ArticleView(leaf);
