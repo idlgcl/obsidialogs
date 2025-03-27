@@ -17,7 +17,6 @@ export class CommentsView extends ItemView {
     private selectedArticle: Article | null = null;
     private apiService: ApiService;
     
-    // Track form fields for target text
     private targetTextStartInput: HTMLInputElement;
     private targetTextEndInput: HTMLInputElement;
     private targetTextDisplayInput: HTMLInputElement;
@@ -320,7 +319,6 @@ export class CommentsView extends ItemView {
             return;
         }
         
-        // Process text start and end spans
         let targetStartIndex;
         let targetEndIndex;
         let targetFullText;
