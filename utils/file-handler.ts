@@ -1,5 +1,6 @@
 import { App, TFile, MarkdownView } from 'obsidian';
 import { ApiService } from './api';
+import { IDL_RIGHT_PANEL } from 'components/right-panel';
 
 const IDEALOGS_FILE_PATTERNS = ['Ix', '0x', 'Tx', 'Fx'];
 
@@ -38,6 +39,27 @@ export class FileHandler {
                 this.currentIdealogsFile = file;
                 this.handleMarkdownFileOpen(file);
             } else {
+                const existingRightPanelLeaves = this.app.workspace.getLeavesOfType(IDL_RIGHT_PANEL);
+                
+                let rightLeaf;
+                if (existingRightPanelLeaves.length > 0) {
+                    rightLeaf = existingRightPanelLeaves[0];
+                } else {
+                    rightLeaf = this.app.workspace.getRightLeaf(false);
+                    if (rightLeaf) {
+                        rightLeaf.setViewState({
+                            type: IDL_RIGHT_PANEL,
+                            active: false,
+                        });
+                    }
+                }
+                
+                if (rightLeaf) {
+                    this.app.workspace.revealLeaf(rightLeaf);
+                } else {
+                    console.error('Failed to setup IDL_RIGHT_PANEL');
+                }
+
                 this.setViewToEditMode(file);
             }
         }
