@@ -9,8 +9,6 @@ import {
 } from 'obsidian';
 import { Article } from '../types';
 import { ApiService } from '../utils/api';
-import { ArticleView, ARTICLE_VIEW_TYPE } from './article-view';
-import { NOTES_VIEW_TYPE } from './notes-view';
 
 export class ArticleSuggest extends EditorSuggest<Article> {
     limit = 100;
@@ -78,7 +76,7 @@ export class ArticleSuggest extends EditorSuggest<Article> {
         const view = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (!view) return;
 
-        const sourceFilePath = view.file?.path;
+        // const sourceFilePath = view.file?.path;
         
         const editor = view.editor;
         const cursor = editor.getCursor();
@@ -108,44 +106,6 @@ export class ArticleSuggest extends EditorSuggest<Article> {
                 ch: bracketStart + articleLink.length
             });
             
-            try {
-                const articleLeaf = this.app.workspace.getLeaf('split');
-                
-                await articleLeaf.setViewState({
-                    type: ARTICLE_VIEW_TYPE,
-                    active: true,
-                    state: { articleId: article.id }
-                });
-                
-                const articleView = articleLeaf.view as ArticleView;
-                
-                const notesLeaf = this.app.workspace.getRightLeaf(false);
-                
-                if (notesLeaf) {
-                    notesLeaf.setViewState({
-                        type: NOTES_VIEW_TYPE,
-                        active: false,
-                        state: { 
-                            articleId: article.id,
-                            sourceFilePath: sourceFilePath
-                        }
-                    });
-
-                    this.app.workspace.revealLeaf(notesLeaf);
-                } else {
-                    console.error('Failed to setup Notes view')
-                }
-                    
-                
-                try {
-                    const content = await this.apiService.fetchFileContent(article.id);
-                    await articleView.setContent(content);
-                } catch (error) {
-                    console.error('Error fetching article content:', error);
-                }
-            } catch (error) {
-                console.error('Error opening views:', error);
-            }
         }
     }
 }
