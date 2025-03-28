@@ -1,7 +1,7 @@
 // @ts-ignore
 const API_ENDPOINT = API_ENDPOINT_VALUE;
 
-import { ArticleResponse } from './types';
+import { ArticleResponse } from '../types';
 
 export class ApiService {
     async fetchArticleSuggestions(searchTerm: string): Promise<ArticleResponse> {
