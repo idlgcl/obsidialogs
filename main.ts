@@ -6,6 +6,7 @@ import { ARTICLE_VIEW_TYPE, ArticleView } from './components/article-view';
 import { NOTES_VIEW_TYPE, NotesView } from './components/notes-view';
 import { COMMENTS_VIEW_TYPE, CommentsView } from './components/comments-view';
 import { AnnotationService } from './utils/annotation-service';
+import { IDL_RIGHT_PANEL, RightPanel } from 'components/right-panel';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
@@ -31,6 +32,10 @@ export default class ArticleSuggestPlugin extends Plugin {
         
         this.registerView(COMMENTS_VIEW_TYPE, (leaf) => {
             return new CommentsView(leaf);
+        });
+        
+        this.registerView(IDL_RIGHT_PANEL, (leaf) => {
+            return new RightPanel(leaf);
         });
         
         this.addCommand({
