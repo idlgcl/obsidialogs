@@ -8,6 +8,7 @@ export class RightPanel extends ItemView {
     private listView: RightPanelListView;
     private formView: RightPanelFormView;
     private component: Component;
+    private activeFilePath: string;
     
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -29,6 +30,14 @@ export class RightPanel extends ItemView {
         this.component.addChild(this.formView);
         
         this.showListView();
+
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', () => {
+                this.setActiveFilePath();
+            })
+        );
+        
+        this.setActiveFilePath();
     }
     
     showListView() {
@@ -51,6 +60,15 @@ export class RightPanel extends ItemView {
 
     getIcon(): string {
         return "brackets";
+    }
+
+    private setActiveFilePath(): void {
+        const file = this.app.workspace.getActiveFile();
+        this.activeFilePath = file?.path || '';
+
+        if (this.activeFilePath === '') {
+            this.leaf.detach();
+        }
     }
 
     async onClose() {
