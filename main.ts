@@ -1,7 +1,7 @@
 import { Plugin, TFile } from 'obsidian';
-import { ArticleSuggest } from './suggester';
-import { FileHandler } from './file-handler';
-import { patchDefaultSuggester } from './suggester-patcher';
+import { ArticleSuggest } from './components/suggester';
+import { FileHandler } from './utils/file-handler';
+import { patchDefaultSuggester } from './utils/suggester-patcher';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './components/article-view';
 import { NOTES_VIEW_TYPE, NotesView } from './components/notes-view';
 import { COMMENTS_VIEW_TYPE, CommentsView } from './components/comments-view';

@@ -3,7 +3,7 @@ import { Comment, parseComments } from '../utils/comment-parser';
 import { ArticleAutocompleteField } from './article-input';
 import { Article } from '../types';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
-import { ApiService } from '../api';
+import { ApiService } from '../utils/api';
 import { AnnotationService } from 'utils/annotation-service';
 
 export const COMMENTS_VIEW_TYPE = 'idealogs-comments-view';

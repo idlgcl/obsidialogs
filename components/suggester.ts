@@ -7,10 +7,10 @@ import {
     EditorSuggestTriggerInfo,
     Editor,
 } from 'obsidian';
-import { Article } from './types';
-import { ApiService } from './api';
-import { ArticleView, ARTICLE_VIEW_TYPE } from './components/article-view';
-import { NOTES_VIEW_TYPE } from './components/notes-view';
+import { Article } from '../types';
+import { ApiService } from '../utils/api';
+import { ArticleView, ARTICLE_VIEW_TYPE } from './article-view';
+import { NOTES_VIEW_TYPE } from './notes-view';
 
 export class ArticleSuggest extends EditorSuggest<Article> {
     limit = 100;

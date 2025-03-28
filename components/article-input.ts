@@ -1,6 +1,6 @@
 import { Component, setIcon } from 'obsidian';
 
-import { ApiService } from '../api';
+import { ApiService } from '../utils/api';
 import { Article } from '../types';
 
 export interface ArticleAutocompleteOptions {
