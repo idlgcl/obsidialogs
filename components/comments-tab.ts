@@ -3,17 +3,20 @@ import { Component } from "obsidian";
 export interface CommentsTabOptions {
     container: HTMLElement;
     onSelectComment: () => void;
+    onNewComment: () => void;
 }
 
 export class CommentsTab extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
     private onSelectComment: () => void;
+    private onNewComment: () => void; 
     
     constructor(options: CommentsTabOptions) {
         super();
         this.container = options.container;
         this.onSelectComment = options.onSelectComment;
+        this.onNewComment = options.onNewComment;
         this.createView();
     }
     
@@ -22,11 +25,11 @@ export class CommentsTab extends Component {
         
         const commentsListEl = this.contentEl.createDiv({ cls: 'idl-comments-list' });
         
-        const sampleComment = commentsListEl.createDiv({ cls: 'idl-list-item' });
-        sampleComment.setText('Sample Comment');
+        const newCommentBtn = commentsListEl.createDiv({ cls: 'idl-new-comment-btn' });
+        newCommentBtn.setText('New Comment');
         
-        sampleComment.addEventListener('click', () => {
-            this.onSelectComment();
+        newCommentBtn.addEventListener('click', () => {
+            this.onNewComment();
         });
     }
     

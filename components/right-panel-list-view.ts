@@ -6,12 +6,14 @@ import { NotesTab } from "./notes-tab";
 export interface RightPanelListViewOptions {
     container: HTMLElement;
     onSelectItem: () => void;
+    onNewComment: () => void;
 }
 
 export class RightPanelListView extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
     private onSelectItem: () => void;
+    private onNewComment: () => void; 
     private tabsComponent: TabsComponent;
     private commentsTab: CommentsTab;
     private notesTab: NotesTab;
@@ -21,6 +23,7 @@ export class RightPanelListView extends Component {
         super();
         this.container = options.container;
         this.onSelectItem = options.onSelectItem;
+        this.onNewComment = options.onNewComment; 
         this.createView();
     }
     
@@ -47,8 +50,10 @@ export class RightPanelListView extends Component {
         
         this.commentsTab = new CommentsTab({
             container: this.tabContentEl,
-            onSelectComment: () => this.onSelectItem()
+            onSelectComment: () => this.onSelectItem(),
+            onNewComment: () => this.onNewComment() 
         });
+        
         
         this.notesTab = new NotesTab({
             container: this.tabContentEl,
