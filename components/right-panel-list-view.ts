@@ -2,6 +2,7 @@ import { Component } from "obsidian";
 import { TabsComponent, TabItem } from "./tabs-component";
 import { CommentsTab } from "./comments-tab";
 import { NotesTab } from "./notes-tab";
+import { AnnotationService } from "utils/annotation-service";
 
 export interface RightPanelListViewOptions {
     container: HTMLElement;
@@ -76,6 +77,12 @@ export class RightPanelListView extends Component {
         } else if (tabId === 'notes') {
             this.commentsTab.hide();
             this.notesTab.show();
+        }
+    }
+
+    public updateComments(annotationService: AnnotationService, filePath: string): void {
+        if (this.commentsTab) {
+            this.commentsTab.updateComments(annotationService, filePath);
         }
     }
     
