@@ -138,6 +138,14 @@ export class AnnotationService {
             annotationsPath, 
             JSON.stringify(annotations, null, 2)
         );
+
+        const sourceAnnotations = await this.loadAnnotations(commentData.sourceFilePath);
+        sourceAnnotations.comments[id] = annotationData;
+        const sourceAnnotationsPath = this.getAnnotationsFilePath(commentData.sourceFilePath);
+        await this.app.vault.adapter.write(
+            sourceAnnotationsPath, 
+            JSON.stringify(sourceAnnotations, null, 2)
+        );
         
         return id;
     }
