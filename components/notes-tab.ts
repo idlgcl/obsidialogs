@@ -3,17 +3,20 @@ import { Component } from "obsidian";
 export interface NotesTabOptions {
     container: HTMLElement;
     onSelectNote: () => void;
+    onNewNote: () => void;
 }
 
 export class NotesTab extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
     private onSelectNote: () => void;
+    private onNewNote: () => void;
     
     constructor(options: NotesTabOptions) {
         super();
         this.container = options.container;
         this.onSelectNote = options.onSelectNote;
+        this.onNewNote = options.onNewNote;
         this.createView();
     }
     
@@ -22,11 +25,11 @@ export class NotesTab extends Component {
         
         const notesListEl = this.contentEl.createDiv({ cls: 'idl-notes-list' });
         
-        const sampleNote = notesListEl.createDiv({ cls: 'idl-list-item' });
-        sampleNote.setText('Sample Note');
+        const newNoteBtn = notesListEl.createDiv({ cls: 'idl-new-note-btn' });
+        newNoteBtn.setText('New Note');
         
-        sampleNote.addEventListener('click', () => {
-            this.onSelectNote();
+        newNoteBtn.addEventListener('click', () => {
+            this.onNewNote();
         });
     }
     

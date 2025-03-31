@@ -1,14 +1,16 @@
 import { ItemView, WorkspaceLeaf, Component, MarkdownView } from "obsidian";
 import { RightPanelListView } from "./right-panel-list-view";
 import { RightPanelFormView } from "./right-panel-form-view";
-import { CommentForm } from "./comment-form"; 
+import { CommentForm } from "./comment-form";
+import { NoteForm } from "./note-form";
 
 export const IDL_RIGHT_PANEL = 'idl-right-panel';
 
 export class RightPanel extends ItemView {
     private listView: RightPanelListView;
     private formView: RightPanelFormView;
-    private commentForm: CommentForm | null = null; 
+    private commentForm: CommentForm | null = null;
+    private noteForm: NoteForm | null = null;
     private component: Component;
     private activeFilePath: string;
     
@@ -21,7 +23,8 @@ export class RightPanel extends ItemView {
         this.listView = new RightPanelListView({
             container: this.contentEl,
             onSelectItem: () => this.showFormView(),
-            onNewComment: () => this.showNewCommentForm() 
+            onNewComment: () => this.showNewCommentForm(),
+            onNewNote: () => this.showNewNoteForm()
         });
 
         this.formView = new RightPanelFormView({
@@ -46,6 +49,13 @@ export class RightPanel extends ItemView {
                     
                     this.commentForm.updateActiveFilePath(this.activeFilePath);
                 }
+                
+                if (this.noteForm && 
+                    activeView && 
+                    this.activeFilePath !== previousPath) {
+                    
+                    this.noteForm.updateActiveFilePath(this.activeFilePath);
+                }
             })
         );
     }
@@ -56,8 +66,14 @@ export class RightPanel extends ItemView {
         
         if (this.commentForm) {
             this.component.removeChild(this.commentForm);
-            this.commentForm.onunload(); 
+            this.commentForm.onunload();
             this.commentForm = null;
+        }
+        
+        if (this.noteForm) {
+            this.component.removeChild(this.noteForm);
+            this.noteForm.onunload();
+            this.noteForm = null;
         }
     }
 
@@ -72,8 +88,14 @@ export class RightPanel extends ItemView {
         
         if (this.commentForm) {
             this.component.removeChild(this.commentForm);
-            this.commentForm.onunload(); 
+            this.commentForm.onunload();
             this.commentForm = null;
+        }
+        
+        if (this.noteForm) {
+            this.component.removeChild(this.noteForm);
+            this.noteForm.onunload();
+            this.noteForm = null;
         }
         
         this.commentForm = new CommentForm({
@@ -85,6 +107,33 @@ export class RightPanel extends ItemView {
         
         this.component.addChild(this.commentForm);
         this.commentForm.show();
+    }
+    
+    showNewNoteForm() {
+        this.listView.hide();
+        this.formView.hide();
+        
+        if (this.commentForm) {
+            this.component.removeChild(this.commentForm);
+            this.commentForm.onunload();
+            this.commentForm = null;
+        }
+        
+        if (this.noteForm) {
+            this.component.removeChild(this.noteForm);
+            this.noteForm.onunload();
+            this.noteForm = null;
+        }
+        
+        this.noteForm = new NoteForm({
+            container: this.contentEl,
+            onBack: () => this.showListView(),
+            activeFilePath: this.activeFilePath,
+            app: this.app
+        });
+        
+        this.component.addChild(this.noteForm);
+        this.noteForm.show();
     }
 
     getViewType(): string {

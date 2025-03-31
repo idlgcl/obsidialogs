@@ -7,13 +7,15 @@ export interface RightPanelListViewOptions {
     container: HTMLElement;
     onSelectItem: () => void;
     onNewComment: () => void;
+    onNewNote: () => void;
 }
 
 export class RightPanelListView extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
     private onSelectItem: () => void;
-    private onNewComment: () => void; 
+    private onNewComment: () => void;
+    private onNewNote: () => void;
     private tabsComponent: TabsComponent;
     private commentsTab: CommentsTab;
     private notesTab: NotesTab;
@@ -23,7 +25,8 @@ export class RightPanelListView extends Component {
         super();
         this.container = options.container;
         this.onSelectItem = options.onSelectItem;
-        this.onNewComment = options.onNewComment; 
+        this.onNewComment = options.onNewComment;
+        this.onNewNote = options.onNewNote;
         this.createView();
     }
     
@@ -51,13 +54,13 @@ export class RightPanelListView extends Component {
         this.commentsTab = new CommentsTab({
             container: this.tabContentEl,
             onSelectComment: () => this.onSelectItem(),
-            onNewComment: () => this.onNewComment() 
+            onNewComment: () => this.onNewComment()
         });
-        
         
         this.notesTab = new NotesTab({
             container: this.tabContentEl,
-            onSelectNote: () => this.onSelectItem()
+            onSelectNote: () => this.onSelectItem(),
+            onNewNote: () => this.onNewNote()
         });
         
         this.addChild(this.commentsTab);
