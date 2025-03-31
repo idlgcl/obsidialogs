@@ -3,6 +3,7 @@ import { RightPanelListView } from "./right-panel-list-view";
 import { RightPanelFormView } from "./right-panel-form-view";
 import { CommentForm } from "./comment-form";
 import { NoteForm } from "./note-form";
+import { AnnotationService } from '../utils/annotation-service';
 
 export const IDL_RIGHT_PANEL = 'idl-right-panel';
 
@@ -13,10 +14,12 @@ export class RightPanel extends ItemView {
     private noteForm: NoteForm | null = null;
     private component: Component;
     private activeFilePath: string;
-    
-    constructor(leaf: WorkspaceLeaf) {
+    private annotationService: AnnotationService;
+
+    constructor(leaf: WorkspaceLeaf, annotationService: AnnotationService) {
         super(leaf);
         this.component = new Component();
+        this.annotationService = annotationService;
     }
 
     async onOpen() {
@@ -63,7 +66,9 @@ export class RightPanel extends ItemView {
     showListView() {
         this.listView.show();
         this.formView.hide();
-        
+
+        this.updateCommentsList();
+
         if (this.commentForm) {
             this.component.removeChild(this.commentForm);
             this.commentForm.onunload();
@@ -136,6 +141,12 @@ export class RightPanel extends ItemView {
         this.noteForm.show();
     }
 
+    private updateCommentsList(): void {
+        if (this.listView && this.activeFilePath && this.annotationService) {
+            this.listView.updateComments(this.annotationService, this.activeFilePath);
+        }
+    }
+
     getViewType(): string {
         return IDL_RIGHT_PANEL;
     }
@@ -154,6 +165,8 @@ export class RightPanel extends ItemView {
 
         if (this.activeFilePath === '') {
             this.leaf.detach();
+        } else {
+            this.updateCommentsList()
         }
     }
 

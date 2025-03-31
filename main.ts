@@ -25,7 +25,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         });
         
         this.registerView(IDL_RIGHT_PANEL, (leaf) => {
-            return new RightPanel(leaf);
+            return new RightPanel(leaf, this.annotationService);
         });
         
         patchDefaultSuggester(this.app);
