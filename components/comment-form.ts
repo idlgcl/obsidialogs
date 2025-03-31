@@ -65,7 +65,7 @@ export class CommentForm extends Component {
                 this.comments = parseComments(content);
                 this.updateCommentDropdown();
             }
-            
+
         }, 500); 
     }
 
@@ -171,29 +171,40 @@ export class CommentForm extends Component {
         saveButton.addEventListener('click', () => this.handleSave());
     }
     
-    private async openArticleView(article: Article): Promise<void> {
-        try {
-            const articleLeaf = this.app.workspace.getLeaf('split');
-            
+private async openArticleView(article: Article): Promise<void> {
+    try {
+        const existingArticleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
+        let articleLeaf;
+        
+        if (existingArticleLeaves.length > 0) {
+            articleLeaf = existingArticleLeaves[0];
             await articleLeaf.setViewState({
                 type: ARTICLE_VIEW_TYPE,
                 active: false,
                 state: { articleId: article.id }
             });
-            
-            const articleView = articleLeaf.view as ArticleView;
-            
-            try {
-                const content = await this.apiService.fetchFileContent(article.id);
-                await articleView.setContent(content);
-            } catch (error) {
-                console.error('Error fetching article content:', error);
-            }
-        } catch (error) {
-            console.error('Error opening article view:', error);
-            this.isTargetArticleSelection = false; 
+        } else {
+            articleLeaf = this.app.workspace.getLeaf('split');
+            await articleLeaf.setViewState({
+                type: ARTICLE_VIEW_TYPE,
+                active: false,
+                state: { articleId: article.id }
+            });
         }
+        
+        const articleView = articleLeaf.view as ArticleView;
+        
+        try {
+            const content = await this.apiService.fetchFileContent(article.id);
+            await articleView.setContent(content);
+        } catch (error) {
+            console.error('Error fetching article content:', error);
+        }
+    } catch (error) {
+        console.error('Error opening article view:', error);
+        this.isTargetArticleSelection = false; 
     }
+}
     
     private async handleSave(): Promise<void> {
         if (!this.activeFilePath) {
