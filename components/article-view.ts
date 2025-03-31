@@ -1,6 +1,5 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
-import { NOTES_VIEW_TYPE } from './notes-view';
 
 export const ARTICLE_VIEW_TYPE = 'idealogs-article-view';
 
@@ -52,11 +51,6 @@ export class ArticleView extends ItemView {
     }
 
     async onClose() {
-        const notesLeaves = this.app.workspace.getLeavesOfType(NOTES_VIEW_TYPE);
-        for (const leaf of notesLeaves) {
-            leaf.detach();
-        }
-        
         this.component.unload();
         return super.onClose();
     }
