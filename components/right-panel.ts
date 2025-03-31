@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Component } from "obsidian";
+import { ItemView, WorkspaceLeaf, Component, MarkdownView } from "obsidian";
 import { RightPanelListView } from "./right-panel-list-view";
 import { RightPanelFormView } from "./right-panel-form-view";
 import { CommentForm } from "./comment-form"; 
@@ -36,14 +36,18 @@ export class RightPanel extends ItemView {
 
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', () => {
+                const previousPath = this.activeFilePath;
                 this.setActiveFilePath();
-                if (this.commentForm && this.activeFilePath) {
+
+                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+                if (this.commentForm && 
+                    activeView && 
+                    this.activeFilePath !== previousPath) {
+                    
                     this.commentForm.updateActiveFilePath(this.activeFilePath);
                 }
             })
         );
-        
-        this.setActiveFilePath();
     }
     
     showListView() {

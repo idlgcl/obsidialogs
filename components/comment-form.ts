@@ -47,25 +47,26 @@ export class CommentForm extends Component {
     }
     
     private loadCommentsFromFile(): void {
-        const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
-        let content = '';
-        
-        for (const leaf of markdownLeaves) {
-            const view = leaf.view;
-            if (view instanceof MarkdownView && 
-                view.file && 
-                view.file.path === this.activeFilePath) {
-                content = view.editor.getValue();
-                break;
+        setTimeout(() => {
+            const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
+            let content = '';
+            
+            for (const leaf of markdownLeaves) {
+                const view = leaf.view;
+                if (view instanceof MarkdownView && 
+                    view.file && 
+                    view.file.path === this.activeFilePath) {
+                    content = view.editor.getValue();
+                    break;
+                }
             }
-        }
-        
-        if (content) {
-            this.comments = parseComments(content);
-            this.updateCommentDropdown();
-        }
-
-        // TODO: close Idealogs reader???
+            
+            if (content) {
+                this.comments = parseComments(content);
+                this.updateCommentDropdown();
+            }
+            
+        }, 500); 
     }
 
     private resetFormFields(): void {
