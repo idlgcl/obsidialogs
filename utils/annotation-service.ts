@@ -172,27 +172,20 @@ export class AnnotationService {
             throw new Error('Target article and source path are required');
         }
         
-        // Use provided ID or generate a timestamp-based one
         const id = noteData.id || Date.now().toString();
         const timestamp = Date.now();
         
-        // Load existing annotations for the target article
-        const annotations = await this.loadAnnotations(noteData.targetArticle);
         
-        // Extract just the filename from the full path
         const sourceFilename = noteData.sourceFilePath.split('/').pop() || noteData.sourceFilePath;
         
-        // Prepare the source text data
         const srcTxtDisplay = noteData.textDisplay;
         const srcTxtStart = noteData.textStart;
         const srcTxtEnd = noteData.textEnd;
         const srcTxt = `${srcTxtStart} ${srcTxtDisplay} ${srcTxtEnd}`;
         
-        // Notes don't have source ranges/indices, so we use empty arrays
         const srcRange: number[] = [];
         const srcTxtDisplayRange: number[] = [];
         
-        // Prepare the target text data
         const targetTxtDisplay = noteData.targetTextDisplay;
         const targetTxtStart = noteData.targetTextStart;
         const targetTxtEnd = noteData.targetTextEnd;
@@ -219,14 +212,20 @@ export class AnnotationService {
             target_txt_display_range: targetTxtDisplayRange
         };
         
-        // Add or update the note
-        annotations.notes[id] = annotationData;
-        
-        // Save the annotations file
-        const annotationsPath = this.getAnnotationsFilePath(noteData.targetArticle);
+        const targetAnnotations = await this.loadAnnotations(noteData.targetArticle);
+        targetAnnotations.notes[id] = annotationData;
+        const targetAnnotationsPath = this.getAnnotationsFilePath(noteData.targetArticle);
         await this.app.vault.adapter.write(
-            annotationsPath, 
-            JSON.stringify(annotations, null, 2)
+            targetAnnotationsPath, 
+            JSON.stringify(targetAnnotations, null, 2)
+        );
+        
+        const sourceAnnotations = await this.loadAnnotations(noteData.sourceFilePath);
+        sourceAnnotations.notes[id] = annotationData;
+        const sourceAnnotationsPath = this.getAnnotationsFilePath(noteData.sourceFilePath);
+        await this.app.vault.adapter.write(
+            sourceAnnotationsPath, 
+            JSON.stringify(sourceAnnotations, null, 2)
         );
         
         return id;
