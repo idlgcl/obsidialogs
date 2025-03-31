@@ -21,6 +21,7 @@ export class CommentForm extends Component {
     private activeFilePath: string;
     private apiService: ApiService;
     private annotationService: AnnotationService;
+    public isTargetArticleSelection = false;
     
     private comments: Comment[] = [];
     private textDisplayDropdown: HTMLSelectElement;
@@ -42,6 +43,7 @@ export class CommentForm extends Component {
         
         this.createForm();
         this.loadCommentsFromFile();
+        this.resetFormFields();
     }
     
     private loadCommentsFromFile(): void {
@@ -63,12 +65,15 @@ export class CommentForm extends Component {
             this.updateCommentDropdown();
         }
 
-        this.commentTextarea.value = ''
-        this.targetTextDisplayInput.value = ''
-        this.targetTextStartInput.value = ''
-        this.targetTextEndInput.value = ''
-        this.articleAutocomplete?.setValue('');
         // TODO: close Idealogs reader???
+    }
+
+    private resetFormFields(): void {
+        this.commentTextarea.value = '';
+        this.targetTextDisplayInput.value = '';
+        this.targetTextStartInput.value = '';
+        this.targetTextEndInput.value = '';
+        this.articleAutocomplete?.setValue('');
     }
     
     private updateCommentDropdown(): void {
@@ -130,6 +135,7 @@ export class CommentForm extends Component {
             container: targetArticleField,
             placeholder: 'Search for an article...',
             onChange: (article) => {
+                this.isTargetArticleSelection = true;
                 this.selectedArticle = article;
                 this.openArticleView(article);
             }
@@ -170,7 +176,7 @@ export class CommentForm extends Component {
             
             await articleLeaf.setViewState({
                 type: ARTICLE_VIEW_TYPE,
-                active: true,
+                active: false,
                 state: { articleId: article.id }
             });
             
@@ -184,6 +190,7 @@ export class CommentForm extends Component {
             }
         } catch (error) {
             console.error('Error opening article view:', error);
+            this.isTargetArticleSelection = false; 
         }
     }
     
@@ -391,7 +398,13 @@ export class CommentForm extends Component {
     
     public updateActiveFilePath(filePath: string): void {
         this.activeFilePath = filePath;
-        this.loadCommentsFromFile();
+        
+        if (!this.isTargetArticleSelection) {
+            this.loadCommentsFromFile();
+            this.resetFormFields(); 
+        } else {
+            this.isTargetArticleSelection = false; 
+        }
     }
     
     show() {
