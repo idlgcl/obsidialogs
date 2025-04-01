@@ -3,7 +3,7 @@ import { ArticleAutocompleteField } from './article-input';
 import { Article } from '../types';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
 import { ApiService } from '../utils/api';
-import { AnnotationService } from '../utils/annotation-service';
+import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -12,6 +12,7 @@ export interface NoteFormOptions {
     onBack: () => void;
     activeFilePath: string;
     app: App;
+    noteData?: AnnotationData;
 }
 
 export class NoteForm extends Component {
@@ -23,6 +24,7 @@ export class NoteForm extends Component {
     private apiService: ApiService;
     private annotationService: AnnotationService;
     public isTargetArticleSelection = false;
+    private noteData: AnnotationData | undefined;
     
     private textStart: HTMLInputElement;
     private textEnd: HTMLInputElement;
@@ -41,8 +43,34 @@ export class NoteForm extends Component {
         this.app = options.app;
         this.apiService = new ApiService();
         this.annotationService = new AnnotationService(this.app);
+        this.noteData = options.noteData;
         
         this.createForm();
+        
+        if (this.noteData) {
+            this.populateForm(this.noteData);
+        }
+    }
+    
+    private populateForm(noteData: AnnotationData): void {
+        this.textStart.value = noteData.src_txt_start;
+        this.textEnd.value = noteData.src_txt_end;
+        this.textDisplay.value = noteData.src_txt_display;
+        
+        this.articleAutocomplete?.setValue(noteData.target);
+        this.selectedArticle = {
+            id: noteData.target,
+            title: noteData.target,
+            kind: ''
+        };
+        
+        this.targetTextStartInput.value = noteData.target_txt_start;
+        this.targetTextEndInput.value = noteData.target_txt_end;
+        this.targetTextDisplayInput.value = noteData.target_txt_display;
+        
+        if (this.selectedArticle) {
+            this.openArticleView(this.selectedArticle);
+        }
     }
     
     private createForm(): void {
@@ -52,7 +80,7 @@ export class NoteForm extends Component {
         const backButton = headerContainer.createEl('button', { text: 'Back to List' });
         backButton.addEventListener('click', this.onBack);
         
-        headerContainer.createEl('h3', { text: 'New Note' });
+        headerContainer.createEl('h3', { text: this.noteData ? 'Edit Note' : 'New Note' });
         
         const formContainer = this.contentEl.createDiv({ cls: 'idl-form' });
         
@@ -147,6 +175,117 @@ export class NoteForm extends Component {
         } catch (error) {
             console.error('Error opening article view:', error);
             this.isTargetArticleSelection = false;
+        }
+    }
+    
+    private async handleSave(): Promise<void> {
+        if (!this.activeFilePath) {
+            new Notice('Source document not available');
+            return;
+        }
+        
+        if (!this.selectedArticle) {
+            new Notice('Please select a target article');
+            return;
+        }
+
+        const textStart = this.textStart.value.trim();
+        const textEnd = this.textEnd.value.trim();
+        const textDisplay = this.textDisplay.value.trim();
+        
+        if (!textStart || !textEnd || !textDisplay) {
+            new Notice('Please fill all required fields');
+            return;
+        }
+        
+        const targetArticlePath = this.selectedArticle.id;
+        const targetTextStart = this.targetTextStartInput.value.trim();
+        const targetTextEnd = this.targetTextEndInput.value.trim();
+        const targetTextDisplay = this.targetTextDisplayInput.value.trim();
+        
+        if (!targetArticlePath || !targetTextStart || !targetTextEnd || !targetTextDisplay) {
+            new Notice('Please fill all target fields');
+            return;
+        }
+        
+        const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
+        if (articleLeaves.length === 0) {
+            new Notice('No article view found');
+            return;
+        }
+        
+        const articleView = articleLeaves[0].view as ArticleView;
+        const wordSpans = this.getAllWordSpansFromArticleView(articleView);
+        
+        if (!wordSpans || wordSpans.length === 0) {
+            new Notice('No word spans found in article view');
+            return;
+        }
+        
+        try {
+            const targetStartSpans = this.findTextSpans(wordSpans, targetTextStart);
+            const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
+            
+            if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
+                new Notice('Could not find target text ranges');
+                return;
+            }
+            
+            const targetStartIndex = parseInt(targetStartSpans[0].getAttribute('data-word-index') || '0');
+            const targetEndIndex = parseInt(targetEndSpans[targetEndSpans.length - 1].getAttribute('data-word-index') || '0');
+            
+            const targetRangeSpans = this.getSpansBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
+            
+            const targetFullText = this.getTextFromSpans(targetRangeSpans);
+            
+            if (!targetFullText.includes(targetTextDisplay)) {
+                new Notice('Target display text not found in the selected range');
+                return;
+            }
+            
+            const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
+            
+            if (targetDisplaySpans.length === 0) {
+                new Notice('Could not locate target display text within range');
+                return;
+            }
+
+            const targetRangeIndices = targetRangeSpans.map(span => 
+                parseInt(span.getAttribute('data-word-index') || '0')
+            );
+            const targetDisplayIndices = targetDisplaySpans.map(span => 
+                parseInt(span.getAttribute('data-word-index') || '0')
+            );
+            
+            this.highlightWords(targetDisplaySpans, articleView);
+            
+            try {
+                const noteId = this.noteData ? this.noteData.id : uuidv4();
+                
+                await this.annotationService.saveNote({
+                    id: noteId,
+                    sourceFilePath: this.activeFilePath,
+                    textStart,
+                    textEnd,
+                    textDisplay,
+                    targetArticle: targetArticlePath,
+                    targetTextStart,
+                    targetTextEnd,
+                    targetTextDisplay,
+                    targetStartIndex,
+                    targetEndIndex,
+                    targetFullText,
+                    targetRangeIndices,
+                    targetDisplayIndices
+                });
+                
+                new Notice('Note saved successfully');
+                this.onBack();
+            } catch (error) {
+                new Notice(`Error saving note: ${error.message}`);
+            }
+        } catch (error) {
+            new Notice(`Error processing note: ${error.message}`);
         }
     }
     
@@ -247,117 +386,6 @@ export class NoteForm extends Component {
         spans.forEach(span => {
             span.classList.add('idl-highlighted-word');
         });
-    }
-    
-    private async handleSave(): Promise<void> {
-        if (!this.activeFilePath) {
-            new Notice('Source document not available');
-            return;
-        }
-        
-        if (!this.selectedArticle) {
-            new Notice('Please select a target article');
-            return;
-        }
-
-        const textStart = this.textStart.value.trim();
-        const textEnd = this.textEnd.value.trim();
-        const textDisplay = this.textDisplay.value.trim();
-        
-        if (!textStart || !textEnd || !textDisplay) {
-            new Notice('Please fill all required fields');
-            return;
-        }
-        
-        const targetArticlePath = this.selectedArticle.id;
-        const targetTextStart = this.targetTextStartInput.value.trim();
-        const targetTextEnd = this.targetTextEndInput.value.trim();
-        const targetTextDisplay = this.targetTextDisplayInput.value.trim();
-        
-        if (!targetArticlePath || !targetTextStart || !targetTextEnd || !targetTextDisplay) {
-            new Notice('Please fill all target fields');
-            return;
-        }
-        
-        const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
-        if (articleLeaves.length === 0) {
-            new Notice('No article view found');
-            return;
-        }
-        
-        const articleView = articleLeaves[0].view as ArticleView;
-        const wordSpans = this.getAllWordSpansFromArticleView(articleView);
-        
-        if (!wordSpans || wordSpans.length === 0) {
-            new Notice('No word spans found in article view');
-            return;
-        }
-        
-        try {
-            const targetStartSpans = this.findTextSpans(wordSpans, targetTextStart);
-            const targetEndSpans = this.findTextSpans(wordSpans, targetTextEnd);
-            
-            if (targetStartSpans.length === 0 || targetEndSpans.length === 0) {
-                new Notice('Could not find target text ranges');
-                return;
-            }
-            
-            const targetStartIndex = parseInt(targetStartSpans[0].getAttribute('data-word-index') || '0');
-            const targetEndIndex = parseInt(targetEndSpans[targetEndSpans.length - 1].getAttribute('data-word-index') || '0');
-            
-            const targetRangeSpans = this.getSpansBetweenIndices(wordSpans, targetStartIndex, targetEndIndex);
-            
-            const targetFullText = this.getTextFromSpans(targetRangeSpans);
-            
-            if (!targetFullText.includes(targetTextDisplay)) {
-                new Notice('Target display text not found in the selected range');
-                return;
-            }
-            
-            const targetDisplaySpans = this.findTextSpansInRange(targetRangeSpans, targetTextDisplay);
-            
-            if (targetDisplaySpans.length === 0) {
-                new Notice('Could not locate target display text within range');
-                return;
-            }
-
-            const targetRangeIndices = targetRangeSpans.map(span => 
-                parseInt(span.getAttribute('data-word-index') || '0')
-            );
-            const targetDisplayIndices = targetDisplaySpans.map(span => 
-                parseInt(span.getAttribute('data-word-index') || '0')
-            );
-            
-            this.highlightWords(targetDisplaySpans, articleView);
-            
-            try {
-                const noteId = uuidv4();
-                
-                await this.annotationService.saveNote({
-                    id: noteId,
-                    sourceFilePath: this.activeFilePath,
-                    textStart,
-                    textEnd,
-                    textDisplay,
-                    targetArticle: targetArticlePath,
-                    targetTextStart,
-                    targetTextEnd,
-                    targetTextDisplay,
-                    targetStartIndex,
-                    targetEndIndex,
-                    targetFullText,
-                    targetRangeIndices,
-                    targetDisplayIndices
-                });
-                
-                new Notice('Note saved successfully');
-                this.onBack();
-            } catch (error) {
-                new Notice(`Error saving note: ${error.message}`);
-            }
-        } catch (error) {
-            new Notice(`Error processing note: ${error.message}`);
-        }
     }
     
     public updateActiveFilePath(filePath: string): void {
