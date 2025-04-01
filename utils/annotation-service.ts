@@ -69,7 +69,7 @@ export class AnnotationService {
     }
 
     async saveComment(commentData: {
-        commentIndex: number,
+        commentId: string,
         textDisplay: string,
         commentBody: string,
         targetArticle: string,
@@ -108,10 +108,9 @@ export class AnnotationService {
         const targetTxtDisplayRange = commentData.targetDisplayIndices || [];
 
         const sourceFilename = commentData.sourceFilePath.split('/').pop() || commentData.sourceFilePath;
-        const id = `${sourceFilename}-${commentData.commentIndex.toString()}`;
         
         const annotationData: AnnotationData = {
-            id,
+            id: commentData.commentId,
             timestamp,
             src: sourceFilename,
             src_txt_display: srcTxtDisplay,
@@ -131,7 +130,7 @@ export class AnnotationService {
         
         const annotations = await this.loadAnnotations(commentData.targetArticle);
         
-        annotations.comments[id] = annotationData;
+        annotations.comments[commentData.commentId] = annotationData;
         
         const annotationsPath = this.getAnnotationsFilePath(commentData.targetArticle);
         await this.app.vault.adapter.write(
@@ -140,14 +139,14 @@ export class AnnotationService {
         );
 
         const sourceAnnotations = await this.loadAnnotations(commentData.sourceFilePath);
-        sourceAnnotations.comments[id] = annotationData;
+        sourceAnnotations.comments[commentData.commentId] = annotationData;
         const sourceAnnotationsPath = this.getAnnotationsFilePath(commentData.sourceFilePath);
         await this.app.vault.adapter.write(
             sourceAnnotationsPath, 
             JSON.stringify(sourceAnnotations, null, 2)
         );
         
-        return id;
+        return commentData.commentId;
     }
 
     async saveNote(noteData: {
