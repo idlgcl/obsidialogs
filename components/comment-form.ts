@@ -1,16 +1,19 @@
 import { Component, MarkdownView, Notice, App } from "obsidian";
-import { Comment, parseComments } from '../utils/comment-parser';
+import { annotationToComment, Comment, parseComments } from '../utils/comment-parser';
 import { ArticleAutocompleteField } from './article-input';
 import { Article } from '../types';
 import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
 import { ApiService } from '../utils/api';
-import { AnnotationService } from '../utils/annotation-service';
+import { AnnotationData, AnnotationService } from '../utils/annotation-service';
+
+import { v4 as uuidv4 } from 'uuid';
 
 export interface CommentFormOptions {
     container: HTMLElement;
     onBack: () => void;
     activeFilePath: string;
     app: App;
+    commentData?: AnnotationData;
 }
 
 export class CommentForm extends Component {
@@ -21,6 +24,7 @@ export class CommentForm extends Component {
     private activeFilePath: string;
     private apiService: ApiService;
     private annotationService: AnnotationService;
+    private commentData: AnnotationData;
     public isTargetArticleSelection = false;
     
     private comments: Comment[] = [];
@@ -42,8 +46,46 @@ export class CommentForm extends Component {
         this.annotationService = new AnnotationService(this.app);
         
         this.createForm();
-        this.loadCommentsFromFile();
-        this.resetFormFields();
+        
+        if (options.commentData) {
+            this.populateForm(options.commentData);
+            this.setFormReadOnly();
+            this.commentData = options.commentData
+        } else {
+            this.loadCommentsFromFile();
+            this.resetFormFields();
+        }
+    }
+    
+    private populateForm(commentData: AnnotationData): void {
+        this.textDisplayDropdown.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = commentData.id;
+        option.text = commentData.src_txt_display;
+        option.selected = true;
+        this.textDisplayDropdown.appendChild(option);
+        
+        this.commentTextarea.value = commentData.src_txt.replace(commentData.src_txt_display, '').trim();
+        
+        this.articleAutocomplete?.setValue(commentData.target);
+        this.selectedArticle = {
+            id: commentData.target,
+            title: commentData.target,
+            kind: ''
+        };
+        
+        this.targetTextStartInput.value = commentData.target_txt_start;
+        this.targetTextEndInput.value = commentData.target_txt_end;
+        this.targetTextDisplayInput.value = commentData.target_txt_display;
+        
+        if (this.selectedArticle) {
+            this.openArticleView(this.selectedArticle);
+        }
+    }
+
+    private setFormReadOnly(): void {
+        this.textDisplayDropdown.disabled = true;
+        this.commentTextarea.disabled = true;
     }
     
     private loadCommentsFromFile(): void {
@@ -216,14 +258,23 @@ private async openArticleView(article: Article): Promise<void> {
             new Notice('Please select a target article');
             return;
         }
-        
-        const commentIndex = parseInt(this.textDisplayDropdown.value);
-        if (isNaN(commentIndex) || commentIndex < 0 || commentIndex >= this.comments.length) {
-            new Notice('Please select a comment');
-            return;
+
+        let comment : Comment;
+        let commentId : string;
+
+        if (!this.commentData) {
+            const commentIndex = parseInt(this.textDisplayDropdown.value);
+            if (isNaN(commentIndex) || commentIndex < 0 || commentIndex >= this.comments.length) {
+                new Notice('Please select a comment');
+                return;
+            }
+            
+            comment = this.comments[commentIndex];
+            commentId = uuidv4() // TODO :: do it in annotation service
+        } else {
+            comment = annotationToComment(this.commentData)
+            commentId = this.commentData.id
         }
-        
-        const comment = this.comments[commentIndex];
         
         const targetTextStart = this.targetTextStartInput.value.trim();
         const targetTextEnd = this.targetTextEndInput.value.trim();
@@ -286,7 +337,7 @@ private async openArticleView(article: Article): Promise<void> {
             this.highlightWords(targetDisplaySpans, articleView);
             
             await this.annotationService.saveComment({
-                commentIndex,
+                commentId,
                 textDisplay: comment.title,
                 commentBody: this.commentTextarea.value,
                 targetArticle: this.selectedArticle.id,
