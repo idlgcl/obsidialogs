@@ -1,9 +1,9 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 
-export const ARTICLE_VIEW_TYPE = 'idealogs-article-view';
+export const IDEALOGS_READER = 'idealogs-reader';
 
-export class ArticleView extends ItemView {
+export class IdealogsReaderView extends ItemView {
     private articleContentEl: HTMLElement;
     private articleId: string;
     private articleContent = '';
@@ -23,7 +23,7 @@ export class ArticleView extends ItemView {
     }
 
     getViewType(): string {
-        return ARTICLE_VIEW_TYPE;
+        return IDEALOGS_READER;
     }
 
     getDisplayText(): string {

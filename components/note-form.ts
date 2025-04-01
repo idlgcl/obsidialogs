@@ -1,7 +1,7 @@
 import { Component, Notice, App } from "obsidian";
 import { ArticleAutocompleteField } from './article-input';
 import { Article } from '../types';
-import { ARTICLE_VIEW_TYPE, ArticleView } from './article-view';
+import { IDEALOGS_READER, IdealogsReaderView } from './idealogs-reader';
 import { ApiService } from '../utils/api';
 import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
@@ -145,26 +145,26 @@ export class NoteForm extends Component {
     
     private async openArticleView(article: Article): Promise<void> {
         try {
-            const existingArticleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
+            const existingArticleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
             let articleLeaf;
             
             if (existingArticleLeaves.length > 0) {
                 articleLeaf = existingArticleLeaves[0];
                 await articleLeaf.setViewState({
-                    type: ARTICLE_VIEW_TYPE,
+                    type: IDEALOGS_READER,
                     active: false,
                     state: { articleId: article.id }
                 });
             } else {
                 articleLeaf = this.app.workspace.getLeaf('split');
                 await articleLeaf.setViewState({
-                    type: ARTICLE_VIEW_TYPE,
+                    type: IDEALOGS_READER,
                     active: false,
                     state: { articleId: article.id }
                 });
             }
             
-            const articleView = articleLeaf.view as ArticleView;
+            const articleView = articleLeaf.view as IdealogsReaderView;
             
             try {
                 const content = await this.apiService.fetchFileContent(article.id);
@@ -208,13 +208,13 @@ export class NoteForm extends Component {
             return;
         }
         
-        const articleLeaves = this.app.workspace.getLeavesOfType(ARTICLE_VIEW_TYPE);
+        const articleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
         if (articleLeaves.length === 0) {
             new Notice('No article view found');
             return;
         }
         
-        const articleView = articleLeaves[0].view as ArticleView;
+        const articleView = articleLeaves[0].view as IdealogsReaderView;
         const wordSpans = this.getAllWordSpansFromArticleView(articleView);
         
         if (!wordSpans || wordSpans.length === 0) {
@@ -289,7 +289,7 @@ export class NoteForm extends Component {
         }
     }
     
-    private getAllWordSpansFromArticleView(articleView: ArticleView): HTMLElement[] {
+    private getAllWordSpansFromArticleView(articleView: IdealogsReaderView): HTMLElement[] {
         const contentEl = articleView.contentEl;
         if (!contentEl) return [];
         
@@ -377,7 +377,7 @@ export class NoteForm extends Component {
         });
     }
     
-    private highlightWords(spans: HTMLElement[], articleView: ArticleView): void {
+    private highlightWords(spans: HTMLElement[], articleView: IdealogsReaderView): void {
         const allSpans = this.getAllWordSpansFromArticleView(articleView);
         allSpans.forEach(span => {
             span.classList.remove('idl-highlighted-word');
