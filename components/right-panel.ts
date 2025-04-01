@@ -3,7 +3,7 @@ import { RightPanelListView } from "./right-panel-list-view";
 import { RightPanelFormView } from "./right-panel-form-view";
 import { CommentForm } from "./comment-form";
 import { NoteForm } from "./note-form";
-import { AnnotationService } from '../utils/annotation-service';
+import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
 export const IDL_RIGHT_PANEL = 'idl-right-panel';
 
@@ -26,6 +26,7 @@ export class RightPanel extends ItemView {
         this.listView = new RightPanelListView({
             container: this.contentEl,
             onSelectItem: () => this.showFormView(),
+            onSelectComment: (comment) => this.showCommentView(comment),
             onNewComment: () => this.showNewCommentForm(),
             onNewNote: () => this.showNewNoteForm()
         });
@@ -61,6 +62,34 @@ export class RightPanel extends ItemView {
                 }
             })
         );
+    }
+
+    showCommentView(comment: AnnotationData) {
+        this.listView.hide();
+        this.formView.hide();
+        
+        if (this.commentForm) {
+            this.component.removeChild(this.commentForm);
+            this.commentForm.onunload();
+            this.commentForm = null;
+        }
+        
+        if (this.noteForm) {
+            this.component.removeChild(this.noteForm);
+            this.noteForm.onunload();
+            this.noteForm = null;
+        }
+        
+        this.commentForm = new CommentForm({
+            container: this.contentEl,
+            onBack: () => this.showListView(),
+            activeFilePath: this.activeFilePath,
+            app: this.app,
+            commentData: comment,
+        });
+        
+        this.component.addChild(this.commentForm);
+        this.commentForm.show();
     }
     
     showListView() {
