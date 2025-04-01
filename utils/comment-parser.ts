@@ -1,3 +1,5 @@
+import { AnnotationData } from "./annotation-service";
+
 export interface Comment {
     title: string;
     body: string;
@@ -48,4 +50,13 @@ export function parseComments(text: string): Comment[] {
     }
     
     return results;
+}
+
+
+export function annotationToComment(annotation: AnnotationData): Comment {
+    return {
+        title: annotation.src_txt_display,
+        body: annotation.src_txt,
+        indices: annotation.src_range
+    }
 }
