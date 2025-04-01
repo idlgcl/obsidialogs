@@ -2,19 +2,22 @@ import { Component } from "obsidian";
 import { TabsComponent, TabItem } from "./tabs-component";
 import { CommentsTab } from "./comments-tab";
 import { NotesTab } from "./notes-tab";
-import { AnnotationService } from "utils/annotation-service";
+import { AnnotationData, AnnotationService } from "utils/annotation-service";
 
 export interface RightPanelListViewOptions {
     container: HTMLElement;
     onSelectItem: () => void;
+    onSelectComment: (comment: AnnotationData) => void;
     onNewComment: () => void;
     onNewNote: () => void;
 }
+
 
 export class RightPanelListView extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
     private onSelectItem: () => void;
+    private onSelectComment: (comment: AnnotationData) => void;
     private onNewComment: () => void;
     private onNewNote: () => void;
     private tabsComponent: TabsComponent;
@@ -26,6 +29,7 @@ export class RightPanelListView extends Component {
         super();
         this.container = options.container;
         this.onSelectItem = options.onSelectItem;
+        this.onSelectComment = options.onSelectComment; 
         this.onNewComment = options.onNewComment;
         this.onNewNote = options.onNewNote;
         this.createView();
@@ -54,7 +58,7 @@ export class RightPanelListView extends Component {
         
         this.commentsTab = new CommentsTab({
             container: this.tabContentEl,
-            onSelectComment: () => this.onSelectItem(),
+            onSelectComment: (comment) => this.onSelectComment(comment), 
             onNewComment: () => this.onNewComment()
         });
         

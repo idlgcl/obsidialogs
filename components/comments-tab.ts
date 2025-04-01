@@ -3,14 +3,14 @@ import { AnnotationData, AnnotationService } from "../utils/annotation-service";
 
 export interface CommentsTabOptions {
     container: HTMLElement;
-    onSelectComment: () => void;
-    onNewComment: () => void; 
+    onSelectComment: (comment: AnnotationData) => void;
+    onNewComment: () => void;
 }
 
 export class CommentsTab extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
-    private onSelectComment: () => void;
+    private onSelectComment: (comment: AnnotationData) => void;
     private onNewComment: () => void;
     private commentsListEl: HTMLElement;
     
@@ -74,10 +74,10 @@ export class CommentsTab extends Component {
         const commentItemEl = this.commentsListEl.createDiv({ cls: 'comment-item' });
         commentItemEl.setText(comment.src_txt_display);
         commentItemEl.addEventListener('click', () => {
-            this.onSelectComment();
+            this.onSelectComment(comment); 
         });
     }
-    
+
     show() {
         this.contentEl.style.display = 'block';
     }
