@@ -91,6 +91,11 @@ export class IdealogsReaderView extends ItemView {
                 this.highlightComments(comment);
             }
             
+            for (const noteId in annotations.notes) {
+                const note = annotations.notes[noteId];
+                this.highlightNotes(note);
+            }
+            
         } catch (error) {
             console.error('Error loading annotations:', error);
         }
@@ -102,7 +107,7 @@ export class IdealogsReaderView extends ItemView {
         return Array.from(spans) as HTMLElement[];
     }
     
-    highlightComments(comment: any): void {
+    highlightComments(comment: AnnotationData): void {
         if (!comment.src_txt_display_range || comment.src_txt_display_range.length === 0) return;
         
         const indices = comment.src_txt_display_range;
@@ -134,6 +139,109 @@ export class IdealogsReaderView extends ItemView {
         });
     }
     
+    highlightNotes(note: AnnotationData): void {
+        const { src_txt, src_txt_display, src_txt_start, src_txt_end } = note;
+        
+        if (!src_txt || !src_txt_display) return;
+        
+        const wordSpans = this.getAllWordSpans();
+        
+        const displaySpans = this.findNoteTextDisplay(wordSpans, src_txt, src_txt_display, src_txt_start, src_txt_end);
+        
+        if (displaySpans.length === 0) return;
+        
+        const indices = displaySpans.map(span => 
+            parseInt(span.getAttribute('data-word-index') || '0')
+        );
+        
+        indices.forEach(index => {
+            if (!this.annotationsByWordIndex.has(index)) {
+                this.annotationsByWordIndex.set(index, []);
+            }
+            this.annotationsByWordIndex.get(index)?.push({
+                annotation: note,
+                type: 'note'
+            });
+        });
+        
+        indices.forEach(index => {
+            const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
+            if (!span) return;
+            
+            span.classList.add('idl-highlighted-word');
+            
+            if (!span.hasAttribute('data-has-annotations')) {
+                span.setAttribute('data-has-annotations', 'true');
+                
+                span.addEventListener('click', (e) => {
+                    this.toggleAnnotationsForWord(index, span as HTMLElement);
+                    e.stopPropagation();
+                });
+            }
+        });
+    }
+    
+    private findNoteTextDisplay(
+        spans: HTMLElement[], 
+        fullText: string, 
+        displayText: string, 
+        startText?: string, 
+        endText?: string
+    ): HTMLElement[] {
+        if (startText && displayText && endText) {
+            const fullPhrase = fullText;
+            const fullPhraseWords = fullPhrase.split(/\s+/).filter(w => w.length > 0);
+            
+            for (let i = 0; i <= spans.length - fullPhraseWords.length; i++) {
+                let found = true;
+                const sequence: HTMLElement[] = [];
+                
+                for (let j = 0; j < fullPhraseWords.length; j++) {
+                    if (!spans[i + j] || spans[i + j].textContent !== fullPhraseWords[j]) {
+                        found = false;
+                        break;
+                    }
+                    sequence.push(spans[i + j]);
+                }
+                
+                if (found) {
+                    const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
+                    const startWords = startText.split(/\s+/).filter(w => w.length > 0);
+                    return sequence.slice(startWords.length, startWords.length + displayWords.length);
+                }
+            }
+        }
+        
+        const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
+        if (displayWords.length === 0) return [];
+        
+        if (displayWords.length === 1) {
+            return spans.filter(span => span.textContent === displayWords[0]);
+        }
+        
+        const result: HTMLElement[] = [];
+        
+        for (let i = 0; i <= spans.length - displayWords.length; i++) {
+            let found = true;
+            const sequence: HTMLElement[] = [];
+            
+            for (let j = 0; j < displayWords.length; j++) {
+                if (!spans[i + j] || spans[i + j].textContent !== displayWords[j]) {
+                    found = false;
+                    break;
+                }
+                sequence.push(spans[i + j]);
+            }
+            
+            if (found) {
+                result.push(...sequence);
+                break;
+            }
+        }
+        
+        return result;
+    }
+    
     private toggleAnnotationsForWord(wordIndex: number, element: HTMLElement): void {
         const existingContainer = this.articleContentEl.querySelector(`.idl-annotations-container[data-for-word="${wordIndex}"]`);
         
@@ -150,34 +258,32 @@ export class IdealogsReaderView extends ItemView {
         container.setAttribute('data-for-word', wordIndex.toString());
         
         annotations.forEach(({annotation, type}, i) => {
-            if (type === 'comment') {
-                const annotationEl = document.createElement('div');
-                annotationEl.className = 'idl-annotation-item';
+            const annotationEl = document.createElement('div');
+            annotationEl.className = 'idl-annotation-item';
+            
+            const textEl = document.createElement('div');
+            textEl.textContent = annotation.target_txt;
+            annotationEl.appendChild(textEl);
+            
+            if (annotation.target) {
+                const linkEl = document.createElement('div');
+                linkEl.style.marginTop = '4px';
+                linkEl.style.fontSize = '0.85em';
                 
-                const textEl = document.createElement('div');
-                textEl.textContent = annotation.target_txt;
-                annotationEl.appendChild(textEl);
+                const link = document.createElement('a');
+                link.className = 'internal-link';
+                link.setAttribute('href', annotation.target);
+                link.textContent = `${annotation.target}`;
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.app.workspace.openLinkText(annotation.target, '', 'tab');
+                });
                 
-                if (annotation.target) {
-                    const linkEl = document.createElement('div');
-                    linkEl.style.marginTop = '4px';
-                    linkEl.style.fontSize = '0.85em';
-                    
-                    const link = document.createElement('a');
-                    link.className = 'internal-link';
-                    link.setAttribute('href', annotation.target);
-                    link.textContent = `${annotation.target}`;
-                    link.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        this.app.workspace.openLinkText(annotation.target, '', 'tab');
-                    });
-                    
-                    linkEl.appendChild(link);
-                    annotationEl.appendChild(linkEl);
-                }
-                
-                container.appendChild(annotationEl);
+                linkEl.appendChild(link);
+                annotationEl.appendChild(linkEl);
             }
+            
+            container.appendChild(annotationEl);
         });
         
         element.after(container);
