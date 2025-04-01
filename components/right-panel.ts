@@ -27,6 +27,7 @@ export class RightPanel extends ItemView {
             container: this.contentEl,
             onSelectItem: () => this.showFormView(),
             onSelectComment: (comment) => this.showCommentView(comment),
+            onSelectNote: (note) => this.showNoteView(note),
             onNewComment: () => this.showNewCommentForm(),
             onNewNote: () => this.showNewNoteForm()
         });
@@ -92,11 +93,39 @@ export class RightPanel extends ItemView {
         this.commentForm.show();
     }
     
+    showNoteView(note: AnnotationData) {
+        this.listView.hide();
+        this.formView.hide();
+        
+        if (this.commentForm) {
+            this.component.removeChild(this.commentForm);
+            this.commentForm.onunload();
+            this.commentForm = null;
+        }
+        
+        if (this.noteForm) {
+            this.component.removeChild(this.noteForm);
+            this.noteForm.onunload();
+            this.noteForm = null;
+        }
+        
+        this.noteForm = new NoteForm({
+            container: this.contentEl,
+            onBack: () => this.showListView(),
+            activeFilePath: this.activeFilePath,
+            app: this.app,
+            noteData: note,
+        });
+        
+        this.component.addChild(this.noteForm);
+        this.noteForm.show();
+    }
+    
     showListView() {
         this.listView.show();
         this.formView.hide();
 
-        this.updateCommentsList();
+        this.updateAnnotations();
 
         if (this.commentForm) {
             this.component.removeChild(this.commentForm);
@@ -170,9 +199,10 @@ export class RightPanel extends ItemView {
         this.noteForm.show();
     }
 
-    private updateCommentsList(): void {
+    private updateAnnotations(): void {
         if (this.listView && this.activeFilePath && this.annotationService) {
             this.listView.updateComments(this.annotationService, this.activeFilePath);
+            this.listView.updateNotes(this.annotationService, this.activeFilePath);
         }
     }
 
@@ -195,7 +225,7 @@ export class RightPanel extends ItemView {
         if (this.activeFilePath === '') {
             this.leaf.detach();
         } else {
-            this.updateCommentsList()
+            this.updateAnnotations();
         }
     }
 

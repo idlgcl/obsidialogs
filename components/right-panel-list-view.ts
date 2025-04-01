@@ -8,6 +8,7 @@ export interface RightPanelListViewOptions {
     container: HTMLElement;
     onSelectItem: () => void;
     onSelectComment: (comment: AnnotationData) => void;
+    onSelectNote: (note: AnnotationData) => void;
     onNewComment: () => void;
     onNewNote: () => void;
 }
@@ -18,6 +19,7 @@ export class RightPanelListView extends Component {
     private contentEl: HTMLElement;
     private onSelectItem: () => void;
     private onSelectComment: (comment: AnnotationData) => void;
+    private onSelectNote: (note: AnnotationData) => void;
     private onNewComment: () => void;
     private onNewNote: () => void;
     private tabsComponent: TabsComponent;
@@ -30,6 +32,7 @@ export class RightPanelListView extends Component {
         this.container = options.container;
         this.onSelectItem = options.onSelectItem;
         this.onSelectComment = options.onSelectComment; 
+        this.onSelectNote = options.onSelectNote;
         this.onNewComment = options.onNewComment;
         this.onNewNote = options.onNewNote;
         this.createView();
@@ -64,7 +67,7 @@ export class RightPanelListView extends Component {
         
         this.notesTab = new NotesTab({
             container: this.tabContentEl,
-            onSelectNote: () => this.onSelectItem(),
+            onSelectNote: (note) => this.onSelectNote(note),
             onNewNote: () => this.onNewNote()
         });
         
@@ -87,6 +90,12 @@ export class RightPanelListView extends Component {
     public updateComments(annotationService: AnnotationService, filePath: string): void {
         if (this.commentsTab) {
             this.commentsTab.updateComments(annotationService, filePath);
+        }
+    }
+    
+    public updateNotes(annotationService: AnnotationService, filePath: string): void {
+        if (this.notesTab) {
+            this.notesTab.updateNotes(annotationService, filePath);
         }
     }
     
