@@ -2,7 +2,7 @@ import { Plugin, TFile } from 'obsidian';
 import { ArticleSuggest } from './components/suggester';
 import { FileHandler } from './utils/file-handler';
 import { patchDefaultSuggester } from './utils/suggester-patcher';
-import { ARTICLE_VIEW_TYPE, ArticleView } from './components/article-view';
+import { IDEALOGS_READER, IdealogsReaderView } from './components/idealogs-reader';
 import { AnnotationService } from './utils/annotation-service';
 import { IDL_RIGHT_PANEL, RightPanel } from 'components/right-panel';
 
@@ -20,8 +20,8 @@ export default class ArticleSuggestPlugin extends Plugin {
         
         await this.annotationService.ensureAnnotationsDirectory();
         
-        this.registerView(ARTICLE_VIEW_TYPE, (leaf) => {
-            return new ArticleView(leaf);
+        this.registerView(IDEALOGS_READER, (leaf) => {
+            return new IdealogsReaderView(leaf);
         });
         
         this.registerView(IDL_RIGHT_PANEL, (leaf) => {
