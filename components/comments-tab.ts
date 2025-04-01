@@ -73,9 +73,12 @@ export class CommentsTab extends Component {
     private renderCommentItem(comment: AnnotationData): void {
         const commentItemEl = this.commentsListEl.createDiv({ cls: 'comment-item' });
         commentItemEl.setText(comment.src_txt_display);
-        commentItemEl.addEventListener('click', () => {
-            this.onSelectComment(comment); 
-        });
+        
+        commentItemEl.onmousedown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.onSelectComment(comment);
+        };
     }
 
     show() {
