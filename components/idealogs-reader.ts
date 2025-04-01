@@ -8,6 +8,7 @@ export class IdealogsReaderView extends ItemView {
     private articleId: string;
     private articleContent = '';
     private component: Component;
+    private openedFromCommand = false;
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -20,6 +21,13 @@ export class IdealogsReaderView extends ItemView {
         if (state && state.articleId) {
             this.articleId = state.articleId;
         }
+        if (state && state.openedFromCommand !== undefined) {
+            this.openedFromCommand = state.openedFromCommand;
+        }
+    }
+
+    isOpenedFromCommand(): boolean {
+        return this.openedFromCommand;
     }
 
     getViewType(): string {
