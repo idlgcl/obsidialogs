@@ -242,3 +242,22 @@
 .idl-new-note-btn:hover {
     background-color: var(--background-modifier-hover);
 }
+
+/* reader annotations */
+.idl-highlighted-word {
+    font-weight: bolder;
+    cursor: pointer;
+}
+
+.idl-annotations-container {
+    padding: 8px;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    width: 100%;
+}
+
+.idl-annotation-item {
+    border-left: 1px solid var(--color-accent);
+    padding: 6px;
+    margin-bottom: 4px;
+}
