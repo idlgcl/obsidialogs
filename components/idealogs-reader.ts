@@ -46,7 +46,7 @@ export class IdealogsReaderView extends ItemView {
         this.articleContent = content;
         await this.render();
         
-        if (this.articleId) {
+        if (this.articleId && this.isOpenedFromCommand()) {
             await this.loadAnnotations();
         }
     }
@@ -97,7 +97,7 @@ export class IdealogsReaderView extends ItemView {
         });
     }
     
-    private async loadAnnotations(): Promise<void> {
+    async loadAnnotations(): Promise<void> {
         if (!this.articleId) return;
         
         try {
