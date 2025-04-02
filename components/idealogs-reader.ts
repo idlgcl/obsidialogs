@@ -64,6 +64,37 @@ export class IdealogsReaderView extends ItemView {
         
         const processor = new WordProcessor({ articleId: this.articleId });
         processor.processMarkdown(this.articleContentEl);
+        
+        this.attachLinkHandlers();
+    }
+    
+    private attachLinkHandlers(): void {
+        const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
+        internalLinks.forEach(link => {
+            if (link instanceof HTMLAnchorElement) {
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const href = link.getAttribute('href');
+                    if (href) {
+                        this.app.workspace.openLinkText(href, '', false);
+                    }
+                });
+            }
+        });
+        
+        const externalLinks = this.articleContentEl.querySelectorAll('a.external-link');
+        externalLinks.forEach(link => {
+            if (link instanceof HTMLAnchorElement && !link.hasAttribute('data-href-handled')) {
+                link.setAttribute('data-href-handled', 'true');
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const href = link.getAttribute('href');
+                    if (href) {
+                        window.open(href, '_blank');
+                    }
+                });
+            }
+        });
     }
     
     private async loadAnnotations(): Promise<void> {
