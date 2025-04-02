@@ -1,6 +1,9 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { config } from "dotenv";
+
+config();
 
 const banner =
 `/*
@@ -33,6 +36,7 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
+		"uuid",
 		...builtins],
 	format: "cjs",
 	target: "es2018",
