@@ -1,15 +1,17 @@
-import { MarkdownView, Plugin, TFile } from 'obsidian';
+import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { ArticleSuggest } from './components/suggester';
 import { FileHandler } from './utils/file-handler';
 import { patchDefaultSuggester } from './utils/suggester-patcher';
 import { IDEALOGS_READER, IdealogsReaderView } from './components/idealogs-reader';
 import { AnnotationService } from './utils/annotation-service';
 import { IDL_RIGHT_PANEL, RightPanel } from 'components/right-panel';
+import { ApiService } from './utils/api';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
     private fileHandler: FileHandler;
     public annotationService: AnnotationService;
+    private apiService: ApiService;
     
     async onload() {
         this.articleSuggest = new ArticleSuggest(this);
@@ -17,6 +19,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         
         this.fileHandler = new FileHandler(this.app);
         this.annotationService = new AnnotationService(this.app);
+        this.apiService = new ApiService();
         
         await this.annotationService.ensureAnnotationsDirectory();
         
@@ -44,6 +47,8 @@ export default class ArticleSuggestPlugin extends Plugin {
             })
         );
         
+        this.patchLinkOpening();
+        
         this.addCommand({
             id: 'open-in-idealogs-reader',
             name: 'Open in Idealogs Reader',
@@ -65,6 +70,63 @@ export default class ArticleSuggestPlugin extends Plugin {
                 return false;
             }
         });
+    }
+    
+    private originalOpenLinkText: any;
+    
+    private patchLinkOpening(): void {
+        const workspace = this.app.workspace;
+        this.originalOpenLinkText = workspace.openLinkText;
+        
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const self = this;
+
+        // @ts-ignore 
+        workspace.openLinkText = function(linktext, sourcePath, newLeaf, openViewState) {
+            if (self.isIdealogsArticle(linktext)) {
+                self.openIdealogsArticleById(linktext);
+                return true;
+            }
+            
+            return self.originalOpenLinkText.call(workspace, linktext, sourcePath, newLeaf, openViewState);
+        };
+    }
+    
+    private isIdealogsArticle(id: string): boolean {
+        return ['Tx', 'Ix', 'Fx', '0x'].some(prefix => id.startsWith(prefix));
+    }
+    
+    async openIdealogsArticleById(articleId: string): Promise<void> {
+        const existingReaderLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
+        let readerLeaf: WorkspaceLeaf;
+        
+        if (existingReaderLeaves.length > 0) {
+            readerLeaf = existingReaderLeaves[0];
+        } else {
+            readerLeaf = this.app.workspace.getLeaf('split');
+            await readerLeaf.setViewState({
+                type: IDEALOGS_READER,
+                active: false
+            });
+        }
+        
+        await readerLeaf.setViewState({
+            type: IDEALOGS_READER,
+            active: true,
+            state: { 
+                articleId: articleId,
+                openedFromCommand: false
+            }
+        });
+        
+        try {
+            const content = await this.apiService.fetchFileContent(articleId);
+            const readerView = readerLeaf.view as IdealogsReaderView;
+            await readerView.setContent(content);
+            this.app.workspace.revealLeaf(readerLeaf);
+        } catch (error) {
+            console.error('Error fetching article content:', error);
+        }
     }
         
     async openInIdealogsReader(file: TFile): Promise<void> {
@@ -111,5 +173,10 @@ export default class ArticleSuggestPlugin extends Plugin {
     
     onunload() {
         this.fileHandler.trash();
+        
+        const workspace = this.app.workspace;
+        if (this.originalOpenLinkText && workspace.openLinkText !== this.originalOpenLinkText) {
+            workspace.openLinkText = this.originalOpenLinkText;
+        }
     }
 }
