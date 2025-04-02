@@ -212,41 +212,47 @@ export class CommentForm extends Component {
         const saveButton = saveButtonContainer.createEl('button', { text: 'Save' });
         saveButton.addEventListener('click', () => this.handleSave());
     }
-    
-private async openArticleView(article: Article): Promise<void> {
-    try {
-        const existingArticleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
-        let articleLeaf;
         
-        if (existingArticleLeaves.length > 0) {
-            articleLeaf = existingArticleLeaves[0];
-            await articleLeaf.setViewState({
-                type: IDEALOGS_READER,
-                active: false,
-                state: { articleId: article.id }
-            });
-        } else {
-            articleLeaf = this.app.workspace.getLeaf('split');
-            await articleLeaf.setViewState({
-                type: IDEALOGS_READER,
-                active: false,
-                state: { articleId: article.id }
-            });
-        }
-        
-        const articleView = articleLeaf.view as IdealogsReaderView;
-        
+    private async openArticleView(article: Article): Promise<void> {
         try {
-            const content = await this.apiService.fetchFileContent(article.id);
-            await articleView.setContent(content);
+            const existingArticleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
+            let articleLeaf;
+            
+            if (existingArticleLeaves.length > 0) {
+                articleLeaf = existingArticleLeaves[0];
+                await articleLeaf.setViewState({
+                    type: IDEALOGS_READER,
+                    active: false,
+                    state: { 
+                        articleId: article.id, 
+                        openedFromCommand: false 
+                    }
+                });
+            } else {
+                articleLeaf = this.app.workspace.getLeaf('split');
+                await articleLeaf.setViewState({
+                    type: IDEALOGS_READER,
+                    active: false,
+                    state: { 
+                        articleId: article.id, 
+                        openedFromCommand: false 
+                    }
+                });
+            }
+            
+            const articleView = articleLeaf.view as IdealogsReaderView;
+            
+            try {
+                const content = await this.apiService.fetchFileContent(article.id);
+                await articleView.setContent(content);
+            } catch (error) {
+                console.error('Error fetching article content:', error);
+            }
         } catch (error) {
-            console.error('Error fetching article content:', error);
+            console.error('Error opening article view:', error);
+            this.isTargetArticleSelection = false; 
         }
-    } catch (error) {
-        console.error('Error opening article view:', error);
-        this.isTargetArticleSelection = false; 
     }
-}
     
     private async handleSave(): Promise<void> {
         if (!this.activeFilePath) {
