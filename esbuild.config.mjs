@@ -36,7 +36,6 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
-		"uuid",
 		...builtins],
 	format: "cjs",
 	target: "es2018",
