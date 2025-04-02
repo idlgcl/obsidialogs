@@ -88,8 +88,8 @@ export class CommentForm extends Component {
         this.commentTextarea.disabled = true;
     }
     
-    private loadCommentsFromFile(): void {
-        setTimeout(() => {
+    private async loadCommentsFromFile(): Promise<void> {
+        setTimeout(async () => {
             const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
             let content = '';
             
@@ -105,10 +105,32 @@ export class CommentForm extends Component {
             
             if (content) {
                 this.comments = parseComments(content);
+                
+                try {
+                    const annotations = await this.annotationService.loadAnnotations(this.activeFilePath);
+                    const savedComments = annotations.comments;
+                    
+                    this.comments = this.comments.filter(comment => {
+                        const commentText = `${comment.title} ${comment.body}`.trim();
+                        
+                        for (const commentId in savedComments) {
+                            const savedComment = savedComments[commentId];
+                            const savedText = savedComment.src_txt.trim();
+                            
+                            if (commentText === savedText) {
+                                return false; 
+                            }
+                        }
+                        
+                        return true;
+                    });
+                } catch (error) {
+                    console.error('Error loading annotations:', error);
+                }
+                
                 this.updateCommentDropdown();
             }
-
-        }, 500); 
+        }, 500);
     }
 
     private resetFormFields(): void {
