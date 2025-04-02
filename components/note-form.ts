@@ -153,14 +153,20 @@ export class NoteForm extends Component {
                 await articleLeaf.setViewState({
                     type: IDEALOGS_READER,
                     active: false,
-                    state: { articleId: article.id }
+                    state: { 
+                        articleId: article.id, 
+                        openedFromCommand: false 
+                    }
                 });
             } else {
                 articleLeaf = this.app.workspace.getLeaf('split');
                 await articleLeaf.setViewState({
                     type: IDEALOGS_READER,
                     active: false,
-                    state: { articleId: article.id }
+                    state: { 
+                        articleId: article.id, 
+                        openedFromCommand: false 
+                    }
                 });
             }
             
