@@ -17,26 +17,36 @@ export class WordProcessor {
     }
 
     private processElement(element: HTMLElement): void {
+        if (element.tagName.toLowerCase() === 'a') {
+            return;
+        }
+        
         const fragment = document.createDocumentFragment();
         
         Array.from(element.childNodes).forEach(node => {
             if (node.nodeType === Node.TEXT_NODE && node.textContent) {
                 this.processTextNode(node.textContent, fragment);
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
+            } 
+            else if (node.nodeType === Node.ELEMENT_NODE) {
                 const el = node as HTMLElement;
-                const newEl = document.createElement(el.tagName);
                 
-                Array.from(el.attributes).forEach(attr => {
-                    newEl.setAttribute(attr.name, attr.value);
-                });
-                
-                this.processElement(el);
-                
-                while (el.firstChild) {
-                    newEl.appendChild(el.firstChild);
+                if (el.tagName.toLowerCase() === 'a') {
+                    fragment.appendChild(el.cloneNode(true));
+                } else {
+                    const newEl = document.createElement(el.tagName);
+                    
+                    Array.from(el.attributes).forEach(attr => {
+                        newEl.setAttribute(attr.name, attr.value);
+                    });
+                    
+                    this.processElement(el);
+                    
+                    while (el.firstChild) {
+                        newEl.appendChild(el.firstChild);
+                    }
+                    
+                    fragment.appendChild(newEl);
                 }
-                
-                fragment.appendChild(newEl);
             } else {
                 fragment.appendChild(node.cloneNode(true));
             }
