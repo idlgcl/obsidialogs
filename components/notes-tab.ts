@@ -1,10 +1,12 @@
-import { Component } from "obsidian";
+import { Component, MarkdownView, App } from "obsidian";
 import { AnnotationData, AnnotationService } from "../utils/annotation-service";
+import { Note, parseNotes, noteToAnnotationData } from "../utils/note-parser";
 
 export interface NotesTabOptions {
     container: HTMLElement;
     onSelectNote: (note: AnnotationData) => void;
     onNewNote: () => void;
+    app: App; 
 }
 
 export class NotesTab extends Component {
@@ -13,12 +15,14 @@ export class NotesTab extends Component {
     private onSelectNote: (note: AnnotationData) => void;
     private onNewNote: () => void;
     private notesListEl: HTMLElement;
+    private app: App;
     
     constructor(options: NotesTabOptions) {
         super();
         this.container = options.container;
         this.onSelectNote = options.onSelectNote;
         this.onNewNote = options.onNewNote;
+        this.app = options.app;
         this.createView();
     }
     
@@ -27,39 +31,48 @@ export class NotesTab extends Component {
         
         const notesListEl = this.contentEl.createDiv({ cls: 'idl-notes-list' });
         
-        const newNoteBtn = notesListEl.createDiv({ cls: 'idl-new-note-btn' });
-        newNoteBtn.setText('New Note');
-        
-        newNoteBtn.addEventListener('click', () => {
-            this.onNewNote();
-        });
-        
         this.notesListEl = notesListEl.createDiv({ cls: 'idl-notes-items' });
     }
     
     public async updateNotes(annotationService: AnnotationService, filePath: string): Promise<void> {
-        if (!annotationService || !filePath) {
+        if (!filePath) {
             this.displayEmptyState();
             return;
         }
         
         try {
-            const annotations = await annotationService.loadAnnotations(filePath);
-            const notes = annotations.notes;
+            const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
+            let content = '';
             
-            this.notesListEl.empty();
+            for (const leaf of markdownLeaves) {
+                const view = leaf.view;
+                if (view instanceof MarkdownView && 
+                    view.file && 
+                    view.file.path === filePath) {
+                    content = view.editor.getValue();
+                    break;
+                }
+            }
             
-            if (Object.keys(notes).length === 0) {
+            if (!content) {
                 this.displayEmptyState();
                 return;
             }
             
-            for (const noteId in notes) {
-                const note = notes[noteId];
-                this.renderNoteItem(note);
+            const parsedNotes = parseNotes(content);
+            
+            this.notesListEl.empty();
+            
+            if (parsedNotes.length === 0) {
+                this.displayEmptyState();
+                return;
+            }
+            
+            for (const note of parsedNotes) {
+                this.renderNoteItem(note, filePath);
             }
         } catch (error) {
-            console.error('Error loading notes:', error);
+            console.error('Error parsing notes:', error);
             this.displayEmptyState();
         }
     }
@@ -70,14 +83,31 @@ export class NotesTab extends Component {
         emptyStateEl.setText('No notes found');
     }
     
-    private renderNoteItem(note: AnnotationData): void {
+    private renderNoteItem(note: Note | AnnotationData, filePath?: string): void {
         const noteItemEl = this.notesListEl.createDiv({ cls: 'comment-item' });
-        noteItemEl.setText(note.src_txt_display);
+        
+        let displayText: string;
+        let annotationData: AnnotationData;
+        
+        if ('linkText' in note) {
+            if (!filePath) {
+                console.error('filePath is required for Note objects');
+                return;
+            }
+            
+            displayText = note.linkText.replace(/\[\[(.*?)\]\]/g, '$1');
+            annotationData = noteToAnnotationData(note, filePath);
+        } else {
+            displayText = note.src_txt_display;
+            annotationData = note;
+        }
+        
+        noteItemEl.setText(displayText);
         
         noteItemEl.onmousedown = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.onSelectNote(note);
+            this.onSelectNote(annotationData);
         };
     }
 
