@@ -1,4 +1,4 @@
-import { Component } from "obsidian";
+import { Component, App } from "obsidian";
 import { TabsComponent, TabItem } from "./tabs-component";
 import { CommentsTab } from "./comments-tab";
 import { NotesTab } from "./notes-tab";
@@ -11,6 +11,7 @@ export interface RightPanelListViewOptions {
     onSelectNote: (note: AnnotationData) => void;
     onNewComment: () => void;
     onNewNote: () => void;
+    app: App; 
 }
 
 
@@ -26,6 +27,7 @@ export class RightPanelListView extends Component {
     private commentsTab: CommentsTab;
     private notesTab: NotesTab;
     private tabContentEl: HTMLElement;
+    private app: App;
     
     constructor(options: RightPanelListViewOptions) {
         super();
@@ -35,6 +37,7 @@ export class RightPanelListView extends Component {
         this.onSelectNote = options.onSelectNote;
         this.onNewComment = options.onNewComment;
         this.onNewNote = options.onNewNote;
+        this.app = options.app;
         this.createView();
     }
     
@@ -68,7 +71,8 @@ export class RightPanelListView extends Component {
         this.notesTab = new NotesTab({
             container: this.tabContentEl,
             onSelectNote: (note) => this.onSelectNote(note),
-            onNewNote: () => this.onNewNote()
+            onNewNote: () => this.onNewNote(),
+            app: this.app 
         });
         
         this.addChild(this.commentsTab);
