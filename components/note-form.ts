@@ -53,20 +53,21 @@ export class NoteForm extends Component {
     }
     
     private populateForm(noteData: AnnotationData): void {
-        this.textStart.value = noteData.src_txt_start;
-        this.textEnd.value = noteData.src_txt_end;
-        this.textDisplay.value = noteData.src_txt_display;
+        this.textStart.value = '';
+        this.textEnd.value = '';
+        this.textDisplay.value = '';
+        this.targetTextStartInput.value = '';
+        this.targetTextEndInput.value = '';
+        this.targetTextDisplayInput.value = '';
         
         this.articleAutocomplete?.setValue(noteData.target);
+        this.articleAutocomplete?.setDisabled(true); 
+        
         this.selectedArticle = {
             id: noteData.target,
             title: noteData.target,
             kind: ''
         };
-        
-        this.targetTextStartInput.value = noteData.target_txt_start;
-        this.targetTextEndInput.value = noteData.target_txt_end;
-        this.targetTextDisplayInput.value = noteData.target_txt_display;
         
         if (this.selectedArticle) {
             this.openArticleView(this.selectedArticle);
