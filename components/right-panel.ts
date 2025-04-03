@@ -29,7 +29,8 @@ export class RightPanel extends ItemView {
             onSelectComment: (comment) => this.showCommentView(comment),
             onSelectNote: (note) => this.showNoteView(note),
             onNewComment: () => this.showNewCommentForm(),
-            onNewNote: () => this.showNewNoteForm()
+            onNewNote: () => this.showNewNoteForm(),
+            app: this.app 
         });
 
         this.formView = new RightPanelFormView({
@@ -61,8 +62,12 @@ export class RightPanel extends ItemView {
                     
                     this.noteForm.updateActiveFilePath(this.activeFilePath);
                 }
+                
+                this.registerEditorChangeHandler();
             })
         );
+        
+        this.registerEditorChangeHandler();
     }
 
     showCommentView(comment: AnnotationData) {
@@ -205,6 +210,33 @@ export class RightPanel extends ItemView {
             this.listView.updateNotes(this.annotationService, this.activeFilePath);
         }
     }
+    
+    private editorChangeTimeout: number | null = null;
+    
+    private registerEditorChangeHandler(): void {
+        this.registerEvent(
+            this.app.workspace.on("editor-change", () => {
+                this.handleEditorChanges();
+            })
+        );
+    }
+    
+    private handleEditorChanges = (): void => {
+        if (this.editorChangeTimeout) {
+            window.clearTimeout(this.editorChangeTimeout);
+        }
+        
+        this.editorChangeTimeout = window.setTimeout(() => {
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!activeView) return;
+            
+            if (this.listView) {
+                this.listView.updateNotes(this.annotationService, this.activeFilePath);
+            }
+            
+            this.editorChangeTimeout = null;
+        }, 500);
+    }
 
     getViewType(): string {
         return IDL_RIGHT_PANEL;
@@ -230,6 +262,10 @@ export class RightPanel extends ItemView {
     }
 
     async onClose() {
+        if (this.editorChangeTimeout) {
+            window.clearTimeout(this.editorChangeTimeout);
+        }
+        
         this.component.unload();
         return super.onClose();
     }
