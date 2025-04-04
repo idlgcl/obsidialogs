@@ -5,7 +5,7 @@ import { IDEALOGS_READER, IdealogsReaderView } from './idealogs-reader';
 import { ApiService } from '../utils/api';
 import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
-import { v4 as uuidv4 } from 'uuid';
+import { Note } from "utils/note-parser";
 
 export interface NoteFormOptions {
     container: HTMLElement;
@@ -13,6 +13,7 @@ export interface NoteFormOptions {
     activeFilePath: string;
     app: App;
     noteData?: AnnotationData;
+    note?: Note;
 }
 
 export class NoteForm extends Component {
@@ -25,6 +26,9 @@ export class NoteForm extends Component {
     private annotationService: AnnotationService;
     public isTargetArticleSelection = false;
     private noteData: AnnotationData | undefined;
+
+    private note?: Note;
+
     
     private textStart: HTMLInputElement;
     private textEnd: HTMLInputElement;
@@ -44,6 +48,8 @@ export class NoteForm extends Component {
         this.apiService = new ApiService();
         this.annotationService = new AnnotationService(this.app);
         this.noteData = options.noteData;
+        this.note = options.note || this.noteData?.noteMeta;
+
         
         this.createForm();
         
@@ -267,7 +273,7 @@ export class NoteForm extends Component {
             this.highlightWords(targetDisplaySpans, articleView);
             
             try {
-                const noteId = this.noteData ? this.noteData.id : uuidv4();
+                const noteId = this.note?.id;
                 
                 await this.annotationService.saveNote({
                     id: noteId,
@@ -283,7 +289,8 @@ export class NoteForm extends Component {
                     targetEndIndex,
                     targetFullText,
                     targetRangeIndices,
-                    targetDisplayIndices
+                    targetDisplayIndices,
+                    noteMeta: this.note 
                 });
                 
                 new Notice('Note saved successfully');

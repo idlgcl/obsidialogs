@@ -1,5 +1,7 @@
 import { AnnotationData } from "./annotation-service";
 
+import { v4 as uuidv4 } from 'uuid';
+
 export interface Note {
     id: string;
     linkText: string;
@@ -61,7 +63,7 @@ export function parseNotes(text: string): Note[] {
                     ...nextWordsIndex
                 ];
                 
-                const id = `note-${counter + i}`;
+                const id = uuidv4();
                 
                 results.push({
                     id,
@@ -99,6 +101,7 @@ export function noteToAnnotationData(note: Note, filePath: string): AnnotationDa
         target_txt_end: '',
         target_txt: '',
         target_range: [],
-        target_txt_display_range: []
+        target_txt_display_range: [],
+        noteMeta: note
     };
 }
