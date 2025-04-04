@@ -54,9 +54,7 @@ export class FileHandler {
                     }
                 }
                 
-                if (rightLeaf) {
-                    this.app.workspace.revealLeaf(rightLeaf);
-                } else {
+                if (!rightLeaf) {
                     console.error('Failed to setup IDL_RIGHT_PANEL');
                 }
 
