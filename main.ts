@@ -70,6 +70,35 @@ export default class ArticleSuggestPlugin extends Plugin {
                 return false;
             }
         });
+
+        this.registerEvent(
+            this.app.workspace.on('file-menu', (menu, file) => {
+                if (file instanceof TFile && file.extension === 'md') {
+                    menu.addItem((item) => {
+                        item.setTitle("Open in Idealogs Reader")
+                           .setIcon("book-open")
+                           .onClick(() => {
+                               this.openInIdealogsReader(file);
+                           });
+                    });
+                }
+            })
+        );
+
+        this.registerEvent(
+            this.app.workspace.on('editor-menu', (menu) => {
+                const activeFile = this.app.workspace.getActiveFile();
+                if (activeFile instanceof TFile && activeFile.extension === 'md') {
+                    menu.addItem((item) => {
+                        item.setTitle("Open in Idealogs Reader")
+                           .setIcon("book-open")
+                           .onClick(() => {
+                                this.openInIdealogsReader(activeFile);
+                           });
+                    });
+                }
+            })
+        );
     }
     
     private originalOpenLinkText: any;
