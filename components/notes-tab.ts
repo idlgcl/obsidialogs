@@ -69,7 +69,7 @@ export class NotesTab extends Component {
             }
             
             for (const note of parsedNotes) {
-                this.renderNoteItem(note, filePath);
+                this.renderNoteItem(note, filePath, annotationService);
             }
         } catch (error) {
             console.error('Error parsing notes:', error);
@@ -83,19 +83,44 @@ export class NotesTab extends Component {
         emptyStateEl.setText('No notes found');
     }
     
-    private renderNoteItem(note: Note, filePath?: string): void {
+    private async renderNoteItem(note: Note, filePath?: string, annotationService?: AnnotationService): Promise<void> {
         const noteItemEl = this.notesListEl.createDiv({ cls: 'comment-item' });
         
         const displayText = note.linkText.replace(/\[\[(.*?)\]\]/g, '$1');
  
         noteItemEl.setText(displayText);
         
-        noteItemEl.onmousedown = (e) => {
+        noteItemEl.onmousedown = async (e) => {
             e.preventDefault();
             e.stopPropagation();
             
-            const annotationData = noteToAnnotationData(note, filePath || '');
-            this.onSelectNote(annotationData, note); 
+            let annotationData = noteToAnnotationData(note, filePath || '');
+            let originalNote = note;
+            
+            if (annotationService && filePath) {
+                try {
+                    const annotations = await annotationService.loadAnnotations(filePath);
+                    const savedNotes = annotations.notes;
+                    
+                    for (const noteId in savedNotes) {
+                        const savedNote = savedNotes[noteId];
+                        const savedNoteMeta = savedNote.noteMeta;
+                        
+                        if (savedNoteMeta &&
+                            savedNoteMeta.linkText === note.linkText &&
+                            savedNoteMeta.previousWords === note.previousWords &&
+                            savedNoteMeta.nextWords === note.nextWords) {
+                            annotationData = savedNote;
+                            originalNote = savedNoteMeta;
+                            break;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking for existing notes:', error);
+                }
+            }
+            
+            this.onSelectNote(annotationData, originalNote);
         };
     }
 
