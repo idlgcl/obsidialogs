@@ -5,6 +5,7 @@ import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 export const IDEALOGS_READER = 'idealogs-reader';
 
 export class IdealogsReaderView extends ItemView {
+    private articleHeaderEl: HTMLElement; 
     private articleContentEl: HTMLElement;
     private articleId: string;
     private articleContent = '';
@@ -17,6 +18,7 @@ export class IdealogsReaderView extends ItemView {
         super(leaf);
         this.articleId = '';
         this.component = new Component();
+        this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
         this.articleContentEl = this.contentEl.createDiv({ cls: 'idealogs-article-content' });
         this.annotationService = new AnnotationService(this.app);
     }
@@ -44,6 +46,10 @@ export class IdealogsReaderView extends ItemView {
 
     async setContent(content: string): Promise<void> {
         this.articleContent = content;
+
+        this.articleHeaderEl.empty();
+        this.articleHeaderEl.createEl('h1', { text: this.articleId });
+        
         await this.render();
         
         if (this.articleId && this.isOpenedFromCommand()) {
