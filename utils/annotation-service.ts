@@ -17,6 +17,7 @@ export interface AnnotationData {
     target_txt: string;
     target_range: number[];
     target_txt_display_range: number[];
+    noteMeta?: any; 
 }
 
 export interface AnnotationsFile {
@@ -163,7 +164,8 @@ export class AnnotationService {
         targetEndIndex?: number,
         targetFullText?: string,
         targetRangeIndices?: number[],
-        targetDisplayIndices?: number[]
+        targetDisplayIndices?: number[],
+        noteMeta?: any
     }): Promise<string> {
         await this.ensureAnnotationsDirectory();
         
@@ -225,7 +227,8 @@ export class AnnotationService {
             target_txt_end: targetTxtEnd,
             target_txt: targetTxt,
             target_range: targetRange,
-            target_txt_display_range: targetTxtDisplayRange
+            target_txt_display_range: targetTxtDisplayRange,
+            noteMeta: noteData.noteMeta
         };
         
         const targetAnnotations = await this.loadAnnotations(noteData.targetArticle);

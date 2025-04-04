@@ -4,6 +4,7 @@ import { RightPanelFormView } from "./right-panel-form-view";
 import { CommentForm } from "./comment-form";
 import { NoteForm } from "./note-form";
 import { AnnotationData, AnnotationService } from '../utils/annotation-service';
+import { Note } from "utils/note-parser";
 
 export const IDL_RIGHT_PANEL = 'idl-right-panel';
 
@@ -98,7 +99,7 @@ export class RightPanel extends ItemView {
         this.commentForm.show();
     }
     
-    showNoteView(note: AnnotationData) {
+    showNoteView(note: AnnotationData, originalNote?: Note) {
         this.listView.hide();
         this.formView.hide();
         
@@ -120,6 +121,7 @@ export class RightPanel extends ItemView {
             activeFilePath: this.activeFilePath,
             app: this.app,
             noteData: note,
+            note: originalNote
         });
         
         this.component.addChild(this.noteForm);

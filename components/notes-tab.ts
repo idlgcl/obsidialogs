@@ -4,7 +4,7 @@ import { Note, parseNotes, noteToAnnotationData } from "../utils/note-parser";
 
 export interface NotesTabOptions {
     container: HTMLElement;
-    onSelectNote: (note: AnnotationData) => void;
+    onSelectNote: (note: AnnotationData, originalNote?: Note) => void; 
     onNewNote: () => void;
     app: App; 
 }
@@ -12,7 +12,7 @@ export interface NotesTabOptions {
 export class NotesTab extends Component {
     private container: HTMLElement;
     private contentEl: HTMLElement;
-    private onSelectNote: (note: AnnotationData) => void;
+    private onSelectNote: (note: AnnotationData, originalNote: Note) => void;
     private onNewNote: () => void;
     private notesListEl: HTMLElement;
     private app: App;
@@ -83,31 +83,19 @@ export class NotesTab extends Component {
         emptyStateEl.setText('No notes found');
     }
     
-    private renderNoteItem(note: Note | AnnotationData, filePath?: string): void {
+    private renderNoteItem(note: Note, filePath?: string): void {
         const noteItemEl = this.notesListEl.createDiv({ cls: 'comment-item' });
         
-        let displayText: string;
-        let annotationData: AnnotationData;
-        
-        if ('linkText' in note) {
-            if (!filePath) {
-                console.error('filePath is required for Note objects');
-                return;
-            }
-            
-            displayText = note.linkText.replace(/\[\[(.*?)\]\]/g, '$1');
-            annotationData = noteToAnnotationData(note, filePath);
-        } else {
-            displayText = note.src_txt_display;
-            annotationData = note;
-        }
-        
+        const displayText = note.linkText.replace(/\[\[(.*?)\]\]/g, '$1');
+ 
         noteItemEl.setText(displayText);
         
         noteItemEl.onmousedown = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.onSelectNote(annotationData);
+            
+            const annotationData = noteToAnnotationData(note, filePath || '');
+            this.onSelectNote(annotationData, note); 
         };
     }
 
