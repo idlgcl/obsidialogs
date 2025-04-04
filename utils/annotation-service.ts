@@ -174,13 +174,30 @@ export class AnnotationService {
         const id = noteData.id || Date.now().toString();
         const timestamp = Date.now();
         
+        let sourceContent = "";
+        try {
+            sourceContent = await this.app.vault.adapter.read(noteData.sourceFilePath);
+        } catch (error) {
+            console.error(`Error reading source file: ${error}`);
+            throw new Error(`Could not read source file: ${error.message}`);
+        }
+        
+        const startPos = sourceContent.indexOf(noteData.textStart);
+        const endPos = sourceContent.indexOf(noteData.textEnd) + noteData.textEnd.length;
+        
+        if (startPos === -1 || endPos === -1) {
+            throw new Error('Could not locate text boundaries in source file');
+        }
+        
+        const fullText = sourceContent.substring(startPos, endPos);
+        
+        const srcTxt = fullText.replace(/\[\[.*?\]\]/g, '');
         
         const sourceFilename = noteData.sourceFilePath.split('/').pop() || noteData.sourceFilePath;
         
         const srcTxtDisplay = noteData.textDisplay;
         const srcTxtStart = noteData.textStart;
         const srcTxtEnd = noteData.textEnd;
-        const srcTxt = `${srcTxtStart} ${srcTxtDisplay} ${srcTxtEnd}`;
         
         const srcRange: number[] = [];
         const srcTxtDisplayRange: number[] = [];
