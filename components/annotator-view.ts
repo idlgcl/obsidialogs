@@ -63,7 +63,7 @@ export class AnnotatorView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Article Annotator';
+        return 'Annotation View';
     }
 
     async loadArticleContent(): Promise<void> {

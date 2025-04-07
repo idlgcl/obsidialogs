@@ -53,7 +53,7 @@ export class IdealogsReaderView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Idealogs Article';
+        return 'Idealogs Reader';
     }
 
     async setContent(content: string): Promise<void> {
