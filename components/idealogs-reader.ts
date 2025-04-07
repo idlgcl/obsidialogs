@@ -13,6 +13,7 @@ export class IdealogsReaderView extends ItemView {
     private openedFromCommand = false;
     private annotationService: AnnotationService;
     private annotationsByWordIndex: Map<number, {annotation: AnnotationData, type: 'comment' | 'note'}[]> = new Map();
+    private altKeyHandler: (e: KeyboardEvent) => void;
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -21,6 +22,17 @@ export class IdealogsReaderView extends ItemView {
         this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
         this.articleContentEl = this.contentEl.createDiv({ cls: 'idealogs-article-content' });
         this.annotationService = new AnnotationService(this.app);
+        
+        this.altKeyHandler = (e: KeyboardEvent) => {
+            if (e.type === 'keydown' && e.key === 'Alt') {
+                this.articleContentEl.classList.add('alt-key-pressed');
+            } else if (e.type === 'keyup' && e.key === 'Alt') {
+                this.articleContentEl.classList.remove('alt-key-pressed');
+            }
+        };
+        
+        document.addEventListener('keydown', this.altKeyHandler);
+        document.addEventListener('keyup', this.altKeyHandler);
     }
     
     async setState(state: any, result: any): Promise<void> {
@@ -109,7 +121,7 @@ export class IdealogsReaderView extends ItemView {
         try {
             const allWordSpans = this.getAllWordSpans();
             allWordSpans.forEach(span => {
-                span.classList.remove('idl-highlighted-word');
+                span.classList.remove('idl-annotated-word', 'source-annotation', 'target-annotation');
                 span.removeAttribute('data-has-annotations');
                 
                 const newSpan = span.cloneNode(true) as HTMLElement;
@@ -163,7 +175,8 @@ export class IdealogsReaderView extends ItemView {
             const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
             if (!span) return;
             
-            span.classList.add('idl-highlighted-word');
+            span.classList.add('idl-annotated-word');
+            span.classList.add('source-annotation');
             
             if (!span.hasAttribute('data-has-annotations')) {
                 span.setAttribute('data-has-annotations', 'true');
@@ -205,7 +218,8 @@ export class IdealogsReaderView extends ItemView {
             const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
             if (!span) return;
             
-            span.classList.add('idl-highlighted-word');
+            span.classList.add('idl-annotated-word');
+            span.classList.add('target-annotation');
             
             if (!span.hasAttribute('data-has-annotations')) {
                 span.setAttribute('data-has-annotations', 'true');
@@ -327,6 +341,9 @@ export class IdealogsReaderView extends ItemView {
     }
 
     async onClose() {
+        document.removeEventListener('keydown', this.altKeyHandler);
+        document.removeEventListener('keyup', this.altKeyHandler);
+        
         this.component.unload();
         return super.onClose();
     }
