@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 import { ApiService } from '../utils/api';
 import { IdealogsAnnotation } from '../types';
+import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
 export const ANNOTATOR_VIEW = 'annotator-view';
 
@@ -27,6 +28,7 @@ export class AnnotatorView extends ItemView {
     private articleContent = '';
     private component: Component;
     private apiService: ApiService;
+    private annotationService: AnnotationService;
     private annotationsByWordIndex: Map<number, IdealogsAnnotation[]> = new Map();
     private altKeyHandler: (e: KeyboardEvent) => void;
 
@@ -37,6 +39,7 @@ export class AnnotatorView extends ItemView {
         this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
         this.articleContentEl = this.contentEl.createDiv({ cls: 'idealogs-article-content' });
         this.apiService = new ApiService();
+        this.annotationService = new AnnotationService(this.app);
         
         this.altKeyHandler = (e: KeyboardEvent) => {
             if (e.type === 'keydown' && e.key === 'Alt') {
@@ -131,11 +134,10 @@ export class AnnotatorView extends ItemView {
         
         try {
             this.annotationsByWordIndex.clear();
-            const annotations = await this.fetchAllAnnotations(this.articleId, this.articleId);
             
             const allWordSpans = this.getAllWordSpans();
             allWordSpans.forEach(span => {
-                span.classList.remove('idl-annotated-word', 'source-annotation', 'target-annotation');
+                span.classList.remove('idl-annotated-word', 'source-annotation', 'target-annotation', 'local-annotation');
                 span.removeAttribute('data-has-annotations');
                 
                 const newSpan = span.cloneNode(true) as HTMLElement;
@@ -145,12 +147,68 @@ export class AnnotatorView extends ItemView {
             const existingContainers = this.articleContentEl.querySelectorAll('.idl-annotations-container');
             existingContainers.forEach(el => el.remove());
             
-            for (const annotation of annotations) {
-                this.markAnnotatedWords(annotation);
+            const localAnnotations = await this.loadLocalAnnotations();
+            
+            const webAnnotations = await this.fetchAllAnnotations(this.articleId, this.articleId);
+            
+            for (const annotation of localAnnotations) {
+                this.markAnnotatedWords(annotation, true);
+            }
+            
+            for (const annotation of webAnnotations) {
+                this.markAnnotatedWords(annotation, false);
             }
         } catch (error) {
             console.error('Error loading annotations:', error);
         }
+    }
+    
+    private async loadLocalAnnotations(): Promise<IdealogsAnnotation[]> {
+        try {
+            const annotations = await this.annotationService.loadAnnotations(this.articleId);
+            const idealogsAnnotations: IdealogsAnnotation[] = [];
+            
+            for (const commentId in annotations.comments) {
+                const comment = annotations.comments[commentId];
+                idealogsAnnotations.push(this.mapToIdealogsAnnotation(comment, 'Comment'));
+            }
+            
+            for (const noteId in annotations.notes) {
+                const note = annotations.notes[noteId];
+                idealogsAnnotations.push(this.mapToIdealogsAnnotation(note, 'Note'));
+            }
+            
+            return idealogsAnnotations;
+        } catch (error) {
+            console.error('Error loading local annotations:', error);
+            return [];
+        }
+    }
+    
+    private mapToIdealogsAnnotation(annotation: AnnotationData, kind: string): IdealogsAnnotation {
+        return {
+            id: parseInt(annotation.id) || 0,
+            kind: kind,
+            commitId: 0,
+            isValid: true,
+            commitIsMerged: true,
+            
+            sourceId: annotation.src,
+            sTxtStart: annotation.src_txt_start,
+            sTxtEnd: annotation.src_txt_end,
+            sTxtDisplay: annotation.src_txt_display,
+            sTxt: annotation.src_txt,
+            sTxtDisplayRange: annotation.src_txt_display_range,
+            sTxtRange: annotation.src_range,
+            
+            targetId: this.articleId,
+            tTxtStart: annotation.target_txt_start,
+            tTxtEnd: annotation.target_txt_end,
+            tTxtDisplay: annotation.target_txt_display,
+            tTxt: annotation.target_txt,
+            tTxtDisplayRange: annotation.target_txt_display_range,
+            tTxtRange: annotation.target_range
+        };
     }
     
     private async fetchAllAnnotations(sourceId: string, targetId: string): Promise<IdealogsAnnotation[]> {
@@ -188,7 +246,7 @@ export class AnnotatorView extends ItemView {
         return Array.from(spans) as HTMLElement[];
     }
     
-    markAnnotatedWords(annotation: IdealogsAnnotation): void {
+    markAnnotatedWords(annotation: IdealogsAnnotation, isLocal: boolean): void {
         const isFromCurrentArticle = this.articleId === annotation.sourceId;
         const isToCurrentArticle = this.articleId === annotation.targetId;
         
@@ -204,7 +262,13 @@ export class AnnotatorView extends ItemView {
             if (!this.annotationsByWordIndex.has(index)) {
                 this.annotationsByWordIndex.set(index, []);
             }
-            this.annotationsByWordIndex.get(index)?.push(annotation);
+            
+            const annotationsArray = this.annotationsByWordIndex.get(index);
+            if (isLocal) {
+                annotationsArray?.unshift(annotation);
+            } else {
+                annotationsArray?.push(annotation);
+            }
         });
         
         indices.forEach((index: number) => {
@@ -213,6 +277,10 @@ export class AnnotatorView extends ItemView {
             
             span.classList.add('idl-annotated-word');
             span.classList.add(isFromCurrentArticle ? 'source-annotation' : 'target-annotation');
+            
+            if (isLocal) {
+                span.classList.add('local-annotation');
+            }
             
             if (!span.hasAttribute('data-has-annotations')) {
                 span.setAttribute('data-has-annotations', 'true');
@@ -246,6 +314,10 @@ export class AnnotatorView extends ItemView {
             annotationEl.className = 'idl-annotation-item';
             
             annotationEl.classList.add(isFromCurrentArticle ? 'from-current' : 'to-current');
+            
+            if (element.classList.contains('local-annotation')) {
+                annotationEl.classList.add('local-annotation-item');
+            }
             
             const textEl = document.createElement('div');
             textEl.textContent = isFromCurrentArticle ? annotation.tTxt : annotation.sTxt;
