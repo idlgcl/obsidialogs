@@ -6,6 +6,7 @@ import { IDEALOGS_READER, IdealogsReaderView } from './components/idealogs-reade
 import { AnnotationService } from './utils/annotation-service';
 import { IDL_RIGHT_PANEL, RightPanel } from 'components/right-panel';
 import { ApiService } from './utils/api';
+import { ANNOTATOR_VIEW, AnnotatorView } from './components/annotator-view';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
@@ -29,6 +30,10 @@ export default class ArticleSuggestPlugin extends Plugin {
         
         this.registerView(IDL_RIGHT_PANEL, (leaf) => {
             return new RightPanel(leaf, this.annotationService);
+        });
+        
+        this.registerView(ANNOTATOR_VIEW, (leaf) => {
+            return new AnnotatorView(leaf);
         });
         
         patchDefaultSuggester(this.app);
@@ -113,7 +118,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         // @ts-ignore 
         workspace.openLinkText = function(linktext, sourcePath, newLeaf, openViewState) {
             if (self.isIdealogsArticle(linktext)) {
-                self.openIdealogsArticleById(linktext);
+                self.openAnnotatorViewById(linktext);
                 return true;
             }
             
@@ -123,6 +128,31 @@ export default class ArticleSuggestPlugin extends Plugin {
     
     private isIdealogsArticle(id: string): boolean {
         return ['Tx', 'Ix', 'Fx', '0x'].some(prefix => id.startsWith(prefix));
+    }
+    
+    async openAnnotatorViewById(articleId: string): Promise<void> {
+        const existingAnnotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW);
+        let annotatorLeaf: WorkspaceLeaf;
+        
+        if (existingAnnotatorLeaves.length > 0) {
+            annotatorLeaf = existingAnnotatorLeaves[0];
+        } else {
+            annotatorLeaf = this.app.workspace.getLeaf('split');
+            await annotatorLeaf.setViewState({
+                type: ANNOTATOR_VIEW,
+                active: false
+            });
+        }
+        
+        await annotatorLeaf.setViewState({
+            type: ANNOTATOR_VIEW,
+            active: true,
+            state: { 
+                articleId: articleId
+            }
+        });
+        
+        this.app.workspace.revealLeaf(annotatorLeaf);
     }
     
     async openIdealogsArticleById(articleId: string): Promise<void> {
