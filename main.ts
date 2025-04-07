@@ -6,6 +6,7 @@ import { IDEALOGS_READER, IdealogsReaderView } from './components/idealogs-reade
 import { AnnotationService } from './utils/annotation-service';
 import { IDL_RIGHT_PANEL, RightPanel } from 'components/right-panel';
 import { ApiService } from './utils/api';
+import { IDEALOGS_WEB_VIEW, IdealogsWebView } from 'components/idl-webview';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
@@ -30,6 +31,12 @@ export default class ArticleSuggestPlugin extends Plugin {
         this.registerView(IDL_RIGHT_PANEL, (leaf) => {
             return new RightPanel(leaf, this.annotationService);
         });
+
+                
+        this.registerView(IDEALOGS_WEB_VIEW, (leaf) => {
+            return new IdealogsWebView(leaf);
+        });
+
         
         patchDefaultSuggester(this.app);
 
@@ -113,7 +120,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         // @ts-ignore 
         workspace.openLinkText = function(linktext, sourcePath, newLeaf, openViewState) {
             if (self.isIdealogsArticle(linktext)) {
-                self.openIdealogsArticleById(linktext);
+                self.openIdealogsArticleInWebView(linktext);
                 return true;
             }
             
@@ -157,6 +164,33 @@ export default class ArticleSuggestPlugin extends Plugin {
             console.error('Error fetching article content:', error);
         }
     }
+
+
+    async openIdealogsArticleInWebView(articleId: string): Promise<void> {
+        try {
+            const existingLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_WEB_VIEW);
+            let leaf: WorkspaceLeaf;
+            
+            if (existingLeaves.length > 0) {
+                leaf = existingLeaves[0];
+            } else {
+                leaf = this.app.workspace.getLeaf('split');
+            }
+            
+            await leaf.setViewState({
+                type: IDEALOGS_WEB_VIEW,
+                active: true,
+                state: { 
+                    articleId: articleId
+                }
+            });
+            
+            this.app.workspace.revealLeaf(leaf);
+        } catch (error) {
+            console.error('Error opening article in WebView:', error);
+        }
+    }
+
         
     async openInIdealogsReader(file: TFile): Promise<void> {
         const existingReaderLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
