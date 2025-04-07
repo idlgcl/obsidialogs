@@ -15,6 +15,7 @@ if you want to view the source, please visit the github repository of this plugi
 const prod = (process.argv[2] === "production");
 
 const API_ENDPOINT = process.env.API_ENDPOINT || 'http://localhost:8002/api';
+const ANNOTATION_ENDPOINT = process.env.ANNOTATION_ENDPOINT || 'http://localhost:8003/api';
 
 const context = await esbuild.context({
 	banner: {
@@ -45,7 +46,8 @@ const context = await esbuild.context({
 	outfile: "main.js",
 	minify: prod,
 	define: {
-		'API_ENDPOINT_VALUE': JSON.stringify(API_ENDPOINT)
+		'API_ENDPOINT_VALUE': JSON.stringify(API_ENDPOINT),
+		'ANNOTATION_ENDPOINT_VALUE': JSON.stringify(ANNOTATION_ENDPOINT),
 	},
 });
 
