@@ -25,3 +25,28 @@ export interface Article {
 export interface WordProcessorOptions {
     articleId: string;
 }
+
+
+export interface IdealogsAnnotation {
+    id: number;
+    kind: string;
+    commitId: number;
+    isValid: boolean;
+    commitIsMerged: boolean;
+
+    sourceId: string;
+    sTxtStart: string;
+    sTxtEnd: string;
+    sTxtDisplay: string;
+    sTxt: string;
+    sTxtDisplayRange: number[];
+    sTxtRange: number[];
+
+    targetId: string;
+    tTxtStart: string;
+    tTxtEnd: string;
+    tTxtDisplay: string;
+    tTxt: string;
+    tTxtDisplayRange: number[];
+    tTxtRange: number[];
+}
