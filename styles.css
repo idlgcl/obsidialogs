@@ -291,3 +291,8 @@
 .alt-key-pressed .idl-annotated-word {
     font-weight: bold;
 }
+
+
+.local-annotation-item {
+    background-color: var(--background-secondary);
+}
