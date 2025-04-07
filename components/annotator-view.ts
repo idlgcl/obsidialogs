@@ -72,7 +72,7 @@ export class AnnotatorView extends ItemView {
             this.articleContent = content;
 
             this.articleHeaderEl.empty();
-            this.articleHeaderEl.createEl('h1', { text: this.articleId });
+            this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
             
             await this.render();
         } catch (error) {
