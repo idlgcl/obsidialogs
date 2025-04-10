@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { MarkdownView, Plugin, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
 import { ArticleSuggest } from './components/suggester';
 import { FileHandler } from './utils/file-handler';
 import { patchDefaultSuggester } from './utils/suggester-patcher';
@@ -41,6 +41,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         this.registerEvent(
             this.app.workspace.on('file-open', (file) => {
                 if (file instanceof TFile) {
+                    this.setupReaderButton(file);
                     this.fileHandler.handleFileOpen(file);
                 }
             })
@@ -53,7 +54,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         );
         
         this.patchLinkOpening();
-        
+
         this.addCommand({
             id: 'open-in-idealogs-reader',
             name: 'Open in Idealogs Reader',
@@ -228,6 +229,32 @@ export default class ArticleSuggestPlugin extends Plugin {
         } catch (error) {
             console.error('Error reading file content:', error);
         }
+    }
+
+    private setupReaderButton(file: TFile): void {
+        if (file.extension !== 'md') return;
+    
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) return;
+    
+        const existingButton = view.containerEl.querySelector('.idealogs-reader-button');
+        if (existingButton) existingButton.remove();
+    
+        const viewActionsEl = view.containerEl.querySelector('.view-actions');
+        if (!viewActionsEl) return;
+    
+        const button = document.createElement('button');
+        button.className = 'view-action clickable-icon idealogs-reader-button';
+        button.setAttribute('aria-label', 'Open in Idealogs Reader');
+        setIcon(button, 'book-open-text');
+        
+        button.addEventListener('click', () => {
+            if (file) {
+                this.openInIdealogsReader(file);
+            }
+        });
+    
+        viewActionsEl.insertAdjacentElement('afterbegin', button);
     }
     
     onunload() {
