@@ -95,6 +95,21 @@ export class NoteForm extends Component {
         
         const formContainer = this.contentEl.createDiv({ cls: 'idl-form' });
         
+        const isInvalid = this.noteData && this.noteData.isValid === false;
+        if (isInvalid) {
+            const validationWarningEl = formContainer.createDiv({ cls: 'idl-validation-warning' });
+            validationWarningEl.createDiv({ 
+                cls: 'idl-warning-icon',
+                text: '⚠️'
+            });
+            
+            validationWarningEl.createDiv({
+                cls: 'idl-warning-message',
+                text: this.noteData?.validationMessage || 'Note may be invalid due to document changes'
+            });
+        }
+        
+        // Original form elements
         const srcRangeFields = formContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
         
         const startField = srcRangeFields.createDiv({ cls: 'idl-start-field' });
@@ -108,13 +123,13 @@ export class NoteForm extends Component {
         this.textEnd = endField.createEl('input', { 
             type: 'text'
         });
-
+    
         const textDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
         textDisplayField.createEl('label', { text: 'Text Display' });
         this.textDisplay = textDisplayField.createEl('input', { 
             type: 'text'
         });
-
+    
         const targetArticleField = formContainer.createDiv({ cls: 'idl-form-field' });
         targetArticleField.createEl('label', { text: 'Target Article' });
         
@@ -128,13 +143,13 @@ export class NoteForm extends Component {
             }
         });
         this.addChild(this.articleAutocomplete);
-
+    
         const targetDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
         targetDisplayField.createEl('label', { text: 'Target Text Display' });
         this.targetTextDisplayInput = targetDisplayField.createEl('input', { 
             type: 'text'
         });
-
+    
         const targetSrcRangeFields = formContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
          
         const targetStartField = targetSrcRangeFields.createDiv({ cls: 'idl-start-field' });
@@ -148,11 +163,56 @@ export class NoteForm extends Component {
         this.targetTextEndInput = targetEndField.createEl('input', { 
             type: 'text'
         });
-
-        const saveButtonContainer = formContainer.createDiv({ cls: 'idl-btns' });
-        const saveButton = saveButtonContainer.createEl('button', { text: 'Save' });
-        saveButton.addEventListener('click', () => this.handleSave());
+    
+        // Buttons container
+        const buttonContainer = formContainer.createDiv({ cls: 'idl-btns' });
+        
+        if (this.noteData && this.noteData.isValid === false) {
+            const deleteButton = buttonContainer.createEl('button', { 
+                text: 'Delete',
+                cls: 'idl-delete-btn'
+            });
+            deleteButton.addEventListener('click', () => this.handleDelete());
+        }
+    
+        const saveButton = buttonContainer.createEl('button', { text: 'Save' });
+        
+        if (isInvalid) {
+            saveButton.disabled = true;
+            saveButton.setAttribute('title', 'Cannot save invalid note');
+        } else {
+            saveButton.addEventListener('click', () => this.handleSave());
+        }
     }
+
+    private async handleDelete(): Promise<void> {
+        if (!this.noteData || !this.noteData.id) {
+            new Notice('Error: No note ID found');
+            return;
+        }
+    
+        try {
+            await this.annotationService.deleteAnnotation(
+                this.activeFilePath,
+                this.noteData.id,
+                'note'
+            );
+            
+            if (this.noteData.target && this.noteData.target !== this.activeFilePath) {
+                await this.annotationService.deleteAnnotation(
+                    this.noteData.target,
+                    this.noteData.id,
+                    'note'
+                );
+            }
+            
+            new Notice('Note deleted successfully');
+            this.onBack();
+        } catch (error) {
+            new Notice(`Error deleting note: ${error.message}`);
+        }
+    }
+    
     
     private async openArticleView(article: Article): Promise<void> {
         try {

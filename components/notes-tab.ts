@@ -87,39 +87,46 @@ export class NotesTab extends Component {
         const noteItemEl = this.notesListEl.createDiv({ cls: 'comment-item' });
         
         const displayText = note.linkText.replace(/\[\[(.*?)\]\]/g, '$1');
- 
-        noteItemEl.setText(displayText);
+        
+        let annotationData = noteToAnnotationData(note, filePath || '');
+        let originalNote = note;
+        
+        if (annotationService && filePath) {
+            try {
+                const annotations = await annotationService.loadAnnotations(filePath);
+                const savedNotes = annotations.notes;
+                
+                for (const noteId in savedNotes) {
+                    const savedNote = savedNotes[noteId];
+                    const savedNoteMeta = savedNote.noteMeta;
+                    
+                    if (savedNoteMeta &&
+                        savedNoteMeta.linkText === note.linkText &&
+                        savedNoteMeta.previousWords === note.previousWords &&
+                        savedNoteMeta.nextWords === note.nextWords) {
+                        annotationData = savedNote;
+                        originalNote = savedNoteMeta;
+                        
+                        if (savedNote.isValid === false) {
+                            noteItemEl.addClass('comment-invalid');
+                        }
+                        
+                        break;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for existing notes:', error);
+            }
+        }
+        
+        noteItemEl.createDiv({
+            cls: 'comment-text',
+            text: displayText
+        });
         
         noteItemEl.onmousedown = async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
-            let annotationData = noteToAnnotationData(note, filePath || '');
-            let originalNote = note;
-            
-            if (annotationService && filePath) {
-                try {
-                    const annotations = await annotationService.loadAnnotations(filePath);
-                    const savedNotes = annotations.notes;
-                    
-                    for (const noteId in savedNotes) {
-                        const savedNote = savedNotes[noteId];
-                        const savedNoteMeta = savedNote.noteMeta;
-                        
-                        if (savedNoteMeta &&
-                            savedNoteMeta.linkText === note.linkText &&
-                            savedNoteMeta.previousWords === note.previousWords &&
-                            savedNoteMeta.nextWords === note.nextWords) {
-                            annotationData = savedNote;
-                            originalNote = savedNoteMeta;
-                            break;
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error checking for existing notes:', error);
-                }
-            }
-            
             this.onSelectNote(annotationData, originalNote);
         };
     }
