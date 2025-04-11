@@ -87,12 +87,14 @@ export class RightPanel extends ItemView {
             this.noteForm = null;
         }
         
+        const commentCopy = {...comment};
+        
         this.commentForm = new CommentForm({
             container: this.contentEl,
             onBack: () => this.showListView(),
             activeFilePath: this.activeFilePath,
             app: this.app,
-            commentData: comment,
+            commentData: commentCopy,
         });
         
         this.component.addChild(this.commentForm);
@@ -206,8 +208,10 @@ export class RightPanel extends ItemView {
         this.noteForm.show();
     }
 
-    private updateAnnotations(): void {
+    private async updateAnnotations(): Promise<void> {
         if (this.listView && this.activeFilePath && this.annotationService) {
+            await this.annotationService.validateAllAnnotations(this.activeFilePath);
+            
             this.listView.updateComments(this.annotationService, this.activeFilePath);
             this.listView.updateNotes(this.annotationService, this.activeFilePath);
         }
