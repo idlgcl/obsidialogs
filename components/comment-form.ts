@@ -173,6 +173,18 @@ export class CommentForm extends Component {
         const formContainer = this.contentEl.createDiv({ cls: 'idl-form' });
         
         const isInvalid = this.commentData && this.commentData.isValid === false;
+        if (isInvalid) {
+            const validationWarningEl = formContainer.createDiv({ cls: 'idl-validation-warning' });
+            validationWarningEl.createDiv({ 
+                cls: 'idl-warning-icon',
+                text: '⚠️'
+            });
+            
+            validationWarningEl.createDiv({
+                cls: 'idl-warning-message',
+                text: this.commentData.validationMessage || 'Annotation may be invalid due to document changes'
+            });
+        }
         
         // Text Display field (dropdown)
         const textDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
