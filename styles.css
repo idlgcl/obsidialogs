@@ -296,3 +296,50 @@
 .local-annotation-item {
     background-color: var(--background-secondary);
 }
+
+
+/* invalid annotations */
+.comment-invalid {
+    border-left: 2px solid #ff5555;
+    background-color: rgba(255, 85, 85, 0.1);
+}
+
+.comment-warning-icon {
+    display: inline-block;
+    margin-right: 6px;
+    color: #ff5555;
+}
+
+.idl-validation-warning {
+    padding: 8px;
+    margin-bottom: 12px;
+    background-color: rgba(255, 85, 85, 0.1);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.idl-warning-icon {
+    margin-right: 8px;
+}
+
+.idl-warning-message {
+    color: var(--text-error);
+    flex-grow: 1;
+}
+
+.idl-fix-buttons {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.idl-invalid-annotation {
+    border-left: 2px solid #ff5555 !important;
+}
+
+.idl-annotated-word.idl-invalid-annotation {
+    text-decoration: line-through;
+    text-decoration-color: #ff5555;
+    text-decoration-style: wavy;
+}
