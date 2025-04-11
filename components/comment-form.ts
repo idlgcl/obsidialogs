@@ -45,12 +45,14 @@ export class CommentForm extends Component {
         this.apiService = new ApiService();
         this.annotationService = new AnnotationService(this.app);
         
+        if (options.commentData) {
+            this.commentData = { ...options.commentData };
+        }
         this.createForm();
         
-        if (options.commentData) {
-            this.populateForm(options.commentData);
+        if (this.commentData) {
+            this.populateForm(this.commentData);
             this.setFormReadOnly();
-            this.commentData = options.commentData
         } else {
             this.loadCommentsFromFile();
             this.resetFormFields();
@@ -166,9 +168,23 @@ export class CommentForm extends Component {
         const backButton = headerContainer.createEl('button', { text: 'Back to List' });
         backButton.addEventListener('click', this.onBack);
         
-        headerContainer.createEl('h3', { text: 'New Comment' });
+        headerContainer.createEl('h3', { text: 'Comment' });
         
         const formContainer = this.contentEl.createDiv({ cls: 'idl-form' });
+        
+        const isInvalid = this.commentData && this.commentData.isValid === false;
+        if (isInvalid) {
+            const validationWarningEl = formContainer.createDiv({ cls: 'idl-validation-warning' });
+            validationWarningEl.createDiv({ 
+                cls: 'idl-warning-icon',
+                text: '⚠️'
+            });
+            
+            validationWarningEl.createDiv({
+                cls: 'idl-warning-message',
+                text: this.commentData.validationMessage || 'Annotation may be invalid due to document changes'
+            });
+        }
         
         // Text Display field (dropdown)
         const textDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
@@ -229,10 +245,52 @@ export class CommentForm extends Component {
             type: 'text'
         });
         
-        // Save button
-        const saveButtonContainer = formContainer.createDiv({ cls: 'idl-btns' });
-        const saveButton = saveButtonContainer.createEl('button', { text: 'Save' });
-        saveButton.addEventListener('click', () => this.handleSave());
+        const buttonContainer = formContainer.createDiv({ cls: 'idl-btns' });
+        
+        if (this.commentData && this.commentData.isValid === false) {
+            const deleteButton = buttonContainer.createEl('button', { 
+                text: 'Delete',
+                cls: 'idl-delete-btn'
+            });
+            deleteButton.addEventListener('click', () => this.handleDelete());
+        }
+        
+        const saveButton = buttonContainer.createEl('button', { text: 'Save' });
+        
+        if (isInvalid) {
+            saveButton.disabled = true;
+            saveButton.setAttribute('title', 'Cannot save invalid comment');
+        } else {
+            saveButton.addEventListener('click', () => this.handleSave());
+        }
+    }
+
+    private async handleDelete(): Promise<void> {
+        if (!this.commentData || !this.commentData.id) {
+            new Notice('Error: No comment ID found');
+            return;
+        }
+    
+        try {
+            await this.annotationService.deleteAnnotation(
+                this.activeFilePath,
+                this.commentData.id,
+                'comment'
+            );
+            
+            if (this.commentData.target && this.commentData.target !== this.activeFilePath) {
+                await this.annotationService.deleteAnnotation(
+                    this.commentData.target,
+                    this.commentData.id,
+                    'comment'
+                );
+            }
+            
+            new Notice('Comment deleted successfully');
+            this.onBack();
+        } catch (error) {
+            new Notice(`Error deleting comment: ${error.message}`);
+        }
     }
         
     private async openArticleView(article: Article): Promise<void> {
