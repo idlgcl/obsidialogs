@@ -71,8 +71,23 @@ export class CommentsTab extends Component {
     }
     
     private renderCommentItem(comment: AnnotationData): void {
-        const commentItemEl = this.commentsListEl.createDiv({ cls: 'comment-item' });
-        commentItemEl.setText(comment.src_txt_display);
+        const commentItemEl = this.commentsListEl.createDiv({ 
+            cls: `comment-item ${comment.isValid === false ? 'comment-invalid' : ''}`
+        });
+        
+        if (comment.isValid === false) {
+            const warningIconEl = commentItemEl.createDiv({ cls: 'comment-warning-icon' });
+            warningIconEl.innerHTML = '⚠️';
+            
+            if (comment.validationMessage) {
+                warningIconEl.setAttribute('title', comment.validationMessage);
+            }
+        }
+        
+        commentItemEl.createDiv({ 
+            cls: 'comment-text',
+            text: comment.src_txt_display 
+        });
         
         commentItemEl.onmousedown = (e) => {
             e.preventDefault();
