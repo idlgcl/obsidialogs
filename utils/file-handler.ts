@@ -1,6 +1,7 @@
 import { App, TFile, MarkdownView } from 'obsidian';
 import { ApiService } from './api';
 import { IDL_RIGHT_PANEL } from 'components/right-panel';
+import { AnnotationService } from './annotation-service';
 
 const IDEALOGS_FILE_PATTERNS = ['Ix', '0x', 'Tx', 'Fx'];
 
@@ -57,8 +58,11 @@ export class FileHandler {
                 if (!rightLeaf) {
                     console.error('Failed to setup IDL_RIGHT_PANEL');
                 }
-
+    
                 this.setViewToEditMode(file);
+                
+                const annotationService = new AnnotationService(this.app);
+                await annotationService.validateAllAnnotations(file.path);
             }
         }
     }
