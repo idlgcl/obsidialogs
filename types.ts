@@ -33,6 +33,7 @@ export interface IdealogsAnnotation {
     commitId: number;
     isValid: boolean;
     commitIsMerged: boolean;
+    validationMessage?: string;
 
     sourceId: string;
     sTxtStart: string;
