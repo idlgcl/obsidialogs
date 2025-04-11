@@ -18,6 +18,8 @@ export interface AnnotationData {
     target_range: number[];
     target_txt_display_range: number[];
     noteMeta?: any; 
+    isValid?: boolean;
+    validationMessage?: string;
 }
 
 export interface AnnotationsFile {
@@ -274,5 +276,161 @@ export class AnnotationService {
         );
         
         return true;
+    }
+
+    async validateAnnotation(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
+        try {
+            if (!await this.app.vault.adapter.exists(sourceFilePath)) {
+                return {
+                    isValid: false,
+                    message: `Source document not found: ${sourceFilePath}`
+                };
+            }
+    
+            const sourceContent = await this.app.vault.adapter.read(sourceFilePath);
+            
+            const hasStartText = sourceContent.includes(annotation.src_txt_start);
+            const hasEndText = sourceContent.includes(annotation.src_txt_end);
+            const hasDisplayText = sourceContent.includes(annotation.src_txt_display);
+            
+            if (!hasStartText || !hasEndText) {
+                return {
+                    isValid: false,
+                    message: `Text boundaries not found in document: "${annotation.src_txt_start}" or "${annotation.src_txt_end}"`
+                };
+            }
+            
+            if (!hasDisplayText) {
+                return {
+                    isValid: false,
+                    message: `Display text not found: "${annotation.src_txt_display}"`
+                };
+            }
+            
+            const startIndex = sourceContent.indexOf(annotation.src_txt_start);
+            const endIndex = sourceContent.lastIndexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
+            const currentText = sourceContent.substring(startIndex, endIndex);
+            
+            if (currentText !== annotation.src_txt) {
+                const similarity = this.calculateTextSimilarity(currentText, annotation.src_txt);
+                return {
+                    isValid: false,
+                    message: `Text content has changed (${Math.round(similarity * 100)}% similar)`
+                };
+            }
+            
+            return { isValid: true };
+        }
+        catch (error) {
+            console.error(`Error validating annotation: ${error}`);
+            return {
+                isValid: false,
+                message: `Error validating: ${error.message}`
+            };
+        }
+    }
+    
+    
+    
+
+    async validateAllAnnotations(filePath: string): Promise<Record<string, {isValid: boolean, message?: string}>> {
+        const results: Record<string, {isValid: boolean, message?: string}> = {};
+        
+        try {
+            const annotations = await this.loadAnnotations(filePath);
+
+            for (const commentId in annotations.comments) {
+                const comment = annotations.comments[commentId];
+                results[commentId] = await this.validateAnnotation(comment, filePath);
+                
+                comment.isValid = results[commentId].isValid;
+                comment.validationMessage = results[commentId].message;
+                
+                if (comment.target && comment.target !== filePath) {
+                    await this.updateTargetFileAnnotation(comment, 'comment');
+                }
+            }
+            
+            for (const noteId in annotations.notes) {
+                const note = annotations.notes[noteId];
+                results[noteId] = await this.validateAnnotation(note, filePath);
+                
+                note.isValid = results[noteId].isValid;
+                note.validationMessage = results[noteId].message;
+  
+                if (note.target && note.target !== filePath) {
+                    await this.updateTargetFileAnnotation(note, 'note');
+                }
+            }
+            
+            await this.saveAnnotationsFile(filePath, annotations);
+            
+        } catch (error) {
+            console.error(`Error in validateAllAnnotations: ${error}`);
+        }
+        
+        return results;
+    }
+
+    async updateTargetFileAnnotation(annotation: AnnotationData, type: 'comment' | 'note'): Promise<void> {
+        try {
+            const targetPath = annotation.target;
+            const targetAnnotations = await this.loadAnnotations(targetPath);
+            
+            if (type === 'comment' && targetAnnotations.comments[annotation.id]) {
+                targetAnnotations.comments[annotation.id].isValid = annotation.isValid;
+                targetAnnotations.comments[annotation.id].validationMessage = annotation.validationMessage;
+   
+            } 
+            else if (type === 'note' && targetAnnotations.notes[annotation.id]) {
+                targetAnnotations.notes[annotation.id].isValid = annotation.isValid;
+                targetAnnotations.notes[annotation.id].validationMessage = annotation.validationMessage;
+            }
+            
+            await this.saveAnnotationsFile(targetPath, targetAnnotations);
+        } catch (error) {
+            console.error(`Error updating target file annotation: ${error}`);
+        }
+    }
+    
+    private calculateTextSimilarity(s1: string, s2: string): number {
+        if (s1 === s2) return 1.0; // identical strings
+        if (s1.length === 0 || s2.length === 0) return 0.0; // one string is empty
+        
+        const len1 = s1.length;
+        const len2 = s2.length;
+        
+        // build 2d array for Levenshtein distance
+        const distance = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+        
+        // fill 1st column
+        for (let i = 0; i <= len1; i++) distance[i][0] = i;
+        
+        // fill 1st row
+        for (let j = 0; j <= len2; j++) distance[0][j] = j;
+        
+        // fill the matrix
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+                distance[i][j] = Math.min(
+                    distance[i - 1][j] + 1, // deletion
+                    distance[i][j - 1] + 1, // insertion
+                    distance[i - 1][j - 1] + cost // substitution
+                );
+            }
+        }
+        
+        // compute score
+        const maxLen = Math.max(len1, len2);
+        return 1 - (distance[len1][len2] / maxLen);
+    }
+    
+    private async saveAnnotationsFile(targetPath: string, annotations: AnnotationsFile): Promise<void> {
+        const annotationsPath = this.getAnnotationsFilePath(targetPath);
+        await this.app.vault.adapter.write(
+            annotationsPath, 
+            JSON.stringify(annotations, null, 2)
+        );
     }
 }
