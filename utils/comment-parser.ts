@@ -7,7 +7,8 @@ export interface Comment {
 }
 
 export function parseComments(text: string): Comment[] {
-    const segments = text.split('\n');
+    const cleanText = text.replace(/\[\[[^\]]+\]\]/g, '');
+    const segments = cleanText.split('\n');
     const pattern = /^(.*?)\.\s+(.*)$/;
     
     const results: Comment[] = [];
