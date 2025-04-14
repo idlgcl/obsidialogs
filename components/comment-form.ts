@@ -205,8 +205,9 @@ export class CommentForm extends Component {
         const commentField = formContainer.createDiv({ cls: 'idl-form-field' });
         commentField.createEl('label', { text: 'Comment' });
         this.commentTextarea = commentField.createEl('textarea', {
-            attr: { rows: '4' }
+            attr: { rows: '4' }, 
         });
+        this.commentTextarea.disabled = true;
         
         // Target Article field
         const targetArticleField = formContainer.createDiv({ cls: 'idl-form-field' });
