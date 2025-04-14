@@ -230,7 +230,9 @@ export class AnnotationService {
             target_txt: targetTxt,
             target_range: targetRange,
             target_txt_display_range: targetTxtDisplayRange,
-            noteMeta: noteData.noteMeta
+            noteMeta: noteData.noteMeta,
+            isValid: true,
+            validationMessage: ''
         };
         
         const targetAnnotations = await this.loadAnnotations(noteData.targetArticle);
