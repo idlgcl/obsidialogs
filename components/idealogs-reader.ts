@@ -247,14 +247,17 @@ export class IdealogsReaderView extends ItemView {
             
             for (const commentId in annotations.comments) {
                 const comment = annotations.comments[commentId];
-                this.highlightComments(comment);
+                if (comment.isValid !== false) {
+                    this.highlightComments(comment);
+                }
             }
             
             for (const noteId in annotations.notes) {
                 const note = annotations.notes[noteId];
-                this.highlightNotes(note);
+                if (note.isValid !== false) {
+                    this.highlightNotes(note);
+                }
             }
-            
         } catch (error) {
             console.error('Error loading annotations:', error);
         }
@@ -267,6 +270,8 @@ export class IdealogsReaderView extends ItemView {
     }
     
     highlightComments(comment: AnnotationData): void {
+        if (comment.isValid === false) return;
+
         if (!comment.src_txt_display_range || comment.src_txt_display_range.length === 0) return;
         
         const indices = comment.src_txt_display_range;
@@ -300,107 +305,75 @@ export class IdealogsReaderView extends ItemView {
     }
     
     highlightNotes(note: AnnotationData): void {
-        const { src_txt, src_txt_display, src_txt_start, src_txt_end } = note;
+        if (note.isValid === false) return;
         
-        if (!src_txt || !src_txt_display) return;
+        const displayText = note.src_txt_display;
+        if (!displayText) return;
         
-        const wordSpans = this.getAllWordSpans();
+        const allSpans = this.getAllWordSpans();
+        if (allSpans.length === 0) return;
         
-        const displaySpans = this.findNoteTextDisplay(wordSpans, src_txt, src_txt_display, src_txt_start, src_txt_end);
+        const matchingSpans: HTMLElement[] = [];
         
-        if (displaySpans.length === 0) return;
-        
-        const indices = displaySpans.map(span => 
-            parseInt(span.getAttribute('data-word-index') || '0')
-        );
-        
-        indices.forEach(index => {
-            if (!this.annotationsByWordIndex.has(index)) {
-                this.annotationsByWordIndex.set(index, []);
-            }
-            this.annotationsByWordIndex.get(index)?.push({
-                annotation: note,
-                type: 'note'
+        if (note.noteMeta && note.noteMeta.previousWordsIndex && note.noteMeta.linkTextIndex) {
+            const linkIndex = note.noteMeta.linkTextIndex[0];
+            const linkSpan = allSpans.find(span => {
+                const index = parseInt(span.getAttribute('data-word-index') || '-1');
+                return index === linkIndex;
             });
-        });
-        
-        indices.forEach(index => {
-            const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
-            if (!span) return;
             
-            span.classList.add('idl-annotated-word');
-            span.classList.add('target-annotation');
-            
-            if (!span.hasAttribute('data-has-annotations')) {
-                span.setAttribute('data-has-annotations', 'true');
-                
-                span.addEventListener('click', (e) => {
-                    this.toggleAnnotationsForWord(index, span as HTMLElement);
-                    e.stopPropagation();
-                });
-            }
-        });
-    }
-    
-    private findNoteTextDisplay(
-        spans: HTMLElement[], 
-        fullText: string, 
-        displayText: string, 
-        startText?: string, 
-        endText?: string
-    ): HTMLElement[] {
-        if (startText && displayText && endText) {
-            const fullPhrase = fullText;
-            const fullPhraseWords = fullPhrase.split(/\s+/).filter(w => w.length > 0);
-            
-            for (let i = 0; i <= spans.length - fullPhraseWords.length; i++) {
-                let found = true;
-                const sequence: HTMLElement[] = [];
-                
-                for (let j = 0; j < fullPhraseWords.length; j++) {
-                    if (!spans[i + j] || spans[i + j].textContent !== fullPhraseWords[j]) {
-                        found = false;
-                        break;
-                    }
-                    sequence.push(spans[i + j]);
+            if (linkSpan) {
+                const previousIndices = note.noteMeta.previousWordsIndex;
+                for (const index of previousIndices) {
+                    const span = allSpans.find(s => 
+                        parseInt(s.getAttribute('data-word-index') || '-1') === index
+                    );
+                    if (span) matchingSpans.push(span);
                 }
                 
-                if (found) {
-                    const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
-                    const startWords = startText.split(/\s+/).filter(w => w.length > 0);
-                    return sequence.slice(startWords.length, startWords.length + displayWords.length);
+                const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
+                const filteredSpans = matchingSpans.filter(span => 
+                    displayWords.some(word => span.textContent === word || 
+                                             span.textContent?.includes(word))
+                );
+                
+                if (filteredSpans.length > 0) {
+                    const indices = filteredSpans.map(span => 
+                        parseInt(span.getAttribute('data-word-index') || '0')
+                    );
+                    
+                    indices.forEach(index => {
+                        if (!this.annotationsByWordIndex.has(index)) {
+                            this.annotationsByWordIndex.set(index, []);
+                        }
+                        this.annotationsByWordIndex.get(index)?.push({
+                            annotation: note,
+                            type: 'note'
+                        });
+                    });
+                    
+                    indices.forEach(index => {
+                        const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
+                        if (!span) return;
+                        
+                        span.classList.add('idl-annotated-word');
+                        span.classList.add('source-annotation');
+                        
+                        if (!span.hasAttribute('data-has-annotations')) {
+                            span.setAttribute('data-has-annotations', 'true');
+                            
+                            span.addEventListener('click', (e) => {
+                                this.toggleAnnotationsForWord(index, span as HTMLElement);
+                                e.stopPropagation();
+                            });
+                        }
+                    });
+                    
+                    return; 
                 }
             }
         }
-        
-        const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
-        if (displayWords.length === 0) return [];
-        
-        if (displayWords.length === 1) {
-            return spans.filter(span => span.textContent === displayWords[0]);
-        }
-        
-        const result: HTMLElement[] = [];
-        
-        for (let i = 0; i <= spans.length - displayWords.length; i++) {
-            let found = true;
-            const sequence: HTMLElement[] = [];
-            
-            for (let j = 0; j < displayWords.length; j++) {
-                if (!spans[i + j] || spans[i + j].textContent !== displayWords[j]) {
-                    found = false;
-                    break;
-                }
-                sequence.push(spans[i + j]);
-            }
-            
-            if (found) {
-                result.push(...sequence);
-                break;
-            }
-        }
-        
-        return result;
+        console.error('Failed to highligh note:', note)
     }
     
     private toggleAnnotationsForWord(wordIndex: number, element: HTMLElement): void {
