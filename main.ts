@@ -10,7 +10,7 @@ import { ANNOTATOR_VIEW, AnnotatorView } from './components/annotator-view';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
-    private fileHandler: FileHandler;
+    public fileHandler: FileHandler;
     public annotationService: AnnotationService;
     private apiService: ApiService;
     
