@@ -59,7 +59,7 @@ export class IdealogsReaderView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Idealogs Reader';
+        return this.articleId ? `${this.articleId}` : '';
     }
 
     private getLinkDisplayText(articleId: string, kind: string): string {
