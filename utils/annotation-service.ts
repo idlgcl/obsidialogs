@@ -295,7 +295,6 @@ export class AnnotationService {
             
             const hasStartText = sourceContent.includes(annotation.src_txt_start);
             const hasEndText = sourceContent.includes(annotation.src_txt_end);
-            const hasDisplayText = sourceContent.includes(annotation.src_txt_display);
             
             if (!hasStartText || !hasEndText) {
                 return {
@@ -303,16 +302,25 @@ export class AnnotationService {
                     message: `Text boundaries not found in document: "${annotation.src_txt_start}" or "${annotation.src_txt_end}"`
                 };
             }
-            
-            if (!hasDisplayText) {
+    
+            const startIndex = sourceContent.indexOf(annotation.src_txt_start);
+            const endIndex = sourceContent.lastIndexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
+    
+            if (startIndex >= 0 && endIndex > startIndex) {
+                const boundedText = sourceContent.substring(startIndex, endIndex);
+                if (!boundedText.includes(annotation.src_txt_display)) {
+                    return {
+                        isValid: false,
+                        message: `Display text "${annotation.src_txt_display}" not found between start and end markers`
+                    };
+                }
+            } else {
                 return {
                     isValid: false,
-                    message: `Display text not found: "${annotation.src_txt_display}"`
+                    message: `Cannot locate proper boundaries for display text validation`
                 };
             }
             
-            const startIndex = sourceContent.indexOf(annotation.src_txt_start);
-            const endIndex = sourceContent.lastIndexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
             const currentText = sourceContent.substring(startIndex, endIndex);
             
             const normalizedCurrentText = currentText.replace(/\[\[.*?\|?\d*?\]\]/g, '');
