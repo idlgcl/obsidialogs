@@ -13,9 +13,6 @@ import { ApiService } from '../utils/api';
 export class ArticleSuggest extends EditorSuggest<Article> {
     limit = 100;
     private apiService: ApiService;
-
-    private static writingNumbers: Map<string, number> = new Map();
-    private static nextWritingNumber = 1;
     
     constructor(plugin: Plugin) {
         super(plugin.app);
@@ -37,27 +34,6 @@ export class ArticleSuggest extends EditorSuggest<Article> {
             end: cursor,
             query: query
         };
-    }
-
-    private getDisplayText(article: Article): string {
-        if (!article.kind) return article.id;
-        
-        switch (article.kind.toLowerCase()) {
-            case 'question':
-                return '?';
-            case 'insight':
-                return '!';
-            case 'writing':
-                if (!ArticleSuggest.writingNumbers.has(article.id)) {
-                    ArticleSuggest.writingNumbers.set(article.id, ArticleSuggest.nextWritingNumber++);
-                }
-                {
-                    const numberValue = ArticleSuggest.writingNumbers.get(article.id);
-                    return numberValue !== undefined ? numberValue.toString() : '0';
-                }
-            default:
-                return article.id;
-        }
     }
 
     async getSuggestions(context: EditorSuggestContext): Promise<Article[]> {
@@ -115,8 +91,7 @@ export class ArticleSuggest extends EditorSuggest<Article> {
         const bracketStart = line.lastIndexOf('[[', cursor.ch);
         
         if (bracketStart >= 0) {
-            const displayText = this.getDisplayText(article);
-            const articleLink = `[[${article.id}|${displayText}]]`;
+            const articleLink = `[[${article.id}]]`;
             
             editor.replaceRange(
                 articleLink,
