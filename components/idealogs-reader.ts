@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 import { AnnotationData, AnnotationService } from '../utils/annotation-service';
+import { ApiService } from '../utils/api';
 
 export const IDEALOGS_READER = 'idealogs-reader';
 
@@ -12,8 +13,12 @@ export class IdealogsReaderView extends ItemView {
     private component: Component;
     private openedFromCommand = false;
     private annotationService: AnnotationService;
+    private apiService: ApiService;
     private annotationsByWordIndex: Map<number, {annotation: AnnotationData, type: 'comment' | 'note'}[]> = new Map();
     private altKeyHandler: (e: KeyboardEvent) => void;
+    
+    private static writingNumbers: Map<string, number> = new Map();
+    private static nextWritingNumber = 1;
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -22,6 +27,7 @@ export class IdealogsReaderView extends ItemView {
         this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
         this.articleContentEl = this.contentEl.createDiv({ cls: 'idealogs-article-content' });
         this.annotationService = new AnnotationService(this.app);
+        this.apiService = new ApiService();
         
         this.altKeyHandler = (e: KeyboardEvent) => {
             if (e.type === 'keydown' && e.key === 'Alt') {
@@ -56,6 +62,54 @@ export class IdealogsReaderView extends ItemView {
         return 'Idealogs Reader';
     }
 
+    private getLinkDisplayText(articleId: string, kind: string): string {
+        if (!kind) return articleId;
+        
+        switch (kind.toLowerCase()) {
+            case 'question':
+                return '[?]';
+            case 'insight':
+                return '[!]';
+            case 'writing': {
+                if (!IdealogsReaderView.writingNumbers.has(articleId)) {
+                    IdealogsReaderView.writingNumbers.set(articleId, IdealogsReaderView.nextWritingNumber++);
+                }
+                const numberValue = IdealogsReaderView.writingNumbers.get(articleId);
+                return numberValue !== undefined ? `[${numberValue.toString()}]` : '[0]';
+            }
+            default:
+                return articleId;
+        }
+    }
+    
+    private async processInternalLinks(): Promise<void> {
+        const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
+        console.log(internalLinks)
+        
+        Array.from(internalLinks).forEach(async (link) => {
+            if (link instanceof HTMLAnchorElement) {
+                const href = link.getAttribute('href');
+                if (href) {
+                    let kind = '';
+                    if (href.startsWith('Tx')) {
+                        kind = 'writing';
+                    } else if (href.startsWith('Fx')) {
+                        kind = 'question';
+                    } else if (href.startsWith('Ix')) {
+                        kind = 'insight';
+                    }
+                    
+                    if (kind) {
+                        const displayText = this.getLinkDisplayText(href, kind);
+                        if (displayText !== href) {
+                            link.textContent = displayText;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     async setContent(content: string): Promise<void> {
         this.articleContent = content;
 
@@ -63,6 +117,8 @@ export class IdealogsReaderView extends ItemView {
         this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
         
         await this.render();
+        
+        await this.processInternalLinks();
         
         if (this.articleId && this.isOpenedFromCommand()) {
             await this.loadAnnotations();
