@@ -328,7 +328,7 @@ export class AnnotationService {
             const normalizedCurrentText = currentText.replace(/\[\[.*?\|?\d*?\]\]/g, '');
             const normalizedSavedText = annotation.src_txt.replace(/\[\[.*?\|?\d*?\]\]/g, '');
             
-            if (normalizedCurrentText.trim() !== normalizedSavedText.trim()) {
+            if (normalizedCurrentText.trim().contains(normalizedSavedText) === false) {
                 return {
                     isValid: false,
                     message: `Text content has changed.`
