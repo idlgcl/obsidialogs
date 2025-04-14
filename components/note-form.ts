@@ -166,53 +166,11 @@ export class NoteForm extends Component {
     
         // Buttons container
         const buttonContainer = formContainer.createDiv({ cls: 'idl-btns' });
-        
-        if (this.noteData && this.noteData.isValid === false) {
-            const deleteButton = buttonContainer.createEl('button', { 
-                text: 'Delete',
-                cls: 'idl-delete-btn'
-            });
-            deleteButton.addEventListener('click', () => this.handleDelete());
-        }
-    
         const saveButton = buttonContainer.createEl('button', { text: 'Save' });
         
-        if (isInvalid) {
-            saveButton.disabled = true;
-            saveButton.setAttribute('title', 'Cannot save invalid note');
-        } else {
-            saveButton.addEventListener('click', () => this.handleSave());
-        }
+        saveButton.addEventListener('click', () => this.handleSave());
     }
 
-    private async handleDelete(): Promise<void> {
-        if (!this.noteData || !this.noteData.id) {
-            new Notice('Error: No note ID found');
-            return;
-        }
-    
-        try {
-            await this.annotationService.deleteAnnotation(
-                this.activeFilePath,
-                this.noteData.id,
-                'note'
-            );
-            
-            if (this.noteData.target && this.noteData.target !== this.activeFilePath) {
-                await this.annotationService.deleteAnnotation(
-                    this.noteData.target,
-                    this.noteData.id,
-                    'note'
-                );
-            }
-            
-            new Notice('Note deleted successfully');
-            this.onBack();
-        } catch (error) {
-            new Notice(`Error deleting note: ${error.message}`);
-        }
-    }
-    
     
     private async openArticleView(article: Article): Promise<void> {
         try {
