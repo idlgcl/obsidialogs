@@ -326,7 +326,7 @@ export class NoteForm extends Component {
                     targetFullText,
                     targetRangeIndices,
                     targetDisplayIndices,
-                    noteMeta: this.note 
+                    noteMeta: this.note // TODO: we need to update noteMeta
                 });
                 
                 new Notice('Note saved successfully');

@@ -356,40 +356,7 @@ export class AnnotationService {
             }
     
             const sourceContent = await this.app.vault.adapter.read(sourceFilePath);
-            const note = annotation.noteMeta;
-            
-            if (!note || !note.linkText || !sourceContent.includes(note.linkText)) {
-                return {
-                    isValid: false,
-                    message: `Link "${note?.linkText || 'unknown'}" not found in document`
-                };
-            }
-            
-            const linkIndex = sourceContent.indexOf(note.linkText);
-            
-            if (note.previousWords) {
-                const contextBefore = sourceContent.substring(Math.max(0, linkIndex - 100), linkIndex);
-                if (!contextBefore.includes(note.previousWords)) {
-                    return {
-                        isValid: false,
-                        message: `Context before link has changed`
-                    };
-                }
-            }
-            
-            if (note.nextWords) {
-                const contextAfter = sourceContent.substring(
-                    linkIndex + note.linkText.length,
-                    Math.min(sourceContent.length, linkIndex + note.linkText.length + 100)
-                );
-                if (!contextAfter.includes(note.nextWords)) {
-                    return {
-                        isValid: false,
-                        message: `Context after link has changed`
-                    };
-                }
-            }
-            
+
             if (annotation.src_txt_start && !sourceContent.includes(annotation.src_txt_start)) {
                 return {
                     isValid: false,
