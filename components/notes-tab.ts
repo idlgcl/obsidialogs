@@ -86,9 +86,10 @@ export class NotesTab extends Component {
     private async renderNoteItem(note: Note, filePath?: string, annotationService?: AnnotationService): Promise<void> {
         const noteItemEl = this.notesListEl.createDiv({ cls: 'comment-item' });
         
-        const displayText = note.linkText.replace(/\[\[(.*?)\]\]/g, '$1');
+        const displayText = note.linkText.replace(/\[\[(.*?)(?:\|.*?)?\]\]/g, '$1');
         
         let annotationData = noteToAnnotationData(note, filePath || '');
+        annotationData.target = displayText;
         let originalNote = note;
         
         if (annotationService && filePath) {
