@@ -66,7 +66,7 @@ export class AnnotatorView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Annotation View';
+        return this.articleId ? `${this.articleId}` : '';
     }
 
     async loadArticleContent(): Promise<void> {
