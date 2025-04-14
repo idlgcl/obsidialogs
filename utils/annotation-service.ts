@@ -280,6 +280,10 @@ export class AnnotationService {
 
     async validateAnnotation(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
         try {
+            if (annotation.noteMeta) {
+                return await this.validateNote(annotation, sourceFilePath);
+            }
+
             if (!await this.app.vault.adapter.exists(sourceFilePath)) {
                 return {
                     isValid: false,
@@ -311,11 +315,13 @@ export class AnnotationService {
             const endIndex = sourceContent.lastIndexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
             const currentText = sourceContent.substring(startIndex, endIndex);
             
-            if (currentText !== annotation.src_txt) {
-                const similarity = this.calculateTextSimilarity(currentText, annotation.src_txt);
+            const normalizedCurrentText = currentText.replace(/\[\[.*?\|?\d*?\]\]/g, '');
+            const normalizedSavedText = annotation.src_txt.replace(/\[\[.*?\|?\d*?\]\]/g, '');
+            
+            if (normalizedCurrentText.trim() !== normalizedSavedText.trim()) {
                 return {
                     isValid: false,
-                    message: `Text content has changed (${Math.round(similarity * 100)}% similar)`
+                    message: `Text content has changed.`
                 };
             }
             
@@ -329,9 +335,102 @@ export class AnnotationService {
             };
         }
     }
+
+    async validateNote(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
+        try {
+            if (!await this.app.vault.adapter.exists(sourceFilePath)) {
+                return {
+                    isValid: false,
+                    message: `Source document not found: ${sourceFilePath}`
+                };
+            }
     
-    
-    
+            const sourceContent = await this.app.vault.adapter.read(sourceFilePath);
+            const note = annotation.noteMeta;
+            
+            if (!note || !note.linkText || !sourceContent.includes(note.linkText)) {
+                return {
+                    isValid: false,
+                    message: `Link "${note?.linkText || 'unknown'}" not found in document`
+                };
+            }
+            
+            const linkIndex = sourceContent.indexOf(note.linkText);
+            
+            if (note.previousWords) {
+                const contextBefore = sourceContent.substring(Math.max(0, linkIndex - 100), linkIndex);
+                if (!contextBefore.includes(note.previousWords)) {
+                    return {
+                        isValid: false,
+                        message: `Context before link has changed`
+                    };
+                }
+            }
+            
+            if (note.nextWords) {
+                const contextAfter = sourceContent.substring(
+                    linkIndex + note.linkText.length,
+                    Math.min(sourceContent.length, linkIndex + note.linkText.length + 100)
+                );
+                if (!contextAfter.includes(note.nextWords)) {
+                    return {
+                        isValid: false,
+                        message: `Context after link has changed`
+                    };
+                }
+            }
+            
+            if (annotation.src_txt_start && !sourceContent.includes(annotation.src_txt_start)) {
+                return {
+                    isValid: false,
+                    message: `Start text "${annotation.src_txt_start}" not found in document`
+                };
+            }
+            
+            if (annotation.src_txt_end && !sourceContent.includes(annotation.src_txt_end)) {
+                return {
+                    isValid: false,
+                    message: `End text "${annotation.src_txt_end}" not found in document`
+                };
+            }
+            
+            if (annotation.src_txt_display && annotation.src_txt_start && annotation.src_txt_end) {
+                const startIdx = sourceContent.indexOf(annotation.src_txt_start);
+                const endIdx = sourceContent.indexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
+                
+                if (startIdx >= 0 && endIdx > startIdx) {
+                    const boundedText = sourceContent.substring(startIdx, endIdx);
+                    if (!boundedText.includes(annotation.src_txt_display)) {
+                        return {
+                            isValid: false,
+                            message: `Display text "${annotation.src_txt_display}" not found between start and end markers`
+                        };
+                    }
+                } else {
+                    return {
+                        isValid: false,
+                        message: `Cannot locate proper boundaries for display text validation`
+                    };
+                }
+            } else if (annotation.src_txt_display) {
+                if (!sourceContent.includes(annotation.src_txt_display)) {
+                    return {
+                        isValid: false,
+                        message: `Display text "${annotation.src_txt_display}" not found in document`
+                    };
+                }
+            }
+            
+            return { isValid: true };
+        }
+        catch (error) {
+            console.error(`Error validating note: ${error}`);
+            return {
+                isValid: false,
+                message: `Error validating: ${error.message}`
+            };
+        }
+    }
 
     async validateAllAnnotations(filePath: string): Promise<Record<string, {isValid: boolean, message?: string}>> {
         const results: Record<string, {isValid: boolean, message?: string}> = {};
