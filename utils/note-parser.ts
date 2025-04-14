@@ -19,20 +19,28 @@ export function parseNotes(text: string): Note[] {
     let counter = 0;
     
     for (const paragraph of paragraphs) {
-        if (paragraph.trim().startsWith('#') || paragraph.trim() === '') {
-            const words = paragraph.split(/\s+/).filter(word => word.length > 0);
-            counter += words.length;
+        if (paragraph.trim() === '') {
             continue;
         }
         
-        const words = paragraph.split(/\s+/).filter(word => word.length > 0);
+        const lines = paragraph.split('\n');
+        let paragraphWords: string[] = [];
         
-        if (words.length === 0) {
+        for (const line of lines) {
+            if (line.trim().startsWith('#')) {
+                continue;
+            }
+            
+            const lineWords = line.split(/\s+/).filter(word => word.length > 0);
+            paragraphWords = paragraphWords.concat(lineWords);
+        }
+        
+        if (paragraphWords.length === 0) {
             continue;
         }
         
-        for (let i = 0; i < words.length; i++) {
-            const word = words[i];
+        for (let i = 0; i < paragraphWords.length; i++) {
+            const word = paragraphWords[i];
             
             const linkMatch = word.match(/\[\[(Tx[^\]]+)\]\]/);
             
@@ -40,10 +48,10 @@ export function parseNotes(text: string): Note[] {
                 const linkText = linkMatch[0]; 
                 
                 const prevStartIdx = Math.max(0, i - 5);
-                const previousWords = words.slice(prevStartIdx, i).join(' ');
+                const previousWords = paragraphWords.slice(prevStartIdx, i).join(' ');
                 
-                const nextEndIdx = Math.min(words.length, i + 6);
-                const nextWords = words.slice(i + 1, nextEndIdx).join(' ');
+                const nextEndIdx = Math.min(paragraphWords.length, i + 6);
+                const nextWords = paragraphWords.slice(i + 1, nextEndIdx).join(' ');
                 
                 const previousWordsIndex: number[] = [];
                 for (let j = prevStartIdx; j < i; j++) {
@@ -78,7 +86,7 @@ export function parseNotes(text: string): Note[] {
             }
         }
         
-        counter += words.length;
+        counter += paragraphWords.length;
     }
     
     return results;
