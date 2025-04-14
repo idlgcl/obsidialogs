@@ -97,22 +97,24 @@ export class NotesTab extends Component {
                 const annotations = await annotationService.loadAnnotations(filePath);
                 const savedNotes = annotations.notes;
                 
+                let matchedNote: AnnotationData | null = null;
+                
                 for (const noteId in savedNotes) {
                     const savedNote = savedNotes[noteId];
                     const savedNoteMeta = savedNote.noteMeta;
                     
-                    if (savedNoteMeta &&
-                        savedNoteMeta.linkText === note.linkText &&
-                        savedNoteMeta.previousWords === note.previousWords &&
-                        savedNoteMeta.nextWords === note.nextWords) {
-                        annotationData = savedNote;
+                    if (savedNoteMeta && savedNoteMeta.linkText === note.linkText) {
+                        matchedNote = savedNote;
                         originalNote = savedNoteMeta;
-                        
-                        if (savedNote.isValid === false) {
-                            noteItemEl.addClass('comment-invalid');
-                        }
-                        
                         break;
+                    }
+                }
+                
+                if (matchedNote) {
+                    annotationData = matchedNote;
+                    
+                    if (matchedNote.isValid === false) {
+                        noteItemEl.addClass('comment-invalid');
                     }
                 }
             } catch (error) {
