@@ -143,6 +143,12 @@ export class IdealogsReaderView extends ItemView {
             await leaf.openFile(file);
             this.app.workspace.revealLeaf(leaf);
 
+            // @ts-ignore
+            const plugin = this.app.plugins.plugins['idealogs-annotator'];
+            if (plugin && plugin.fileHandler) {
+                plugin.fileHandler.handleFileOpen(file);
+            }
+
             this.leaf.detach();
             
             setTimeout(() => {
