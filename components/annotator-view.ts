@@ -332,7 +332,14 @@ export class AnnotatorView extends ItemView {
             }
             
             const textEl = document.createElement('div');
-            textEl.textContent = isFromCurrentArticle ? annotation.tTxt : annotation.sTxt;
+            let textContent = isFromCurrentArticle ? annotation.tTxt : annotation.sTxt;
+            
+            if (annotation.kind === 'Comment') {
+                textContent = textContent.replace(annotation.sTxtDisplay, '').trim()
+            }
+
+            textEl.textContent = textContent;
+            
             annotationEl.appendChild(textEl);
             
             const relatedArticleId = isFromCurrentArticle ? annotation.targetId : annotation.sourceId;
