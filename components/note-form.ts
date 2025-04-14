@@ -274,6 +274,20 @@ export class NoteForm extends Component {
             new Notice('Please fill all required fields');
             return;
         }
+
+        try {
+            const fileContent = await this.app.vault.adapter.read(this.activeFilePath);
+            const linkText = this.note?.linkText || `[[${this.selectedArticle.id}]]`;
+            
+            const correctSequencePattern = new RegExp(`${textDisplay}\\s*${linkText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+            
+            if (!correctSequencePattern.test(fileContent)) {
+                new Notice(`Text display "${textDisplay}" must appear directly before the link`);
+                return;
+            }
+        } catch (error) {
+            console.error('Error validating text display position:', error);
+        }
         
         const targetArticlePath = this.selectedArticle.id;
         const targetTextStart = this.targetTextStartInput.value.trim();
