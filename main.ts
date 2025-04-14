@@ -105,6 +105,24 @@ export default class ArticleSuggestPlugin extends Plugin {
                 }
             })
         );
+
+        this.addCommand({
+            id: 'toggle-editor-reader-view',
+            name: 'Toggle between Editor and Reader views',
+            hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'd' }],
+            callback: () => {
+                const readerView = this.app.workspace.getActiveViewOfType(IdealogsReaderView);
+                if (readerView) {
+                    readerView.openInEditor();
+                    return;
+                }
+                
+                const activeFile = this.app.workspace.getActiveFile();
+                if (activeFile && activeFile.extension === 'md') {
+                    this.openInIdealogsReader(activeFile);
+                }
+            }
+        });
     }
     
     private originalOpenLinkText: any;
