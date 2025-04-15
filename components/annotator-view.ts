@@ -29,7 +29,7 @@ export class AnnotatorView extends ItemView {
     private component: Component;
     private apiService: ApiService;
     private annotationService: AnnotationService;
-    private annotationsByWordIndex: Map<number, IdealogsAnnotation[]> = new Map();
+    private annotationsByWordIndex: Map<number, {annotation: IdealogsAnnotation, isLocal: boolean}[]> = new Map();
     private altKeyHandler: (e: KeyboardEvent) => void;
 
     constructor(leaf: WorkspaceLeaf) {
@@ -272,9 +272,9 @@ export class AnnotatorView extends ItemView {
             
             const annotationsArray = this.annotationsByWordIndex.get(index);
             if (isLocal) {
-                annotationsArray?.unshift(annotation);
+                annotationsArray?.unshift({annotation, isLocal: true});
             } else {
-                annotationsArray?.push(annotation);
+                annotationsArray?.push({annotation, isLocal: false});
             }
         });
         
@@ -316,14 +316,14 @@ export class AnnotatorView extends ItemView {
         container.className = 'idl-annotations-container';
         container.setAttribute('data-for-word', wordIndex.toString());
         
-        annotations.forEach((annotation) => {
+        annotations.forEach(({annotation, isLocal}) => {
             const isFromCurrentArticle = this.articleId === annotation.sourceId;
             const annotationEl = document.createElement('div');
             annotationEl.className = 'idl-annotation-item';
             
             annotationEl.classList.add(isFromCurrentArticle ? 'from-current' : 'to-current');
             
-            if (element.classList.contains('local-annotation')) {
+            if (isLocal) {
                 annotationEl.classList.add('local-annotation-item');
             }
             
