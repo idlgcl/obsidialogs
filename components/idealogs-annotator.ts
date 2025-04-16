@@ -4,16 +4,19 @@ import { ApiService } from '../utils/api';
 
 export const IDEALOGS_ANNOTATOR = 'idealogs-annotator';
 
+type AnnotatorMode = 'WEB' | 'LOCAL' | 'ANNOTATOR';
+
 export class IdealogsAnnotator extends ItemView {
     private articleHeaderEl: HTMLElement;
     private articleContentEl: HTMLElement;
     private articleId: string;
+    private articleTitle = '';
     private articleContent = '';
     private component: Component;
     private apiService: ApiService;
-    private mode: 'WEB' | 'LOCAL' | 'ANNOTATOR';
+    private mode: AnnotatorMode;
 
-    constructor(leaf: WorkspaceLeaf, mode?: 'WEB' | 'LOCAL' | 'ANNOTATOR') {
+    constructor(leaf: WorkspaceLeaf, mode?: AnnotatorMode) {
         super(leaf);
         this.articleId = '';
         this.component = new Component();
@@ -25,7 +28,7 @@ export class IdealogsAnnotator extends ItemView {
         }
     }
     
-    setMode(mode: 'WEB' | 'LOCAL' | 'ANNOTATOR'): void {
+    setMode(mode: AnnotatorMode): void {
         this.mode = mode;
     }
 
@@ -45,24 +48,39 @@ export class IdealogsAnnotator extends ItemView {
     }
 
     getDisplayText(): string {
-        return this.articleId ? `${this.articleId}` : '';
+        return this.articleTitle || this.articleId;
     }
 
     async loadWebArticleContent(): Promise<void> {
         try {
-            const content = await this.apiService.fetchFileContent(this.articleId);
-            this.articleContent = content;
+            const [content, articleDetails] = await Promise.allSettled([
+                this.apiService.fetchFileContent(this.articleId),
+                this.apiService.fetchArticleById(this.articleId)
+            ]);
+
+            if (content.status === 'fulfilled') {
+                this.articleContent = content.value;
+            } else {
+                this.articleContent = 'Failed to load article content';
+                console.error('Error loading article content:', content.reason);
+            }
 
             this.articleHeaderEl.empty();
-            this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
+            if (articleDetails.status === 'fulfilled') {
+                this.articleTitle = articleDetails.value.title || this.articleId;
+            } else {
+                this.articleTitle = this.articleId;
+            }
+                
+            this.articleHeaderEl.createEl('div', { text: this.articleTitle, cls: 'inline-title' });
             
             await this.render();
         } catch (error) {
-            this.articleContent = 'Failed to load article content';
+            console.error('Unexpected error in loadWebArticleContent:', error);
+            this.articleContent = 'An error occurred while loading the article';
+            this.articleTitle = this.articleId;
             this.articleHeaderEl.empty();
             await this.render();
-            
-            console.error('Error loading article content:', error);
         }
     }
 
