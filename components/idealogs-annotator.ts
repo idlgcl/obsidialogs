@@ -54,8 +54,8 @@ export class IdealogsAnnotator extends ItemView {
         }
         if (state && state.articleId) {
             this.articleId = state.articleId;
-            await this.loadWebArticleContent();
             if (this.mode === 'WEB') {
+                await this.loadWebArticleContent();
                 await this.loadAnnotations(true, true)
             }
 
@@ -69,6 +69,24 @@ export class IdealogsAnnotator extends ItemView {
     getDisplayText(): string {
         return this.articleTitle || this.articleId;
     }
+
+    async setLocalContent(content: string): Promise<void> {
+        this.articleContent = content;
+    
+        this.articleHeaderEl.empty();
+        this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
+        
+        await this.render();
+        // this.setupEditorButton();
+        
+        // await this.processInternalLinks();
+        
+        // if (this.articleId && this.isOpenedFromCommand()) {
+        //     await this.loadAnnotations();
+        // }
+        await this.loadAnnotations(true, false)
+    }
+
 
     async loadWebArticleContent(): Promise<void> {
         try {
@@ -122,7 +140,7 @@ export class IdealogsAnnotator extends ItemView {
             existingContainers.forEach(el => el.remove());
             
             this.annotationsByWordIndex.clear();
-            
+
             const webAnnotations = web === true ? await this.apiService.fetchAnnotations(this.articleId, this.articleId) : [];
             const localAnnotations = local === true ? await this.getLocalAnnotations() : [];
 
