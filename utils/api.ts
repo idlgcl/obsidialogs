@@ -1,7 +1,7 @@
 // @ts-ignore
 const API_ENDPOINT = API_ENDPOINT_VALUE;
 
-import { ArticleResponse } from '../types';
+import { Article, ArticleResponse } from '../types';
 
 export class ApiService {
     async fetchArticleSuggestions(searchTerm: string): Promise<ArticleResponse> {
@@ -32,5 +32,16 @@ export class ApiService {
         }
         
         return data.content;
+    }
+
+    async fetchArticleById(articleId: string): Promise<Article> {
+        const url = `${API_ENDPOINT}/articles/${articleId}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.statusText}`);
+        }
+        
+        return await response.json() as Article;
     }
 }
