@@ -114,9 +114,9 @@ export default class ArticleSuggestPlugin extends Plugin {
         this.addCommand({
             id: 'toggle-editor-reader-view',
             name: 'Toggle between Editor and Reader views',
-            hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'd' }],
+            hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'd' }],
             callback: () => {
-                const readerView = this.app.workspace.getActiveViewOfType(IdealogsReaderView);
+                const readerView = this.app.workspace.getActiveViewOfType(IdealogsAnnotator);
                 if (readerView) {
                     readerView.openInEditor();
                     return;
