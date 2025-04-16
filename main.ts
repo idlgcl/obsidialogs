@@ -73,7 +73,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                     
                     if (!isIdealogsFile) {
                         if (!checking) {
-                            this.openInIdealogsReader(activeFile);
+                            this.openAnnotatorViewByFile(activeFile);
                         }
                         return true;
                     }
@@ -89,7 +89,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                         item.setTitle("Open in Idealogs Reader")
                            .setIcon("book-open")
                            .onClick(() => {
-                               this.openInIdealogsReader(file);
+                               this.openAnnotatorViewByFile(file);
                            });
                     });
                 }
@@ -104,7 +104,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                         item.setTitle("Open in Idealogs Reader")
                            .setIcon("book-open")
                            .onClick(() => {
-                                this.openInIdealogsReader(activeFile);
+                                this.openAnnotatorViewByFile(activeFile);
                            });
                     });
                 }
@@ -124,7 +124,7 @@ export default class ArticleSuggestPlugin extends Plugin {
                 
                 const activeFile = this.app.workspace.getActiveFile();
                 if (activeFile && activeFile.extension === 'md') {
-                    this.openInIdealogsReader(activeFile);
+                    this.openAnnotatorViewByFile(activeFile);
                 }
             }
         });
@@ -142,7 +142,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         // @ts-ignore 
         workspace.openLinkText = function(linktext, sourcePath, newLeaf, openViewState) {
             if (self.isIdealogsArticle(linktext)) {
-                self.openAnnotatorViewById(linktext);
+                self.openAnnotatorViewByLinkClick(linktext);
                 return true;
             }
             
@@ -154,7 +154,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         return ['Tx', 'Ix', 'Fx', '0x'].some(prefix => id.startsWith(prefix));
     }
     
-    async openAnnotatorViewById(articleId: string): Promise<void> {
+    async openAnnotatorViewByLinkClick(articleId: string): Promise<void> {
         const existingLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
         const annotatorLeaf = existingLeaves.length > 0 
             ? existingLeaves[0] 
@@ -177,29 +177,25 @@ export default class ArticleSuggestPlugin extends Plugin {
     }
     
         
-    async openInIdealogsReader(file: TFile): Promise<void> {
-        const existingReaderLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
-        let readerLeaf;
+    async openAnnotatorViewByFile(file: TFile): Promise<void> {
+        const existingLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+        const annotatorLeaf = existingLeaves.length > 0 
+            ? existingLeaves[0] 
+            : this.app.workspace.getLeaf('split');
         
-        if (existingReaderLeaves.length > 0) {
-            readerLeaf = existingReaderLeaves[0];
-        } else {
-            readerLeaf = this.app.workspace.getLeaf('split');
-        }
-        
-        await readerLeaf.setViewState({
-            type: IDEALOGS_READER,
+        await annotatorLeaf.setViewState({
+            type: IDEALOGS_ANNOTATOR,
             active: true,
             state: { 
                 articleId: file.basename,
-                openedFromCommand: true
+                mode: 'LOCAL'
             }
         });
         
         try {
             const content = await this.app.vault.read(file);
-            const readerView = readerLeaf.view as IdealogsReaderView;
-            await readerView.setContent(content);
+            const readerView = annotatorLeaf.view as IdealogsAnnotator;
+            await readerView.setLocalContent(content);
             
             const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
             for (const leaf of markdownLeaves) {
@@ -238,7 +234,7 @@ export default class ArticleSuggestPlugin extends Plugin {
         
         button.addEventListener('click', () => {
             if (file) {
-                this.openInIdealogsReader(file);
+                this.openAnnotatorViewByFile(file);
             }
         });
     
