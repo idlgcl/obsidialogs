@@ -65,7 +65,8 @@ export class RightPanelListView extends Component {
         this.commentsTab = new CommentsTab({
             container: this.tabContentEl,
             onSelectComment: (comment) => this.onSelectComment(comment), 
-            onNewComment: () => this.onNewComment()
+            onNewComment: () => this.onNewComment(),
+            app: this.app
         });
         
         this.notesTab = new NotesTab({

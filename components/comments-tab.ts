@@ -1,10 +1,12 @@
-import { Component } from "obsidian";
+import { Component, MarkdownView, App } from "obsidian";
 import { AnnotationData, AnnotationService } from "../utils/annotation-service";
+import { parseComments } from "../utils/comment-parser";
 
 export interface CommentsTabOptions {
     container: HTMLElement;
     onSelectComment: (comment: AnnotationData) => void;
     onNewComment: () => void;
+    app: App;
 }
 
 export class CommentsTab extends Component {
@@ -13,12 +15,15 @@ export class CommentsTab extends Component {
     private onSelectComment: (comment: AnnotationData) => void;
     private onNewComment: () => void;
     private commentsListEl: HTMLElement;
+    private newCommentBtn: HTMLElement;
+    private app: App;
     
     constructor(options: CommentsTabOptions) {
         super();
         this.container = options.container;
         this.onSelectComment = options.onSelectComment;
         this.onNewComment = options.onNewComment;
+        this.app = options.app;
         this.createView();
     }
     
@@ -27,10 +32,10 @@ export class CommentsTab extends Component {
         
         const commentsListEl = this.contentEl.createDiv({ cls: 'idl-comments-list' });
         
-        const newCommentBtn = commentsListEl.createDiv({ cls: 'idl-new-comment-btn' });
-        newCommentBtn.setText('New Comment');
+        this.newCommentBtn = commentsListEl.createDiv({ cls: 'idl-new-comment-btn' });
+        this.newCommentBtn.setText('New Comment');
         
-        newCommentBtn.addEventListener('click', () => {
+        this.newCommentBtn.addEventListener('click', () => {
             this.onNewComment();
         });
         
@@ -44,6 +49,28 @@ export class CommentsTab extends Component {
         }
         
         try {
+            const hasCommentsInFile = await this.checkForCommentsInFile(filePath);
+            
+            if (!hasCommentsInFile) {
+                this.displayEmptyState();
+                this.newCommentBtn.addClass('disabled');
+                this.newCommentBtn.style.opacity = '0.6';
+                
+                 this.newCommentBtn.setAttribute('title', "No comments found. To add one, use the syntax 'Comment title. Comment body:'");
+                
+                 this.newCommentBtn.style.pointerEvents = 'auto';
+                 this.newCommentBtn.style.cursor = 'not-allowed';
+                return;
+            }
+            
+            this.newCommentBtn.removeClass('disabled');
+            this.newCommentBtn.removeAttribute('title');
+            this.newCommentBtn.style.pointerEvents = 'auto';
+            this.newCommentBtn.style.opacity = '1';
+
+            const tooltip = this.newCommentBtn.querySelector('.idealogs-tooltip');
+            if (tooltip) tooltip.remove();
+            
             const annotations = await annotationService.loadAnnotations(filePath);
             const comments = annotations.comments;
             
@@ -62,6 +89,28 @@ export class CommentsTab extends Component {
             console.error('Error loading comments:', error);
             this.displayEmptyState();
         }
+    }
+    
+    private async checkForCommentsInFile(filePath: string): Promise<boolean> {
+        const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
+        let content = '';
+        
+        for (const leaf of markdownLeaves) {
+            const view = leaf.view;
+            if (view instanceof MarkdownView && 
+                view.file && 
+                view.file.path === filePath) {
+                content = view.editor.getValue();
+                break;
+            }
+        }
+        
+        if (content) {
+            const comments = parseComments(content);
+            return comments.length > 0;
+        }
+        
+        return false;
     }
     
     private displayEmptyState(): void {
