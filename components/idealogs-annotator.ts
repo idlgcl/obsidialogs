@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon, TFile, MarkdownView, Notice } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 import { ApiService } from '../utils/api';
 import { IdealogsAnnotation } from '../types';
@@ -42,6 +42,8 @@ export class IdealogsAnnotator extends ItemView {
         
         document.addEventListener('keydown', this.altKeyHandler);
         document.addEventListener('keyup', this.altKeyHandler);
+
+        this.setUpActionButtons()
     }
     
     setMode(mode: AnnotatorMode): void {
@@ -60,7 +62,73 @@ export class IdealogsAnnotator extends ItemView {
             }
 
         }
+
+        
     }
+
+    setUpActionButtons(): void {
+        this.addAction("book-open", "Open in Editor", () => {
+            if (this.mode === 'WEB') {
+                new Notice('Cant open web article in editor.')
+                return;
+            }
+            this.openInEditor()
+        });
+        this.addAction("edit", "Open in Editor", () => {
+            if (this.mode === 'WEB') {
+                new Notice('Cant open web article in editor.')
+                return;
+            }
+            this.openInEditor()
+        });
+    }
+
+    async openInEditor(): Promise<void> {
+            if (!this.articleId) return;
+            
+            const fileName = `${this.articleId}.md`;
+            const file = this.app.vault.getAbstractFileByPath(fileName);
+            
+            if (file instanceof TFile) {
+                const leaf = this.app.workspace.getLeaf('tab');
+                await leaf.openFile(file);
+                this.app.workspace.revealLeaf(leaf);
+    
+                // @ts-ignore
+                const plugin = this.app.plugins.plugins['idealogs-annotator'];
+                if (plugin && plugin.fileHandler) {
+                    plugin.fileHandler.handleFileOpen(file);
+                }
+    
+                this.leaf.detach();
+                
+                setTimeout(() => {
+                    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                    if (!view) return;
+                    
+                    const existingButton = view.containerEl.querySelector('.idealogs-reader-button');
+                    if (existingButton) existingButton.remove();
+                    
+                    const viewActionsEl = view.containerEl.querySelector('.view-actions');
+                    if (!viewActionsEl) return;
+                    
+                    const button = document.createElement('button');
+                    button.className = 'view-action clickable-icon idealogs-reader-button';
+                    button.setAttribute('aria-label', 'Open in Idealogs Reader');
+                    setIcon(button, 'book-open-text');
+                    
+                    button.addEventListener('click', () => {
+                        // @ts-ignore
+                        const plugin = this.app.plugins.plugins['idealogs-annotator'];
+                        if (plugin && typeof plugin.openAnnotatorViewByFile === 'function') {
+                            plugin.openAnnotatorViewByFile(file);
+                        }
+                    });
+                    
+                    viewActionsEl.insertAdjacentElement('afterbegin', button);
+                }, 100); 
+            }
+        }
 
     getViewType(): string {
         return IDEALOGS_ANNOTATOR;
