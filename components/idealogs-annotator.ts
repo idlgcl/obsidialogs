@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 import { ApiService } from '../utils/api';
 import { IdealogsAnnotation } from '../types';
-import { AnnotationService } from '../utils/annotation-service';
+import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
 export const IDEALOGS_ANNOTATOR = 'idealogs-annotator';
 
@@ -56,7 +56,7 @@ export class IdealogsAnnotator extends ItemView {
             this.articleId = state.articleId;
             await this.loadWebArticleContent();
             if (this.mode === 'WEB') {
-                await this.loadWebAnnotations()
+                await this.loadAnnotations(true, true)
             }
 
         }
@@ -103,8 +103,10 @@ export class IdealogsAnnotator extends ItemView {
         }
     }
 
-    async loadWebAnnotations(): Promise<void> {
+    async loadAnnotations(local: boolean, web: boolean): Promise<void> {
         if (!this.articleId) return;
+
+        if (!local && !web) return;
         
         try {
             const allWordSpans = this.getAllWordSpans();
@@ -121,7 +123,12 @@ export class IdealogsAnnotator extends ItemView {
             
             this.annotationsByWordIndex.clear();
             
-            const webAnnotations = await this.apiService.fetchAnnotations(this.articleId, this.articleId);
+            const webAnnotations = web === true ? await this.apiService.fetchAnnotations(this.articleId, this.articleId) : [];
+            const localAnnotations = local === true ? await this.getLocalAnnotations() : [];
+
+            for (const annotation of localAnnotations) {
+                this.markAnnotatedWords(annotation, true);
+            }
             
             for (const annotation of webAnnotations) {
                 this.markAnnotatedWords(annotation, false);
@@ -129,6 +136,58 @@ export class IdealogsAnnotator extends ItemView {
         } catch (error) {
             console.error('Error loading annotations:', error);
         }
+    }
+
+    private async getLocalAnnotations(): Promise<IdealogsAnnotation[]> {
+        try {
+            const annotations = await this.annotationService.loadAnnotations(this.articleId);
+            const idealogsAnnotations: IdealogsAnnotation[] = [];
+            
+            
+            for (const commentId in annotations.comments) {
+                const comment = annotations.comments[commentId];
+                idealogsAnnotations.push(this.mapToIdealogsAnnotation(comment, 'Comment'));
+            }
+            
+            for (const noteId in annotations.notes) {
+                const note = annotations.notes[noteId];
+                idealogsAnnotations.push(this.mapToIdealogsAnnotation(note, 'Note'));
+            }
+            
+            return idealogsAnnotations;
+        } catch (error) {
+            console.error('Error loading local annotations:', error);
+            return [];
+        }
+    }
+    
+    private mapToIdealogsAnnotation(annotation: AnnotationData, kind: string): IdealogsAnnotation {
+        const isValid = annotation.isValid !== false;
+        
+        return {
+            id: parseInt(annotation.id) || 0,
+            kind: kind,
+            commitId: 0,
+            isValid: isValid,
+            validationMessage: annotation.validationMessage,
+            commitIsMerged: true,
+            
+            sourceId: annotation.src,
+            sTxtStart: annotation.src_txt_start,
+            sTxtEnd: annotation.src_txt_end,
+            sTxtDisplay: annotation.src_txt_display,
+            sTxt: annotation.src_txt,
+            sTxtDisplayRange: annotation.src_txt_display_range,
+            sTxtRange: annotation.src_range,
+            
+            targetId: this.articleId,
+            tTxtStart: annotation.target_txt_start,
+            tTxtEnd: annotation.target_txt_end,
+            tTxtDisplay: annotation.target_txt_display,
+            tTxt: annotation.target_txt,
+            tTxtDisplayRange: annotation.target_txt_display_range,
+            tTxtRange: annotation.target_range
+        };
     }
 
     getAllWordSpans(): HTMLElement[] {
