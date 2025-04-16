@@ -3,6 +3,7 @@ import { App, normalizePath } from 'obsidian';
 export interface AnnotationData {
     id: string;
     timestamp: number;
+    kind: 'COMMENT' | 'NOTE';
     src: string;
     src_txt_display: string;
     src_txt_start: string;
@@ -114,6 +115,7 @@ export class AnnotationService {
         
         const annotationData: AnnotationData = {
             id: commentData.commentId,
+            kind: 'COMMENT',
             timestamp,
             src: sourceFilename,
             src_txt_display: srcTxtDisplay,
@@ -215,6 +217,7 @@ export class AnnotationService {
         
         const annotationData: AnnotationData = {
             id,
+            kind: 'COMMENT',
             timestamp,
             src: sourceFilename,
             src_txt_display: srcTxtDisplay,
@@ -282,7 +285,7 @@ export class AnnotationService {
 
     async validateAnnotation(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
         try {
-            if (annotation.noteMeta) {
+            if (annotation.kind === 'NOTE') {
                 return await this.validateNote(annotation, sourceFilePath);
             }
 

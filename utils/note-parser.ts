@@ -95,6 +95,7 @@ export function parseNotes(text: string): Note[] {
 export function noteToAnnotationData(note: Note, filePath: string): AnnotationData {
     return {
         id: note.id,
+        kind: 'NOTE',
         timestamp: Date.now(),
         src: filePath.split('/').pop() || '',
         src_txt_display: '',
