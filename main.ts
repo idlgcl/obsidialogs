@@ -1,4 +1,4 @@
-import { MarkdownView, Plugin, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
+import { MarkdownView, Plugin, setIcon, TFile } from 'obsidian';
 import { ArticleSuggest } from './components/suggester';
 import { FileHandler } from './utils/file-handler';
 import { patchDefaultSuggester } from './utils/suggester-patcher';
@@ -7,6 +7,7 @@ import { AnnotationService } from './utils/annotation-service';
 import { IDL_RIGHT_PANEL, RightPanel } from 'components/right-panel';
 import { ApiService } from './utils/api';
 import { ANNOTATOR_VIEW, AnnotatorView } from './components/annotator-view';
+import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from './components/idealogs-annotator';
 
 export default class ArticleSuggestPlugin extends Plugin {
     private articleSuggest: ArticleSuggest;
@@ -23,6 +24,10 @@ export default class ArticleSuggestPlugin extends Plugin {
         this.apiService = new ApiService();
         
         await this.annotationService.ensureAnnotationsDirectory();
+
+        this.registerView(IDEALOGS_ANNOTATOR, (leaf) => {
+            return new IdealogsAnnotator(leaf);
+        });
         
         this.registerView(IDEALOGS_READER, (leaf) => {
             return new IdealogsReaderView(leaf);
@@ -150,62 +155,27 @@ export default class ArticleSuggestPlugin extends Plugin {
     }
     
     async openAnnotatorViewById(articleId: string): Promise<void> {
-        const existingAnnotatorLeaves = this.app.workspace.getLeavesOfType(ANNOTATOR_VIEW);
-        let annotatorLeaf: WorkspaceLeaf;
+        const existingLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+        const annotatorLeaf = existingLeaves.length > 0 
+            ? existingLeaves[0] 
+            : this.app.workspace.getLeaf('split');
         
-        if (existingAnnotatorLeaves.length > 0) {
-            annotatorLeaf = existingAnnotatorLeaves[0];
-        } else {
-            annotatorLeaf = this.app.workspace.getLeaf('split');
+        if (existingLeaves.length === 0) {
             await annotatorLeaf.setViewState({
-                type: ANNOTATOR_VIEW,
-                active: false
+                type: IDEALOGS_ANNOTATOR,
+                active: false,
+                state: { articleId, mode: 'WEB' }
             });
+            return;
         }
-        
+
         await annotatorLeaf.setViewState({
-            type: ANNOTATOR_VIEW,
-            active: true,
-            state: { 
-                articleId: articleId
-            }
+            type: IDEALOGS_ANNOTATOR,
+            active: false,
+            state: { articleId, mode: 'WEB' }
         });
-        
-        this.app.workspace.revealLeaf(annotatorLeaf);
     }
     
-    async openIdealogsArticleById(articleId: string): Promise<void> {
-        const existingReaderLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
-        let readerLeaf: WorkspaceLeaf;
-        
-        if (existingReaderLeaves.length > 0) {
-            readerLeaf = existingReaderLeaves[0];
-        } else {
-            readerLeaf = this.app.workspace.getLeaf('split');
-            await readerLeaf.setViewState({
-                type: IDEALOGS_READER,
-                active: false
-            });
-        }
-        
-        await readerLeaf.setViewState({
-            type: IDEALOGS_READER,
-            active: true,
-            state: { 
-                articleId: articleId,
-                openedFromCommand: false
-            }
-        });
-        
-        try {
-            const content = await this.apiService.fetchFileContent(articleId);
-            const readerView = readerLeaf.view as IdealogsReaderView;
-            await readerView.setContent(content);
-            this.app.workspace.revealLeaf(readerLeaf);
-        } catch (error) {
-            console.error('Error fetching article content:', error);
-        }
-    }
         
     async openInIdealogsReader(file: TFile): Promise<void> {
         const existingReaderLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
