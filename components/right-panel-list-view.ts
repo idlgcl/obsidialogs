@@ -44,8 +44,6 @@ export class RightPanelListView extends Component {
     private createView(): void {
         this.contentEl = this.container.createDiv({ cls: 'side-panel-list-view' });
         
-        this.contentEl.createEl('h3', { text: 'Idealogs' });
-        
         const tabs: TabItem[] = [
             { id: 'comments', label: 'Comments' },
             { id: 'notes', label: 'Notes' }
