@@ -21,8 +21,15 @@ export class IdealogsAnnotator extends ItemView {
     private mode: AnnotatorMode;
     private altKeyHandler: (e: KeyboardEvent) => void;
 
+    private writingNumbers: Map<string, number> = new Map();
+    private nextWritingNumber = 1;
+
     constructor(leaf: WorkspaceLeaf, mode?: AnnotatorMode) {
         super(leaf);
+
+        this.writingNumbers = new Map();
+        this.nextWritingNumber = 1;
+
         this.articleId = '';
         this.component = new Component();
         this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
@@ -51,6 +58,9 @@ export class IdealogsAnnotator extends ItemView {
     }
 
     async setState(state: any, result: any): Promise<void> {
+        this.writingNumbers = new Map();
+        this.nextWritingNumber = 1;
+
         if (state && state.mode) {
             this.mode = state.mode;
         }
@@ -60,10 +70,84 @@ export class IdealogsAnnotator extends ItemView {
                 await this.loadWebArticleContent();
                 await this.loadAnnotations(true, true)
             }
-
         }
+    }
 
+
+    private getLinkDisplayText(articleId: string, kind: string): string {
+        if (!kind) return articleId;
         
+        switch (kind.toLowerCase()) {
+            case 'question':
+                return '[?]';
+            case 'insight':
+                return '[!]';
+            case 'writing': {
+                if (!this.writingNumbers.has(articleId)) {
+                    this.writingNumbers.set(articleId, this.nextWritingNumber++);
+                }
+                const numberValue = this.writingNumbers.get(articleId);
+                return numberValue !== undefined ? `[${numberValue.toString()}]` : '[0]';
+            }
+            default:
+                return articleId;
+        }
+    }
+
+    private async processIdealogsLinks(): Promise<void> {
+        const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
+        
+        Array.from(internalLinks).forEach(async (link) => {
+            if (link instanceof HTMLAnchorElement) {
+                const href = link.getAttribute('href');
+                if (href) {
+                    let kind = '';
+                    if (href.startsWith('Tx')) {
+                        kind = 'writing';
+                    } else if (href.startsWith('Fx')) {
+                        kind = 'question';
+                    } else if (href.startsWith('Ix')) {
+                        kind = 'insight';
+                    }
+                    
+                    if (kind) {
+                        const displayText = this.getLinkDisplayText(href, kind);
+                        if (displayText !== href) {
+                            link.textContent = displayText;
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    private attachLinkHandlers(): void {
+        const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
+        internalLinks.forEach(link => {
+            if (link instanceof HTMLAnchorElement) {
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const href = link.getAttribute('href');
+                    if (href) {
+                        this.app.workspace.openLinkText(href, '', false);
+                    }
+                });
+            }
+        });
+        
+        const externalLinks = this.articleContentEl.querySelectorAll('a.external-link');
+        externalLinks.forEach(link => {
+            if (link instanceof HTMLAnchorElement && !link.hasAttribute('data-href-handled')) {
+                link.setAttribute('data-href-handled', 'true');
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const href = link.getAttribute('href');
+                    if (href) {
+                        window.open(href, '_blank');
+                    }
+                });
+            }
+        });
     }
 
     setUpActionButtons(): void {
@@ -147,7 +231,7 @@ export class IdealogsAnnotator extends ItemView {
         await this.render();
         // this.setupEditorButton();
         
-        // await this.processInternalLinks();
+        await this.processIdealogsLinks()
         
         // if (this.articleId && this.isOpenedFromCommand()) {
         //     await this.loadAnnotations();
@@ -409,6 +493,8 @@ export class IdealogsAnnotator extends ItemView {
         
         const processor = new WordProcessor({ articleId: this.articleId });
         processor.processMarkdown(this.articleContentEl);
+
+        this.attachLinkHandlers()
     }
 
     async onClose() {
