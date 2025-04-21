@@ -217,7 +217,7 @@ export class AnnotationService {
         
         const annotationData: AnnotationData = {
             id,
-            kind: 'COMMENT',
+            kind: 'NOTE',
             timestamp,
             src: sourceFilename,
             src_txt_display: srcTxtDisplay,
@@ -358,7 +358,8 @@ export class AnnotationService {
                 };
             }
     
-            const sourceContent = await this.app.vault.adapter.read(sourceFilePath);
+            let sourceContent = await this.app.vault.adapter.read(sourceFilePath);
+            sourceContent = sourceContent.replace(/\[\[.*?\|?\d*?\]\]/g, '');
 
             if (annotation.src_txt_start && !sourceContent.includes(annotation.src_txt_start)) {
                 return {
