@@ -28,7 +28,7 @@ export interface WordProcessorOptions {
 
 
 export interface IdealogsAnnotation {
-    id: number;
+    id: string | number;
     kind: string;
     commitId: number;
     isValid: boolean;
