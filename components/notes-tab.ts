@@ -80,7 +80,7 @@ export class NotesTab extends Component {
     private displayEmptyState(): void {
         this.notesListEl.empty();
         const emptyStateEl = this.notesListEl.createDiv({ cls: 'note-empty-state' });
-        emptyStateEl.setText('No notes found');
+        emptyStateEl.setText('No notes found.');
     }
     
     private async renderNoteItem(note: Note, filePath?: string, annotationService?: AnnotationService): Promise<void> {

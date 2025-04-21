@@ -98,6 +98,12 @@
     color: var(--text-muted);
 }
 
+.note-empty-state {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
 .form-header {
     display: flex;
     align-items: center;
