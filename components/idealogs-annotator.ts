@@ -84,7 +84,10 @@ export class IdealogsAnnotator extends ItemView {
                 await this.loadWebArticleContent();
                 await this.loadAnnotations(true, true)
             }
-            if (this.mode === 'ANNOTATOR') {
+            else if (this.mode === 'LOCAL') {
+                await this.loadAnnotations(true, false);
+            }
+            else if (this.mode === 'ANNOTATOR') {
                 await this.loadWebArticleContent();
             }
         }
@@ -248,12 +251,12 @@ export class IdealogsAnnotator extends ItemView {
         await this.render();
         // this.setupEditorButton();
         
-        await this.processIdealogsLinks()
-        
         // if (this.articleId && this.isOpenedFromCommand()) {
         //     await this.loadAnnotations();
         // }
         await this.loadAnnotations(true, false)
+
+        await this.processIdealogsLinks()
     }
 
 
@@ -281,6 +284,8 @@ export class IdealogsAnnotator extends ItemView {
             this.articleHeaderEl.createEl('div', { text: this.articleTitle, cls: 'inline-title' });
             
             await this.render();
+
+            await this.processIdealogsLinks();
         } catch (error) {
             console.error('Unexpected error in loadWebArticleContent:', error);
             this.articleContent = 'An error occurred while loading the article';
@@ -347,7 +352,7 @@ export class IdealogsAnnotator extends ItemView {
             return [];
         }
     }
-    
+
     private mapToIdealogsAnnotation(annotation: AnnotationData, kind: string): IdealogsAnnotation {
         const isValid = annotation.isValid !== false;
         
@@ -386,7 +391,7 @@ export class IdealogsAnnotator extends ItemView {
     markAnnotatedWords(annotation: IdealogsAnnotation, isLocal: boolean): void {
         const isFromCurrentArticle = this.articleId === annotation.sourceId;
         const isToCurrentArticle = this.articleId === annotation.targetId;
-        
+
         if (!isFromCurrentArticle && !isToCurrentArticle) return;
         
         const indices = isFromCurrentArticle 
