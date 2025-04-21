@@ -111,10 +111,20 @@ export default class ArticleSuggestPlugin extends Plugin {
             })
         );
 
+        // @ts-ignore
+        const hm = (this.app as any).hotkeyManager;
+        for (const [cmd, defs] of Object.entries(hm.defaultKeys) as [string, any[]][]) {
+            hm.defaultKeys[cmd] = defs.filter(hk =>
+            !(hk.modifiers.length === 1
+                && hk.modifiers[0] === "Mod"
+                && hk.key.toLowerCase() === "d")
+            );
+        }
+
         this.addCommand({
             id: 'toggle-editor-reader-view',
             name: 'Toggle between Editor and Reader views',
-            hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'd' }],
+            hotkeys: [{ modifiers: ['Mod'], key: 'd' }],
             callback: () => {
                 const readerView = this.app.workspace.getActiveViewOfType(IdealogsAnnotator);
                 if (readerView) {
