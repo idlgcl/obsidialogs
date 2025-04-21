@@ -49,6 +49,8 @@ export class CommentsTab extends Component {
         }
         
         try {
+            this.commentsListEl.empty();
+            
             const hasCommentsInFile = await this.checkForCommentsInFile(filePath);
             
             if (!hasCommentsInFile) {
@@ -57,20 +59,12 @@ export class CommentsTab extends Component {
                 return;
             }
             
-            this.newCommentBtn.removeClass('disabled');
-            this.newCommentBtn.removeAttribute('title');
-            this.newCommentBtn.style.pointerEvents = 'auto';
-            this.newCommentBtn.style.opacity = '1';
-
-            const tooltip = this.newCommentBtn.querySelector('.idealogs-tooltip');
-            if (tooltip) tooltip.remove();
+            this.newCommentBtn.style.display = 'block';
             
             const annotations = await annotationService.loadAnnotations(filePath);
             const comments = annotations.comments;
             
-            this.commentsListEl.empty();
-            
-            if (Object.keys(comments).length === 0) {
+            if (Object.keys(comments).length === 0 && !hasCommentsInFile) {
                 this.displayEmptyState();
                 return;
             }
