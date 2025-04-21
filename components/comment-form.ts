@@ -2,7 +2,7 @@ import { Component, MarkdownView, Notice, App } from "obsidian";
 import { annotationToComment, Comment, parseComments } from '../utils/comment-parser';
 import { ArticleAutocompleteField } from './article-input';
 import { Article } from '../types';
-import { IDEALOGS_READER, IdealogsReaderView } from './idealogs-reader';
+import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from './idealogs-annotator';
 import { ApiService } from '../utils/api';
 import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 
@@ -296,39 +296,32 @@ export class CommentForm extends Component {
         
     private async openArticleView(article: Article): Promise<void> {
         try {
-            const existingArticleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
+            const existingArticleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
             let articleLeaf;
             
             if (existingArticleLeaves.length > 0) {
                 articleLeaf = existingArticleLeaves[0];
                 await articleLeaf.setViewState({
-                    type: IDEALOGS_READER,
+                    type: IDEALOGS_ANNOTATOR,
                     active: false,
                     state: { 
-                        articleId: article.id, 
-                        openedFromCommand: false 
+                        articleId: article.id,
+                        mode: 'ANNOTATOR'
                     }
                 });
             } else {
                 articleLeaf = this.app.workspace.getLeaf('split');
                 await articleLeaf.setViewState({
-                    type: IDEALOGS_READER,
+                    type: IDEALOGS_ANNOTATOR,
                     active: false,
                     state: { 
-                        articleId: article.id, 
-                        openedFromCommand: false 
+                        articleId: article.id,
+                        mode: 'ANNOTATOR'
                     }
                 });
             }
             
-            const articleView = articleLeaf.view as IdealogsReaderView;
-            
-            try {
-                const content = await this.apiService.fetchFileContent(article.id);
-                await articleView.setContent(content);
-            } catch (error) {
-                console.error('Error fetching article content:', error);
-            }
+            // const articleView = articleLeaf.view as IdealogsAnnotator;
         } catch (error) {
             console.error('Error opening article view:', error);
             this.isTargetArticleSelection = false; 
@@ -372,13 +365,13 @@ export class CommentForm extends Component {
             return;
         }
         
-        const articleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_READER);
+        const articleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
         if (articleLeaves.length === 0) {
             new Notice('No article view found');
             return;
         }
         
-        const articleView = articleLeaves[0].view as IdealogsReaderView;
+        const articleView = articleLeaves[0].view as IdealogsAnnotator;
         const wordSpans = this.getAllWordSpansFromArticleView(articleView);
         
         if (!wordSpans || wordSpans.length === 0) {
@@ -447,7 +440,7 @@ export class CommentForm extends Component {
         }
     }
     
-    private getAllWordSpansFromArticleView(articleView: IdealogsReaderView): HTMLElement[] {
+    private getAllWordSpansFromArticleView(articleView: IdealogsAnnotator): HTMLElement[] {
         const contentEl = articleView.contentEl;
         if (!contentEl) return [];
         
@@ -535,7 +528,7 @@ export class CommentForm extends Component {
         });
     }
     
-    private highlightWords(spans: HTMLElement[], articleView: IdealogsReaderView): void {
+    private highlightWords(spans: HTMLElement[], articleView: IdealogsAnnotator): void {
         const allSpans = this.getAllWordSpansFromArticleView(articleView);
         allSpans.forEach(span => {
             span.classList.remove('idl-highlighted-word');
