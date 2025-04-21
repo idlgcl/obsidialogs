@@ -33,8 +33,8 @@ export class IdealogsAnnotator extends ItemView {
 
         this.articleId = '';
         this.component = new Component();
-        this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
-        this.articleContentEl = this.contentEl.createDiv({ cls: 'idealogs-article-content' });
+        this.articleHeaderEl = this.contentEl.createDiv();
+        this.articleContentEl = this.contentEl.createDiv();
         this.apiService = new ApiService();
         this.annotationService = new AnnotationService(this.app);
         if (mode) {
@@ -495,20 +495,46 @@ export class IdealogsAnnotator extends ItemView {
 
 
     private async render(): Promise<void> {
+        this.articleHeaderEl.empty();
         this.articleContentEl.empty();
+        
+        this.articleContentEl.addClass('markdown-reading-view');
+        
+        const previewView = this.articleContentEl.createDiv({
+            cls: 'markdown-preview-view markdown-rendered node-insert-event is-readable-line-width allow-fold-headings allow-fold-lists show-indentation-guide show-properties'
+        });
+        
+        const previewSection = previewView.createDiv({
+            cls: 'markdown-preview-sizer markdown-preview-section'
+        });
+        
+        previewSection.createDiv({ cls: 'markdown-preview-pusher', attr: { style: 'width: 1px; height: 0.1px; margin-bottom: 0px;' } });
+        
+        const headerDiv = previewSection.createDiv({ cls: 'mod-header mod-ui' });
+        headerDiv.createDiv({ 
+            cls: 'inline-title', 
+            text: this.articleTitle || this.articleId,
+            attr: { 
+                contenteditable: 'true',
+                spellcheck: 'true',
+                autocapitalize: 'on',
+                tabindex: '-1',
+                enterkeyhint: 'done'
+            }
+        });
         
         await MarkdownRenderer.render(
             this.app,
             this.articleContent,
-            this.articleContentEl,
+            previewSection,
             '',
             this.component
         );
         
         const processor = new WordProcessor({ articleId: this.articleId });
-        processor.processMarkdown(this.articleContentEl);
-
-        this.attachLinkHandlers()
+        processor.processMarkdown(previewSection);
+        
+        this.attachLinkHandlers();
     }
 
     async onClose() {

@@ -24,16 +24,6 @@
     letter-spacing: 0.5px;
 }
 
-
-.idealogs-article-content {
-    padding: 0px 20px 20px 20px;
-    overflow-y: auto;
-
-    max-width: 700px;
-    margin: 0 auto;
-}
-
-
 .idl-form-field {
     margin-bottom: 16px;
 }
@@ -267,22 +257,6 @@
     padding: 6px;
     margin-bottom: 4px;
 }
-
-
-/* reader title */
-
-.idealogs-article-header {
-    padding: 10px 20px;
-    max-width: 700px;
-    margin: 0 auto;
-}
-
-.idealogs-article-header h1 {
-    margin: 0;
-    font-size: 1.5em;
-    color: var(--text-normal);
-}
-
 
 /* annotator */
 
