@@ -20,6 +20,7 @@ export class IdealogsAnnotator extends ItemView {
     private annotationsByWordIndex: Map<number, {annotation: IdealogsAnnotation, isLocal: boolean}[]> = new Map();
     private mode: AnnotatorMode;
     private altKeyHandler: (e: KeyboardEvent) => void;
+    private fileOpenHandlerRef: (file: TFile | null) => void;
 
     private writingNumbers: Map<string, number> = new Map();
     private nextWritingNumber = 1;
@@ -35,6 +36,7 @@ export class IdealogsAnnotator extends ItemView {
         this.articleHeaderEl = this.contentEl.createDiv({ cls: 'idealogs-article-header' });
         this.articleContentEl = this.contentEl.createDiv({ cls: 'idealogs-article-content' });
         this.apiService = new ApiService();
+        this.annotationService = new AnnotationService(this.app);
         if (mode) {
             this.mode = mode;
         }
@@ -50,7 +52,19 @@ export class IdealogsAnnotator extends ItemView {
         document.addEventListener('keydown', this.altKeyHandler);
         document.addEventListener('keyup', this.altKeyHandler);
 
-        this.setUpActionButtons()
+        this.setUpActionButtons();
+
+        this.fileOpenHandlerRef = this.handleFileOpen.bind(this);
+        
+        this.registerEvent(
+            this.app.workspace.on('file-open', this.fileOpenHandlerRef)
+        );
+    }
+    
+    private handleFileOpen(file: TFile | null): void {
+        if (this.mode === 'LOCAL' && file && file.basename !== this.articleId) {
+            this.leaf.detach();
+        }
     }
     
     setMode(mode: AnnotatorMode): void {
@@ -500,6 +514,9 @@ export class IdealogsAnnotator extends ItemView {
     async onClose() {
         document.removeEventListener('keydown', this.altKeyHandler);
         document.removeEventListener('keyup', this.altKeyHandler);
+        
+        this.app.workspace.off('file-open', this.fileOpenHandlerRef);
+        
         this.component.unload();
         return super.onClose();
     }
