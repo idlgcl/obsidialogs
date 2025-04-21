@@ -53,13 +53,7 @@ export class CommentsTab extends Component {
             
             if (!hasCommentsInFile) {
                 this.displayEmptyState();
-                this.newCommentBtn.addClass('disabled');
-                this.newCommentBtn.style.opacity = '0.6';
-                
-                 this.newCommentBtn.setAttribute('title', "No comments found. To add one, use the syntax 'Comment title. Comment body:'");
-                
-                 this.newCommentBtn.style.pointerEvents = 'auto';
-                 this.newCommentBtn.style.cursor = 'not-allowed';
+                this.newCommentBtn.style.display = 'none';
                 return;
             }
             
@@ -116,7 +110,7 @@ export class CommentsTab extends Component {
     private displayEmptyState(): void {
         this.commentsListEl.empty();
         const emptyStateEl = this.commentsListEl.createDiv({ cls: 'comment-empty-state' });
-        emptyStateEl.setText('No comments found');
+        emptyStateEl.setText("No comments found. To add one, use the syntax 'Comment title. Comment body:'");
     }
     
     private renderCommentItem(comment: AnnotationData): void {
