@@ -84,6 +84,9 @@ export class IdealogsAnnotator extends ItemView {
                 await this.loadWebArticleContent();
                 await this.loadAnnotations(true, true)
             }
+            if (this.mode === 'ANNOTATOR') {
+                await this.loadWebArticleContent();
+            }
         }
     }
 
@@ -505,7 +508,7 @@ export class IdealogsAnnotator extends ItemView {
         });
         
         const previewSection = previewView.createDiv({
-            cls: 'markdown-preview-sizer markdown-preview-section'
+            cls: 'markdown-preview-sizer markdown-preview-section idealogs-article-content'
         });
         
         previewSection.createDiv({ cls: 'markdown-preview-pusher', attr: { style: 'width: 1px; height: 0.1px; margin-bottom: 0px;' } });
