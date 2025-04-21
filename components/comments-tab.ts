@@ -100,11 +100,13 @@ export class CommentsTab extends Component {
         
         return false;
     }
-    
+
     private displayEmptyState(): void {
         this.commentsListEl.empty();
         const emptyStateEl = this.commentsListEl.createDiv({ cls: 'comment-empty-state' });
-        emptyStateEl.setText("No comments found. To add one, use the syntax 'Comment title. Comment body:'");
+        emptyStateEl.createSpan({ text: "No comments found. To add one, use the syntax" });
+        emptyStateEl.createEl('br');
+        emptyStateEl.createSpan({ text: "'Comment title. Comment body:'" });
     }
     
     private renderCommentItem(comment: AnnotationData): void {
