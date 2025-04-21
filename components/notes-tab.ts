@@ -63,14 +63,41 @@ export class NotesTab extends Component {
             
             this.notesListEl.empty();
             
-            if (parsedNotes.length === 0) {
+            const annotations = await annotationService.loadAnnotations(filePath);
+            const savedNotes = annotations.notes;
+            
+            if (parsedNotes.length === 0 && Object.keys(savedNotes).length === 0) {
                 this.displayEmptyState();
                 return;
             }
             
-            for (const note of parsedNotes) {
-                this.renderNoteItem(note, filePath, annotationService);
+            const remainingParsedNotes = [...parsedNotes];
+            
+            for (const noteId in savedNotes) {
+                const savedNote = savedNotes[noteId];
+                const savedNoteMeta = savedNote.noteMeta;
+                
+                if (!savedNoteMeta) continue;
+                
+                const matchIndex = remainingParsedNotes.findIndex(parsedNote => 
+                    savedNoteMeta.linkText === parsedNote.linkText
+                );
+                
+                if (matchIndex !== -1) {
+                    remainingParsedNotes.splice(matchIndex, 1);
+                }
+                // else {
+                //     savedNote.isValid = false;
+                //     savedNote.validationMessage = "Note reference not found in document";
+                // }
+                
+                this.renderNoteItem(savedNoteMeta, filePath, true, savedNote);
             }
+            
+            for (const parsedNote of remainingParsedNotes) {
+                this.renderNoteItem(parsedNote, filePath, false);
+            }
+            
         } catch (error) {
             console.error('Error parsing notes:', error);
             this.displayEmptyState();
@@ -83,43 +110,21 @@ export class NotesTab extends Component {
         emptyStateEl.setText('No notes found.');
     }
     
-    private async renderNoteItem(note: Note, filePath?: string, annotationService?: AnnotationService): Promise<void> {
-        const noteItemEl = this.notesListEl.createDiv({ cls: 'comment-item' });
+    private renderNoteItem(note: Note, filePath: string, isSaved = false, savedAnnotation?: AnnotationData): void {
+        const noteItemEl = this.notesListEl.createDiv({ 
+            cls: 'comment-item' 
+        });
         
         const displayText = note.linkText.replace(/\[\[(.*?)(?:\|.*?)?\]\]/g, '$1');
         
-        let annotationData = noteToAnnotationData(note, filePath || '');
-        annotationData.target = displayText;
-        let originalNote = note;
+        const annotationData = savedAnnotation || noteToAnnotationData(note, filePath);
         
-        if (annotationService && filePath) {
-            try {
-                const annotations = await annotationService.loadAnnotations(filePath);
-                const savedNotes = annotations.notes;
-                
-                let matchedNote: AnnotationData | null = null;
-                
-                for (const noteId in savedNotes) {
-                    const savedNote = savedNotes[noteId];
-                    const savedNoteMeta = savedNote.noteMeta;
-                    
-                    if (savedNoteMeta && savedNoteMeta.linkText === note.linkText) {
-                        matchedNote = savedNote;
-                        originalNote = savedNoteMeta;
-                        break;
-                    }
-                }
-                
-                if (matchedNote) {
-                    annotationData = matchedNote;
-                    
-                    if (matchedNote.isValid === false) {
-                        noteItemEl.addClass('comment-invalid');
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking for existing notes:', error);
-            }
+        if (isSaved && savedAnnotation?.isValid === false) {
+            noteItemEl.addClass('comment-invalid');
+        }
+        
+        if (!isSaved) {
+            noteItemEl.addClass('unsaved-note');
         }
         
         noteItemEl.createDiv({
@@ -127,10 +132,10 @@ export class NotesTab extends Component {
             text: displayText
         });
         
-        noteItemEl.onmousedown = async (e) => {
+        noteItemEl.onmousedown = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.onSelectNote(annotationData, originalNote);
+            this.onSelectNote(annotationData, note);
         };
     }
 
