@@ -203,10 +203,6 @@ export default class ArticleSuggestPlugin extends Plugin {
         });
         
         try {
-            const content = await this.app.vault.read(file);
-            const readerView = annotatorLeaf.view as IdealogsAnnotator;
-            await readerView.setLocalContent(content);
-            
             const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
             for (const leaf of markdownLeaves) {
                 const markdownView = leaf.view as MarkdownView;
