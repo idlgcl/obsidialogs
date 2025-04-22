@@ -18,6 +18,7 @@ export class IdealogsAnnotator extends ItemView {
     private apiService: ApiService;
     private annotationService: AnnotationService;
     private annotationsByWordIndex: Map<number, {annotation: IdealogsAnnotation, isLocal: boolean}[]> = new Map();
+    private localModeAnnotationsByWordIndex: Map<number, {annotation: AnnotationData}[]> = new Map();
     private mode: AnnotatorMode;
     private altKeyHandler: (e: KeyboardEvent) => void;
     private fileOpenHandlerRef: (file: TFile | null) => void;
@@ -85,7 +86,12 @@ export class IdealogsAnnotator extends ItemView {
                 await this.loadAnnotations(true, true)
             }
             else if (this.mode === 'LOCAL') {
-                await this.loadAnnotations(true, false);
+                const fileName = `${this.articleId}.md`;
+                const file = this.app.vault.getAbstractFileByPath(fileName);
+                if (file instanceof TFile) {
+                    const content = await this.app.vault.read(file);
+                    await this.setLocalContent(content);
+                }
             }
             else if (this.mode === 'ANNOTATOR') {
                 await this.loadWebArticleContent();
@@ -249,16 +255,46 @@ export class IdealogsAnnotator extends ItemView {
         this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
         
         await this.render();
-        // this.setupEditorButton();
         
-        // if (this.articleId && this.isOpenedFromCommand()) {
-        //     await this.loadAnnotations();
-        // }
-        await this.loadAnnotations(true, false)
-
-        await this.processIdealogsLinks()
+        // Use reader-style annotation loading for LOCAL mode
+        try {
+            const allWordSpans = this.getAllWordSpans();
+            allWordSpans.forEach(span => {
+                span.classList.remove('idl-annotated-word', 'source-annotation', 'target-annotation');
+                span.removeAttribute('data-has-annotations');
+                
+                const newSpan = span.cloneNode(true) as HTMLElement;
+                span.parentNode?.replaceChild(newSpan, span);
+            });
+            
+            const existingContainers = this.articleContentEl.querySelectorAll('.idl-annotations-container');
+            existingContainers.forEach(el => el.remove());
+            
+            this.annotationsByWordIndex.clear();
+            
+            const annotations = await this.annotationService.loadAnnotations(this.articleId);
+            console.log('annotations', annotations)
+            
+            for (const commentId in annotations.comments) {
+                const comment = annotations.comments[commentId];
+                if (comment.isValid !== false) {
+                    this.highlightComments(comment);
+                }
+            }
+            
+            for (const noteId in annotations.notes) {
+                const note = annotations.notes[noteId];
+                if (note.isValid !== false) {
+                    this.highlightNotes(note);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading annotations:', error);
+        }
+        
+        await this.processIdealogsLinks();
     }
-
+    
 
     async loadWebArticleContent(): Promise<void> {
         try {
@@ -544,6 +580,161 @@ export class IdealogsAnnotator extends ItemView {
         
         this.attachLinkHandlers();
     }
+
+    // for LOCAL mode
+    private highlightComments(comment: AnnotationData): void {
+        if (comment.isValid === false) return;
+    
+        if (!comment.src_txt_display_range || comment.src_txt_display_range.length === 0) return;
+        
+        const indices = comment.src_txt_display_range;
+        
+        indices.forEach((index: number) => {
+            if (!this.localModeAnnotationsByWordIndex.has(index)) {
+                this.localModeAnnotationsByWordIndex.set(index, []);
+            }
+            this.localModeAnnotationsByWordIndex.get(index)?.push({
+                annotation: comment
+            });
+        });
+        
+        indices.forEach((index: number) => {
+            const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
+            if (!span) return;
+            
+            span.classList.add('idl-annotated-word');
+            span.classList.add('source-annotation');
+            span.classList.add('local-annotation');
+            
+            if (!span.hasAttribute('data-has-annotations')) {
+                span.setAttribute('data-has-annotations', 'true');
+                
+                span.addEventListener('click', (e) => {
+                    this.toggleLocalModeAnnotationsForWord(index, span as HTMLElement);
+                    e.stopPropagation();
+                });
+            }
+        });
+    }
+    
+    private highlightNotes(note: AnnotationData): void {
+        if (note.isValid === false) return;
+        
+        const displayText = note.src_txt_display;
+        if (!displayText) return;
+        
+        const allSpans = this.getAllWordSpans();
+        if (allSpans.length === 0) return;
+        
+        const matchingSpans: HTMLElement[] = [];
+        
+        if (note.noteMeta && note.noteMeta.previousWordsIndex && note.noteMeta.linkTextIndex) {
+            const linkIndex = note.noteMeta.linkTextIndex[0];
+            const linkSpan = allSpans.find(span => {
+                const index = parseInt(span.getAttribute('data-word-index') || '-1');
+                return index === linkIndex;
+            });
+            
+            if (linkSpan) {
+                const previousIndices = note.noteMeta.previousWordsIndex;
+                for (const index of previousIndices) {
+                    const span = allSpans.find(s => 
+                        parseInt(s.getAttribute('data-word-index') || '-1') === index
+                    );
+                    if (span) matchingSpans.push(span);
+                }
+                
+                const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
+                const filteredSpans = matchingSpans.filter(span => 
+                    displayWords.some(word => span.textContent === word || 
+                                             span.textContent?.includes(word))
+                );
+                
+                if (filteredSpans.length > 0) {
+                    const indices = filteredSpans.map(span => 
+                        parseInt(span.getAttribute('data-word-index') || '0')
+                    );
+                    
+                    indices.forEach(index => {
+                        if (!this.localModeAnnotationsByWordIndex.has(index)) {
+                            this.localModeAnnotationsByWordIndex.set(index, []);
+                        }
+                        this.localModeAnnotationsByWordIndex.get(index)?.push({
+                            annotation: note,
+                        });
+                    });
+                    
+                    indices.forEach(index => {
+                        const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
+                        if (!span) return;
+                        
+                        span.classList.add('idl-annotated-word');
+                        span.classList.add('source-annotation');
+                        span.classList.add('local-annotation');
+                        
+                        if (!span.hasAttribute('data-has-annotations')) {
+                            span.setAttribute('data-has-annotations', 'true');
+                            
+                            span.addEventListener('click', (e) => {
+                                this.toggleLocalModeAnnotationsForWord(index, span as HTMLElement);
+                                e.stopPropagation();
+                            });
+                        }
+                    });
+                    
+                    return; 
+                }
+            }
+        }
+    }
+
+    private toggleLocalModeAnnotationsForWord(wordIndex: number, element: HTMLElement): void {
+        const existingContainer = this.articleContentEl.querySelector(`.idl-annotations-container[data-for-word="${wordIndex}"]`);
+        
+        if (existingContainer) {
+            existingContainer.remove();
+            return;
+        }
+        
+        const annotations = this.localModeAnnotationsByWordIndex.get(wordIndex);
+        if (!annotations || annotations.length === 0) return;
+        
+        const container = document.createElement('div');
+        container.className = 'idl-annotations-container';
+        container.setAttribute('data-for-word', wordIndex.toString());
+        
+        annotations.forEach(({annotation}, i) => {
+            const annotationEl = document.createElement('div');
+            annotationEl.className = 'idl-annotation-item';
+            
+            const textEl = document.createElement('div');
+            textEl.textContent = annotation.target_txt;
+            annotationEl.appendChild(textEl);
+            
+            if (annotation.target) {
+                const linkEl = document.createElement('div');
+                linkEl.style.marginTop = '4px';
+                linkEl.style.fontSize = '0.85em';
+                
+                const link = document.createElement('a');
+                link.className = 'internal-link';
+                link.setAttribute('href', annotation.target);
+                link.textContent = `${annotation.target}`;
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.app.workspace.openLinkText(annotation.target, '', 'tab');
+                });
+                
+                linkEl.appendChild(link);
+                annotationEl.appendChild(linkEl);
+            }
+            
+            container.appendChild(annotationEl);
+        });
+        
+        element.after(container);
+    }
+    
 
     async onClose() {
         document.removeEventListener('keydown', this.altKeyHandler);
