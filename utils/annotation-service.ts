@@ -283,12 +283,90 @@ export class AnnotationService {
         return true;
     }
 
-    async validateAnnotation(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
+    private escapeRegExp(string: string): string {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    async validateComment(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
         try {
-            if (annotation.kind === 'NOTE') {
-                return await this.validateNote(annotation, sourceFilePath);
+            if (!await this.app.vault.adapter.exists(sourceFilePath)) {
+                return {
+                    isValid: false,
+                    message: `Source document not found: ${sourceFilePath}`
+                };
+            }
+    
+            const sourceContent = await this.app.vault.adapter.read(sourceFilePath);
+            const content = sourceContent.replace(/\[\[.*?\|?\d*?\]\]/g, '');
+            
+            const startRegex = new RegExp(`\\b${this.escapeRegExp(annotation.src_txt_start)}\\b`);
+        
+            const startMatch = startRegex.exec(content);
+            
+            if (!startMatch) {
+                return {
+                    isValid: false,
+                    message: `Text Start not found in document: "${annotation.src_txt_start}"`
+                };
             }
 
+            const exactEndText = this.escapeRegExp(annotation.src_txt_end);
+            const exactEndRegex = new RegExp(`\\b${exactEndText}(?:\\s|$)`, 'g');
+            
+            const endMatch = exactEndRegex.exec(content);
+            
+            if (!endMatch) {
+                return {
+                    isValid: false,
+                    message: `Text End not found in document: "${annotation.src_txt_end}"`
+                };
+            }
+    
+            const startIndex = startMatch.index;
+            const endIndex = endMatch.index + annotation.src_txt_end.length;
+    
+            if (endIndex < startIndex) {
+                return {
+                    isValid: false,
+                    message: `Text end appears before text start in the document`
+                };
+            }
+            
+
+            if (!annotation.src_txt_display.startsWith(annotation.src_txt_start)) {
+                return {
+                    isValid: false,
+                    message: `Text start "${annotation.src_txt_start}" must be the beginning of text display "${annotation.src_txt_display}"`
+                };
+            }
+            
+            const boundedText = content.substring(startIndex, endIndex);
+            const exactDisplayRegex = new RegExp(
+                `${this.escapeRegExp(annotation.src_txt_display)}`
+            );
+            
+            const displayTextFound = exactDisplayRegex.test(boundedText);
+            
+            if (!displayTextFound) {
+                return {
+                    isValid: false,
+                    message: `Display text "${annotation.src_txt_display}" not found between start and end markers`
+                };
+            }
+    
+            return { isValid: true };
+        }
+        catch (error) {
+            console.error(`Error validating annotation: ${error}`);
+            return {
+                isValid: false,
+                message: `Error validating: ${error.message}`
+            };
+        }
+    }
+    
+    async validateNote(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
+        try {
             if (!await this.app.vault.adapter.exists(sourceFilePath)) {
                 return {
                     isValid: false,
@@ -298,46 +376,82 @@ export class AnnotationService {
     
             const sourceContent = await this.app.vault.adapter.read(sourceFilePath);
             
-            const hasStartText = sourceContent.includes(annotation.src_txt_start);
-            const hasEndText = sourceContent.includes(annotation.src_txt_end);
+            const startRegex = new RegExp(`\\b${this.escapeRegExp(annotation.src_txt_start)}\\b`);
             
-            if (!hasStartText || !hasEndText) {
+            const endRegex = new RegExp(`\\b${this.escapeRegExp(annotation.src_txt_end)}\\b`);
+            
+            const startMatch = startRegex.exec(sourceContent);
+            const endMatch = endRegex.exec(sourceContent);
+            
+            if (!startMatch) {
                 return {
                     isValid: false,
-                    message: `Text boundaries not found in document: "${annotation.src_txt_start}" or "${annotation.src_txt_end}"`
+                    message: `Text Start not found in document: "${annotation.src_txt_start}"`
                 };
             }
+            if (!endMatch) {
+                return {
+                    isValid: false,
+                    message: `Text End not found in document: "${annotation.src_txt_end}"`
+                };
+            }
+
+            const startIndex = startMatch.index;
+            const endIndex = endMatch.index + annotation.src_txt_end.length;
     
-            const startIndex = sourceContent.indexOf(annotation.src_txt_start);
-            const endIndex = sourceContent.lastIndexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
+            if (endIndex < startIndex) {
+                return {
+                    isValid: false,
+                    message: `Text end appears before text start in the document`
+                };
+            }
+            
+
+            const boundedText = sourceContent.substring(startIndex, endIndex);
     
-            if (startIndex >= 0 && endIndex > startIndex) {
-                const boundedText = sourceContent.substring(startIndex, endIndex);
-                if (!boundedText.includes(annotation.src_txt_display)) {
-                    return {
-                        isValid: false,
-                        message: `Display text "${annotation.src_txt_display}" not found between start and end markers`
-                    };
-                }
+            const displayWords = annotation.src_txt_display.split(/\s+/);
+            let displayTextFound = false;
+
+            if (displayWords.length === 1) {
+                const singleWordRegex = new RegExp(`\\b${this.escapeRegExp(annotation.src_txt_display)}\\b`);
+                displayTextFound = singleWordRegex.test(boundedText);
             } else {
+                const flexibleSpacingRegex = new RegExp(
+                    displayWords.map(word => `\\b${this.escapeRegExp(word)}\\b`).join('\\s+')
+                );
+                displayTextFound = flexibleSpacingRegex.test(boundedText);
+            }
+
+            if (!displayTextFound) {
                 return {
                     isValid: false,
-                    message: `Cannot locate proper boundaries for display text validation`
+                    message: `Display text "${annotation.src_txt_display}" not found between start and end markers`
                 };
             }
-            
-            const currentText = sourceContent.substring(startIndex, endIndex);
-            
-            const normalizedCurrentText = currentText.replace(/\[\[.*?\|?\d*?\]\]/g, '');
-            const normalizedSavedText = annotation.src_txt.replace(/\[\[.*?\|?\d*?\]\]/g, '');
-            
-            if (normalizedCurrentText.trim().contains(normalizedSavedText) === false) {
-                return {
-                    isValid: false,
-                    message: `Text content has changed.`
-                };
+
+            if (annotation.target) {
+                const expectedLinkText = `[[${annotation.target}]]`;
+                
+                const displayTextRegex = new RegExp(
+                    displayWords.map(word => `\\b${this.escapeRegExp(word)}\\b`).join('\\s+')
+                );
+                const displayMatch = displayTextRegex.exec(sourceContent);
+                
+                if (displayMatch) {
+                    const afterDisplayTextPos = displayMatch.index + displayMatch[0].length;
+                    const textAfterDisplay = sourceContent.substring(afterDisplayTextPos, afterDisplayTextPos + 100).trim();
+                    
+                    const linkRegex = new RegExp(`^\\s*${this.escapeRegExp(expectedLinkText)}`);
+                    
+                    if (!linkRegex.test(textAfterDisplay)) {
+                        return {
+                            isValid: false,
+                            message: `Display text "${annotation.src_txt_display}" is not followed by the expected link "${expectedLinkText}"`
+                        };
+                    }
+                }
             }
-            
+    
             return { isValid: true };
         }
         catch (error) {
@@ -349,97 +463,32 @@ export class AnnotationService {
         }
     }
 
-    async validateNote(annotation: AnnotationData, sourceFilePath: string): Promise<{isValid: boolean, message?: string}> {
-        try {
-            if (!await this.app.vault.adapter.exists(sourceFilePath)) {
-                return {
-                    isValid: false,
-                    message: `Source document not found: ${sourceFilePath}`
-                };
-            }
-    
-            let sourceContent = await this.app.vault.adapter.read(sourceFilePath);
-            sourceContent = sourceContent.replace(/\[\[.*?\|?\d*?\]\]/g, '');
-
-            if (annotation.src_txt_start && !sourceContent.includes(annotation.src_txt_start)) {
-                return {
-                    isValid: false,
-                    message: `Start text "${annotation.src_txt_start}" not found in document`
-                };
-            }
-            
-            if (annotation.src_txt_end && !sourceContent.includes(annotation.src_txt_end)) {
-                return {
-                    isValid: false,
-                    message: `End text "${annotation.src_txt_end}" not found in document`
-                };
-            }
-            
-            if (annotation.src_txt_display && annotation.src_txt_start && annotation.src_txt_end) {
-                const startIdx = sourceContent.indexOf(annotation.src_txt_start);
-                const endIdx = sourceContent.indexOf(annotation.src_txt_end) + annotation.src_txt_end.length;
-                
-                if (startIdx >= 0 && endIdx > startIdx) {
-                    const boundedText = sourceContent.substring(startIdx, endIdx);
-                    if (!boundedText.includes(annotation.src_txt_display)) {
-                        return {
-                            isValid: false,
-                            message: `Display text "${annotation.src_txt_display}" not found between start and end markers`
-                        };
-                    }
-                } else {
-                    return {
-                        isValid: false,
-                        message: `Cannot locate proper boundaries for display text validation`
-                    };
-                }
-            } else if (annotation.src_txt_display) {
-                if (!sourceContent.includes(annotation.src_txt_display)) {
-                    return {
-                        isValid: false,
-                        message: `Display text "${annotation.src_txt_display}" not found in document`
-                    };
-                }
-            }
-            
-            return { isValid: true };
-        }
-        catch (error) {
-            console.error(`Error validating note: ${error}`);
-            return {
-                isValid: false,
-                message: `Error validating: ${error.message}`
-            };
-        }
-    }
-
-    async validateAllAnnotations(filePath: string): Promise<Record<string, {isValid: boolean, message?: string}>> {
-        const results: Record<string, {isValid: boolean, message?: string}> = {};
+    async validateAllAnnotations(filePath: string): Promise<void> {
         
         try {
             const annotations = await this.loadAnnotations(filePath);
 
             for (const commentId in annotations.comments) {
                 const comment = annotations.comments[commentId];
-                results[commentId] = await this.validateAnnotation(comment, filePath);
+                const {isValid, message} = await this.validateComment(comment, filePath);
                 
-                comment.isValid = results[commentId].isValid;
-                comment.validationMessage = results[commentId].message;
+                comment.isValid = isValid;
+                comment.validationMessage = message;
                 
                 if (comment.target && comment.target !== filePath) {
-                    await this.updateTargetFileAnnotation(comment, 'comment');
+                    await this.updateTargetFileAnnotation(comment);
                 }
             }
             
             for (const noteId in annotations.notes) {
                 const note = annotations.notes[noteId];
-                results[noteId] = await this.validateAnnotation(note, filePath);
+                const {isValid, message} = await this.validateNote(note, filePath);
                 
-                note.isValid = results[noteId].isValid;
-                note.validationMessage = results[noteId].message;
+                note.isValid = isValid;
+                note.validationMessage = message;
   
                 if (note.target && note.target !== filePath) {
-                    await this.updateTargetFileAnnotation(note, 'note');
+                    await this.updateTargetFileAnnotation(note);
                 }
             }
             
@@ -448,21 +497,19 @@ export class AnnotationService {
         } catch (error) {
             console.error(`Error in validateAllAnnotations: ${error}`);
         }
-        
-        return results;
     }
 
-    async updateTargetFileAnnotation(annotation: AnnotationData, type: 'comment' | 'note'): Promise<void> {
+    async updateTargetFileAnnotation(annotation: AnnotationData): Promise<void> {
         try {
             const targetPath = annotation.target;
             const targetAnnotations = await this.loadAnnotations(targetPath);
             
-            if (type === 'comment' && targetAnnotations.comments[annotation.id]) {
+            if (annotation.kind === 'COMMENT' && targetAnnotations.comments[annotation.id]) {
                 targetAnnotations.comments[annotation.id].isValid = annotation.isValid;
                 targetAnnotations.comments[annotation.id].validationMessage = annotation.validationMessage;
    
             } 
-            else if (type === 'note' && targetAnnotations.notes[annotation.id]) {
+            else if (annotation.kind === 'NOTE' && targetAnnotations.notes[annotation.id]) {
                 targetAnnotations.notes[annotation.id].isValid = annotation.isValid;
                 targetAnnotations.notes[annotation.id].validationMessage = annotation.validationMessage;
             }
