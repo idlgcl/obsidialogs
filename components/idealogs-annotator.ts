@@ -559,7 +559,7 @@ export class IdealogsAnnotator extends ItemView {
             cls: 'inline-title', 
             text: this.articleTitle || this.articleId,
             attr: { 
-                contenteditable: 'true',
+                contenteditable: 'false',
                 spellcheck: 'true',
                 autocapitalize: 'on',
                 tabindex: '-1',
