@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon, TFile, MarkdownView, Notice } from 'obsidian';
+import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon, TFile, MarkdownView, Notice, ViewStateResult } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 import { ApiService } from '../utils/api';
 import { IdealogsAnnotation } from '../types';
@@ -26,12 +26,9 @@ export class IdealogsAnnotator extends ItemView {
     private writingNumbers: Map<string, number> = new Map();
     private nextWritingNumber = 1;
 
-    history: TFile[] = [];
-    historyIndex = -1;
-
     constructor(leaf: WorkspaceLeaf, mode?: AnnotatorMode) {
         super(leaf);
-
+        this.navigation = true;
         this.writingNumbers = new Map();
         this.nextWritingNumber = 1;
 
@@ -75,7 +72,7 @@ export class IdealogsAnnotator extends ItemView {
         this.mode = mode;
     }
 
-    async setState(state: any, result: any): Promise<void> {
+    async setState(state: any, result: ViewStateResult): Promise<void> {
         this.writingNumbers = new Map();
         this.nextWritingNumber = 1;
 
@@ -84,6 +81,9 @@ export class IdealogsAnnotator extends ItemView {
         }
         if (state && state.articleId) {
             this.articleId = state.articleId;
+
+            result.history = true;
+
             if (this.mode === 'WEB') {
                 await this.loadWebArticleContent();
                 await this.loadAnnotations(true, true)
@@ -100,6 +100,13 @@ export class IdealogsAnnotator extends ItemView {
                 await this.loadWebArticleContent();
             }
         }
+    }
+
+    getState(): any {
+        return {
+            articleId: this.articleId,
+            mode: this.mode
+        };
     }
 
 
