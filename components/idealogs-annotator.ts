@@ -75,6 +75,7 @@ export class IdealogsAnnotator extends ItemView {
     async setState(state: any, result: ViewStateResult): Promise<void> {
         this.writingNumbers = new Map();
         this.nextWritingNumber = 1;
+        this.localModeAnnotationsByWordIndex = new Map()
 
         if (state && state.mode) {
             this.mode = state.mode;
