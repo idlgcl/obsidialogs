@@ -260,13 +260,14 @@ export class IdealogsAnnotator extends ItemView {
 
     async setLocalContent(content: string): Promise<void> {
         this.articleContent = content;
+
+        this.articleTitle = this.articleId;
     
         this.articleHeaderEl.empty();
         this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
         
         await this.render();
         
-        // Use reader-style annotation loading for LOCAL mode
         try {
             const allWordSpans = this.getAllWordSpans();
             allWordSpans.forEach(span => {
