@@ -5,6 +5,7 @@ import { CommentForm } from "./comment-form";
 import { NoteForm } from "./note-form";
 import { AnnotationData, AnnotationService } from '../utils/annotation-service';
 import { Note } from "utils/note-parser";
+import { IDEALOGS_ANNOTATOR } from "./idealogs-annotator";
 
 export const IDL_RIGHT_PANEL = 'idl-right-panel';
 
@@ -16,6 +17,8 @@ export class RightPanel extends ItemView {
     private component: Component;
     private activeFilePath: string;
     private annotationService: AnnotationService;
+    private lastActiveFilePath = '';
+
 
     constructor(leaf: WorkspaceLeaf, annotationService: AnnotationService) {
         super(leaf);
@@ -258,9 +261,19 @@ export class RightPanel extends ItemView {
 
     private setActiveFilePath(): void {
         const file = this.app.workspace.getActiveFile();
-        this.activeFilePath = file?.path || '';
-
-        if (this.activeFilePath === '') {
+        const formActive = this.commentForm !== null || this.noteForm !== null;
+        const annotatorOpen = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR).length > 0;
+        
+        if (file?.path) {
+            this.activeFilePath = file.path;
+            this.lastActiveFilePath = file.path;
+        } else if (formActive || annotatorOpen) {
+            this.activeFilePath = this.lastActiveFilePath;
+        } else {
+            this.activeFilePath = '';
+        }
+        
+        if (this.activeFilePath === '' && !annotatorOpen && !formActive) {
             this.leaf.detach();
         } else {
             this.updateAnnotations();
