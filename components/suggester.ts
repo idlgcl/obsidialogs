@@ -91,7 +91,7 @@ export class ArticleSuggest extends EditorSuggest<Article> {
         const bracketStart = line.lastIndexOf('[[', cursor.ch);
         
         if (bracketStart >= 0) {
-            const articleLink = `[[${article.id}]]`;
+            const articleLink = `[[@${article.id}]]`;
             
             editor.replaceRange(
                 articleLink,
