@@ -432,6 +432,13 @@ export class CommentForm extends Component {
                 srcIndices: comment.indices,
                 sourceFilePath: this.activeFilePath
             });
+
+            const articleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+            if (articleLeaves.length > 0) {
+                const articleView = articleLeaves[0].view as IdealogsAnnotator;
+                await articleView.loadAnnotations(true, true);
+            }
+            
             
             new Notice('Comment saved successfully');
             this.onBack();
@@ -535,7 +542,7 @@ export class CommentForm extends Component {
         });
         
         spans.forEach(span => {
-            span.classList.add('idl-highlighted-word');
+            span.classList.add('idl-highlighted-word', 'idl-annotated-word');
         });
     }
     
