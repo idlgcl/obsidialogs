@@ -3,7 +3,7 @@ import { ApiService } from './api';
 import { IDL_RIGHT_PANEL } from 'components/right-panel';
 import { AnnotationService } from './annotation-service';
 
-const IDEALOGS_FILE_PATTERNS = ['Ix', '0x', 'Tx', 'Fx'];
+const IDEALOGS_FILE_PATTERNS = ['@Ix', '@0x', '@Tx', '@Fx'];
 
 export class FileHandler {
     private app: App;
