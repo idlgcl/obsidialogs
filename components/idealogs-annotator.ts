@@ -26,6 +26,9 @@ export class IdealogsAnnotator extends ItemView {
     private writingNumbers: Map<string, number> = new Map();
     private nextWritingNumber = 1;
 
+    history: TFile[] = [];
+    historyIndex = -1;
+
     constructor(leaf: WorkspaceLeaf, mode?: AnnotatorMode) {
         super(leaf);
 
@@ -273,7 +276,6 @@ export class IdealogsAnnotator extends ItemView {
             this.annotationsByWordIndex.clear();
             
             const annotations = await this.annotationService.loadAnnotations(this.articleId);
-            console.log('annotations', annotations)
             
             for (const commentId in annotations.comments) {
                 const comment = annotations.comments[commentId];
