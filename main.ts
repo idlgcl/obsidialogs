@@ -152,7 +152,8 @@ export default class ArticleSuggestPlugin extends Plugin {
         // @ts-ignore 
         workspace.openLinkText = function(linktext, sourcePath, newLeaf, openViewState) {
             if (self.isIdealogsArticle(linktext)) {
-                self.openAnnotatorViewByLinkClick(linktext);
+                const link = linktext.slice(1)
+                self.openAnnotatorViewByLinkClick(link);
                 return true;
             }
             
@@ -161,7 +162,7 @@ export default class ArticleSuggestPlugin extends Plugin {
     }
     
     private isIdealogsArticle(id: string): boolean {
-        return ['Tx', 'Ix', 'Fx', '0x'].some(prefix => id.startsWith(prefix));
+        return ['@Tx', '@Ix', '@Fx', '@0x'].some(prefix => id.startsWith(prefix));
     }
     
     async openAnnotatorViewByLinkClick(articleId: string): Promise<void> {

@@ -42,11 +42,11 @@ export function parseNotes(text: string): Note[] {
         for (let i = 0; i < paragraphWords.length; i++) {
             const word = paragraphWords[i];
             
-            const linkMatch = word.match(/\[\[(Tx[^\]]+)\]\]/);
+            const linkMatch = word.match(/\[\[@(Tx[^\]]+)\]\]/);
             
             if (linkMatch && i > 0) { 
                 const linkText = linkMatch[0]; 
-                
+
                 const prevStartIdx = Math.max(0, i - 5);
                 const previousWords = paragraphWords.slice(prevStartIdx, i).join(' ');
                 
@@ -104,7 +104,7 @@ export function noteToAnnotationData(note: Note, filePath: string): AnnotationDa
         src_txt: '',
         src_range: [],
         src_txt_display_range: [],
-        target: note.linkText.replace(/\[\[(Tx[^\]]+)\]\]/g, '$1'),
+        target: note.linkText.replace(/\[\[@(Tx[^\]]+)\]\]/g, '$1'),
         target_txt_display: '',
         target_txt_start: '',
         target_txt_end: '',
