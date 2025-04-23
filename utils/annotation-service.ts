@@ -378,7 +378,7 @@ export class AnnotationService {
             
             const startRegex = new RegExp(`\\b${this.escapeRegExp(annotation.src_txt_start)}\\b`);
             
-            const endRegex = new RegExp(`\\b${this.escapeRegExp(annotation.src_txt_end)}\\b`);
+            const endRegex = new RegExp(`${this.escapeRegExp(annotation.src_txt_end)}`);
             
             const startMatch = startRegex.exec(sourceContent);
             const endMatch = endRegex.exec(sourceContent);
@@ -430,7 +430,7 @@ export class AnnotationService {
             }
 
             if (annotation.target) {
-                const expectedLinkText = `[[${annotation.target}]]`;
+                const expectedLinkText = `[[@${annotation.target}]]`;
                 
                 const displayTextRegex = new RegExp(
                     displayWords.map(word => `\\b${this.escapeRegExp(word)}\\b`).join('\\s+')
