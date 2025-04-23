@@ -138,11 +138,11 @@ export class IdealogsAnnotator extends ItemView {
                 const href = link.getAttribute('href');
                 if (href) {
                     let kind = '';
-                    if (href.startsWith('Tx')) {
+                    if (href.startsWith('@Tx')) {
                         kind = 'writing';
-                    } else if (href.startsWith('Fx')) {
+                    } else if (href.startsWith('@Fx')) {
                         kind = 'question';
-                    } else if (href.startsWith('Ix')) {
+                    } else if (href.startsWith('@Ix')) {
                         kind = 'insight';
                     }
                     
