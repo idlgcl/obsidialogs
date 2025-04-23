@@ -523,24 +523,27 @@ export class IdealogsAnnotator extends ItemView {
             
             annotationEl.appendChild(textEl);
             
-            const relatedArticleId = isFromCurrentArticle ? annotation.targetId : annotation.sourceId;
-            if (relatedArticleId && relatedArticleId !== this.articleId) {
-                const linkEl = document.createElement('div');
-                linkEl.style.marginTop = '4px';
-                linkEl.style.fontSize = '0.85em';
-                
-                const link = document.createElement('a');
-                link.className = 'internal-link';
-                link.setAttribute('href', relatedArticleId);
-                link.textContent = relatedArticleId;
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.app.workspace.openLinkText(relatedArticleId, '', 'tab');
-                });
-                
-                linkEl.appendChild(link);
-                annotationEl.appendChild(linkEl);
+            const displayId = annotation.sourceId;
+            console.log(displayId)
+        
+            const linkEl = document.createElement('div');
+            linkEl.style.marginTop = '4px';
+            linkEl.style.fontSize = '0.85em';
+            
+            const link = document.createElement('a');
+            link.className = 'internal-link';
+            if (displayId.endsWith('.md')) {
+                link.textContent = displayId;
+            } else {
+                link.textContent = `@${displayId}`;
             }
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.app.workspace.openLinkText(annotation.sourceId, '', 'tab');
+            });
+            
+            linkEl.appendChild(link);
+            annotationEl.appendChild(linkEl);
             
             container.appendChild(annotationEl);
         });
@@ -730,7 +733,7 @@ export class IdealogsAnnotator extends ItemView {
                 const link = document.createElement('a');
                 link.className = 'internal-link';
                 link.setAttribute('href', annotation.target);
-                link.textContent = `${annotation.target}`;
+                link.textContent = `@${annotation.target}`;
                 link.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.app.workspace.openLinkText(annotation.target, '', 'tab');
