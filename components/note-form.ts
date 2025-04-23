@@ -319,6 +319,12 @@ export class NoteForm extends Component {
                     targetDisplayIndices,
                     noteMeta: this.note // TODO: we need to update noteMeta
                 });
+
+                const articleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+                if (articleLeaves.length > 0) {
+                    const articleView = articleLeaves[0].view as IdealogsAnnotator;
+                    await articleView.loadAnnotations(true, true);
+                }
                 
                 new Notice('Note saved successfully');
                 this.onBack();
@@ -425,7 +431,7 @@ export class NoteForm extends Component {
         });
         
         spans.forEach(span => {
-            span.classList.add('idl-highlighted-word');
+            span.classList.add('idl-highlighted-word', 'idl-annotated-word');
         });
     }
     
