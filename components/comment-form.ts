@@ -73,7 +73,8 @@ export class CommentForm extends Component {
         this.selectedArticle = {
             id: commentData.target,
             title: commentData.target,
-            kind: ''
+            kind: '',
+            isParent: false
         };
         
         this.targetTextStartInput.value = commentData.target_txt_start;
