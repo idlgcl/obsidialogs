@@ -296,7 +296,11 @@ export class IdealogsAnnotator extends ItemView {
             for (const noteId in annotations.notes) {
                 const note = annotations.notes[noteId];
                 if (note.isValid !== false) {
-                    this.highlightNotes(note);
+                    const article = await this.apiService.fetchArticleById(note.target)
+                    console.log(article, note.target)
+                    if (!article.isParent) {
+                        this.highlightNotes(note);
+                    }
                 }
             }
         } catch (error) {

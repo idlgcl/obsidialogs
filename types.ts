@@ -14,6 +14,7 @@ export interface Article {
     id: string;
     title: string;
     kind: string;
+    isParent: boolean;
     ledeHtml?: string;
     authorId?: number;
     orgId?: number;
