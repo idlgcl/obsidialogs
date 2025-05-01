@@ -26,6 +26,7 @@ export class NoteForm extends Component {
     private annotationService: AnnotationService;
     public isTargetArticleSelection = false;
     private noteData: AnnotationData | undefined;
+    private targetArticle: Article;
 
     private note?: Note;
 
@@ -36,8 +37,11 @@ export class NoteForm extends Component {
     private articleAutocomplete: ArticleAutocompleteField | null = null;
     private selectedArticle: Article | null = null;
     private targetTextStartInput: HTMLInputElement;
+    private targetTextStartField: HTMLElement;
     private targetTextEndInput: HTMLInputElement;
+    private targetTextEndField: HTMLElement;
     private targetTextDisplayInput: HTMLInputElement;
+    private targetTextDisplayField: HTMLElement;
     
     constructor(options: NoteFormOptions) {
         super();
@@ -58,7 +62,7 @@ export class NoteForm extends Component {
         }
     }
     
-    private populateForm(noteData: AnnotationData): void {
+    private async populateForm(noteData: AnnotationData): Promise<void> {
         this.textStart.value = noteData.src_txt_start || '';
         this.textEnd.value = noteData.src_txt_end || '';
         this.textDisplay.value = noteData.src_txt_display || '';
@@ -71,15 +75,24 @@ export class NoteForm extends Component {
         
         if (noteData.target) {
             this.articleAutocomplete?.setDisabled(true);
+
+            this.targetArticle = await this.apiService.fetchArticleById(noteData.target)
             
             this.selectedArticle = {
                 id: noteData.target,
                 title: noteData.target,
-                kind: ''
+                kind: '',
+                isParent: this.targetArticle.isParent
             };
             
             if (this.selectedArticle) {
                 this.openArticleView(this.selectedArticle);
+            }
+
+            if (this.targetArticle.isParent) {
+                this.targetTextStartField.hidden = true;
+                this.targetTextEndField.hidden = true;
+                this.targetTextDisplayField.hidden = true;
             }
         }
     }
@@ -144,23 +157,23 @@ export class NoteForm extends Component {
         });
         this.addChild(this.articleAutocomplete);
     
-        const targetDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
-        targetDisplayField.createEl('label', { text: 'Target Text Display' });
-        this.targetTextDisplayInput = targetDisplayField.createEl('input', { 
+        this.targetTextDisplayField = formContainer.createDiv({ cls: 'idl-form-field' });
+        this.targetTextDisplayField.createEl('label', { text: 'Target Text Display' });
+        this.targetTextDisplayInput = this.targetTextDisplayField.createEl('input', { 
             type: 'text'
         });
     
         const targetSrcRangeFields = formContainer.createDiv({ cls: 'idl-form-field idl-range-field' });
          
-        const targetStartField = targetSrcRangeFields.createDiv({ cls: 'idl-start-field' });
-        targetStartField.createEl('label', { text: 'Target Text Start' });
-        this.targetTextStartInput = targetStartField.createEl('input', { 
+        this.targetTextStartField = targetSrcRangeFields.createDiv({ cls: 'idl-start-field' });
+        this.targetTextStartField.createEl('label', { text: 'Target Text Start' });
+        this.targetTextStartInput = this.targetTextStartField.createEl('input', { 
             type: 'text'
         });
         
-        const targetEndField = targetSrcRangeFields.createDiv({ cls: 'idl-end-field' });
-        targetEndField.createEl('label', { text: 'Target Text End' });
-        this.targetTextEndInput = targetEndField.createEl('input', { 
+        this.targetTextEndField = targetSrcRangeFields.createDiv({ cls: 'idl-end-field' });
+        this.targetTextEndField.createEl('label', { text: 'Target Text End' });
+        this.targetTextEndInput = this.targetTextEndField.createEl('input', { 
             type: 'text'
         });
     
@@ -242,6 +255,37 @@ export class NoteForm extends Component {
         const targetTextStart = this.targetTextStartInput.value.trim();
         const targetTextEnd = this.targetTextEndInput.value.trim();
         const targetTextDisplay = this.targetTextDisplayInput.value.trim();
+
+        if (this.targetArticle.isParent) {
+            try {
+                const noteId = this.note?.id;
+                
+                await this.annotationService.saveNote({
+                    id: noteId,
+                    sourceFilePath: this.activeFilePath,
+                    textStart,
+                    textEnd,
+                    textDisplay,
+                    targetArticle: targetArticlePath,
+                    targetTextStart,
+                    targetTextEnd,
+                    targetTextDisplay,
+                    noteMeta: this.note // TODO: we need to update noteMeta
+                });
+
+                const articleLeaves = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+                if (articleLeaves.length > 0) {
+                    const articleView = articleLeaves[0].view as IdealogsAnnotator;
+                    await articleView.loadAnnotations(true, true);
+                }
+                
+                new Notice('Note saved successfully');
+                this.onBack();
+                return;
+            } catch (error) {
+                new Notice(`Error saving note: ${error.message}`);
+            }
+        }
         
         if (!targetArticlePath || !targetTextStart || !targetTextEnd || !targetTextDisplay) {
             new Notice('Please fill all target fields');
