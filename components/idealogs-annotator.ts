@@ -1,3 +1,5 @@
+import { parseYaml } from 'obsidian';
+
 import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon, TFile, MarkdownView, Notice, ViewStateResult } from 'obsidian';
 import { WordProcessor } from '../utils/word-processor';
 import { ApiService } from '../utils/api';
@@ -22,6 +24,7 @@ export class IdealogsAnnotator extends ItemView {
     private mode: AnnotatorMode;
     private altKeyHandler: (e: KeyboardEvent) => void;
     private fileOpenHandlerRef: (file: TFile | null) => void;
+    private isParentArticle = false;
 
     private writingNumbers: Map<string, number> = new Map();
     private nextWritingNumber = 1;
@@ -159,6 +162,19 @@ export class IdealogsAnnotator extends ItemView {
     }
     
     private attachLinkHandlers(): void {
+        const childArticleLinks = this.articleContentEl.querySelectorAll('a.idl-article-link');
+        childArticleLinks.forEach(link => {
+            if (link instanceof HTMLAnchorElement) {
+                link.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const href = link.getAttribute('href');
+                    if (href) {
+                        this.app.workspace.openLinkText(href, '', false);
+                    }
+                });
+            }
+        });
+
         const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
         internalLinks.forEach(link => {
             if (link instanceof HTMLAnchorElement) {
@@ -328,6 +344,7 @@ export class IdealogsAnnotator extends ItemView {
             this.articleHeaderEl.empty();
             if (articleDetails.status === 'fulfilled') {
                 this.articleTitle = articleDetails.value.title || this.articleId;
+                this.isParentArticle = articleDetails.value.isParent
             } else {
                 this.articleTitle = this.articleId;
             }
@@ -555,6 +572,123 @@ export class IdealogsAnnotator extends ItemView {
         element.after(container);
     }
 
+    private formatBibliography(data: any): string {
+        try {
+            let result = '';
+            
+            // Format authors
+            if (data.author && Array.isArray(data.author)) {
+                const authorCount = data.author.length;
+                const authors = data.author.map((author: any, index: number) => {
+                    if (author.family && author.given) {
+                        const initial = author.given.charAt(0);
+                        const formattedAuthor = `${author.family}, ${initial}.`;
+                        
+                        // connectors between authors
+                        if (index === authorCount - 2) {
+                            return formattedAuthor + ' & ';
+                        } else if (index < authorCount - 2) {
+                            return formattedAuthor + ', ';
+                        }
+                        return formattedAuthor;
+                    }
+                    return author.name || '';
+                }).join('');
+                
+                result += authors;
+            }
+            
+            // Date in parentheses
+            const hasYear = data.issued && data.issued.year;
+            result += ' ';
+            result += '(';
+            if (hasYear) {
+                result += data.issued.year;
+            } else {
+                result += 'n.d.';
+            }
+            result += ')';
+            result += '.';
+            
+            // Title
+            if (data.title) {
+                result += ' ';
+                result += data.title;
+            }
+            
+            // Volume in parentheses
+            if (data.volume) {
+                result += ' ';
+                result += `(Vol. ${data.volume})`;
+                result += '.';
+            }
+            
+            // Publisher
+            if (data.publisher) {
+                result += ' ';
+                result += data.publisher;
+                result += '.';
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('Error formatting bibliography:', error);
+            return 'Error formatting bibliography data.';
+        }
+    }
+
+
+    private async renderParentArticle(containerEl: HTMLElement): Promise<void> {
+        try {
+            let yamlContent = this.articleContent;
+            if (yamlContent.startsWith("---") && yamlContent.includes("---", 3)) {
+                const endIndex = yamlContent.indexOf("---", 3);
+                yamlContent = yamlContent.substring(3, endIndex).trim();
+            }
+            
+            const parsedYaml = parseYaml(yamlContent);
+            
+            const bibContainer = containerEl.createDiv({
+                cls: 'idl-bib-container'
+            });
+            
+            const bibText = this.formatBibliography(parsedYaml);
+            bibContainer.setText(bibText);
+            
+            if (parsedYaml.children && Array.isArray(parsedYaml.children)) {
+                for (const child of parsedYaml.children) {
+                    if (child && typeof child === 'object' && child.id) {
+                        const childContainer = containerEl.createDiv({
+                            cls: 'idl-child-container'
+                        });
+                        
+                        const flexContainer = childContainer.createDiv({
+                            cls: 'idl-flex-container'
+                        });
+                        
+                        const linkContainer = flexContainer.createDiv();
+                        const link = linkContainer.createEl('a', {
+                            cls: 'idl-article-link ',
+                            text: child.id
+                        });
+                        link.setAttribute('href', child.id);
+                        
+                        const titleContainer = flexContainer.createDiv();
+                        const titleText = child.title.replace(` - ${child.id}`, '');
+                        titleContainer.setText(titleText);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error rendering parent article:', error);
+            containerEl.createEl('p', {
+                text: 'Error rendering parent article content.'
+            });
+        }
+    }
+    
+    
+
 
     private async render(): Promise<void> {
         this.articleHeaderEl.empty();
@@ -584,17 +718,23 @@ export class IdealogsAnnotator extends ItemView {
                 enterkeyhint: 'done'
             }
         });
+
+        console.log('article-content', this.isParentArticle, this.articleContent)
         
-        await MarkdownRenderer.render(
-            this.app,
-            this.articleContent,
-            previewSection,
-            '',
-            this.component
-        );
-        
-        const processor = new WordProcessor({ articleId: this.articleId });
-        processor.processMarkdown(previewSection);
+        if (this.isParentArticle) {
+            await this.renderParentArticle(previewSection);
+        } else {
+            await MarkdownRenderer.render(
+                this.app,
+                this.articleContent,
+                previewSection,
+                '',
+                this.component
+            );
+            
+            const processor = new WordProcessor({ articleId: this.articleId });
+            processor.processMarkdown(previewSection);
+        }
         
         this.attachLinkHandlers();
     }
