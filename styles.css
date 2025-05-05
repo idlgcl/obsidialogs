@@ -323,3 +323,36 @@
     text-decoration-color: #ff5555;
     text-decoration-style: wavy;
 }
+
+/* parent article */
+
+.idl-bib-container {
+    font-style: italic;
+    border: 1px solid var(--background-modifier-border);
+    padding: 8px;
+    background-color: var(--background-secondary);
+    margin-bottom: 0; 
+}
+
+.idl-child-container {
+    font-size: 0.875rem;
+    border: 1px solid var(--background-modifier-border);
+    padding: 8px;
+    border-top: 0;
+    margin-top: 0;
+}
+
+.idl-flex-container {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.idl-article-link {
+    color: var(--text-accent);
+}
+
+.idl-article-link:hover {
+    text-decoration: underline;
+}
