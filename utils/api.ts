@@ -20,7 +20,7 @@ export interface AnnotationsResponse {
 
 export class ApiService {
     async fetchArticleSuggestions(searchTerm: string): Promise<ArticleResponse> {
-        const kinds = ['Writing', 'Question', 'Insight', 'Subject'].join('&kind=');
+        const kinds = ['Writing', 'Question', 'Insight'].join('&kind=');
         const url = `${API_ENDPOINT}/articles?kind=${kinds}&include_parent=True&query=${encodeURIComponent(searchTerm)}`;
         
         const response = await fetch(url);
