@@ -10,6 +10,7 @@ module.exports = {
     "^utils/(.*)$": "<rootDir>/utils/$1",
   },
   collectCoverageFrom: [
+    "main.ts",
     "utils/**/*.ts",
     "components/suggester.ts",
     "components/article-input.ts",
