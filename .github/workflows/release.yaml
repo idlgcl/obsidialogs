@@ -25,6 +25,7 @@ jobs:
       - name: Build plugin
         env:
           API_ENDPOINT: ${{ vars.ARTICLES_URL }}
+          ANNOTATION_ENDPOINT: ${{ vars.ANNOTATION_ENDPOINT }}
         run: npm run build
 
       - name: Verify API endpoint
