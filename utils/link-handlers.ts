@@ -1,5 +1,6 @@
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { WRITING_LINK_PREFIX, COMMON_LINK_PREFIXES } from "../constants";
+import { ApiService } from "./api";
 
 export class WritingLinkHandler {
   handleLink(linkText: string, sourcePath: string): void {
@@ -15,16 +16,49 @@ export class WritingLinkHandler {
 }
 
 export class CommonLinkHandler {
-  handleLink(linkText: string, sourcePath: string): void {
-    const prefix = linkText.substring(0, 3); // @Fx or @Ix
-    const id = linkText.substring(3);
+  private app: App;
+  private apiService: ApiService;
 
-    console.log("Common link clicked:", {
-      fullLink: linkText,
-      prefix: prefix,
-      id: id,
-      sourcePath: sourcePath,
-    });
+  constructor(app: App, apiService: ApiService) {
+    this.app = app;
+    this.apiService = apiService;
+  }
+
+  async handleLink(linkText: string, sourcePath: string): Promise<void> {
+    try {
+      const atIndex = linkText.indexOf("@");
+      if (atIndex === -1) {
+        console.error("Invalid link format:", linkText);
+        return;
+      }
+
+      const articleId = linkText.substring(atIndex + 1);
+
+      console.log("Common link clicked:", {
+        fullLink: linkText,
+        articleId: articleId,
+        sourcePath: sourcePath,
+      });
+
+      await this.apiService.fetchArticleById(articleId);
+
+      const content = await this.apiService.fetchFileContent(articleId);
+
+      const fileName = `${articleId}.md`;
+
+      let file = this.app.vault.getAbstractFileByPath(fileName);
+
+      if (file instanceof TFile) {
+        await this.app.vault.modify(file, content);
+      } else {
+        file = await this.app.vault.create(fileName, content);
+      }
+
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.openFile(file as TFile);
+    } catch (error) {
+      console.error("Error handling common link:", error);
+    }
   }
 }
 
