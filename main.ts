@@ -18,7 +18,7 @@ export default class IdealogsPlugin extends Plugin {
 
   async onload() {
     this.apiService = new ApiService();
-    this.writingLinkHandler = new WritingLinkHandler();
+    this.writingLinkHandler = new WritingLinkHandler(this.app, this.apiService);
     this.commonLinkHandler = new CommonLinkHandler(this.app, this.apiService);
 
     this.articleSuggest = new ArticleSuggest(this, this.apiService);
