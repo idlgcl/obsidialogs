@@ -1,10 +1,11 @@
-import { App, TFile } from "obsidian";
+import { App, TFile, WorkspaceLeaf } from "obsidian";
 import { WRITING_LINK_PREFIX, COMMON_LINK_PREFIXES } from "../constants";
 import { ApiService } from "./api";
 
 export class WritingLinkHandler {
   private app: App;
   private apiService: ApiService;
+  private writingSplitLeaf: WorkspaceLeaf | null = null;
 
   constructor(app: App, apiService: ApiService) {
     this.app = app;
@@ -35,8 +36,15 @@ export class WritingLinkHandler {
         file = await this.app.vault.create(fileName, content);
       }
 
-      const leaf = this.app.workspace.getLeaf(false);
-      await leaf.openFile(file as TFile, { state: { mode: "preview" } });
+      if (this.writingSplitLeaf && this.writingSplitLeaf.view) {
+        await this.writingSplitLeaf.openFile(file as TFile, {
+          state: { mode: "preview" },
+        });
+      } else {
+        const leaf = this.app.workspace.getLeaf("split");
+        this.writingSplitLeaf = leaf;
+        await leaf.openFile(file as TFile, { state: { mode: "preview" } });
+      }
     } catch (error) {
       console.error("Error handling writing link:", error);
     }
