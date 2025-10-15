@@ -68,12 +68,10 @@ export default class IdealogsPlugin extends Plugin {
   }
 
   private debouncedCheckCursorInComment(): void {
-    // Clear existing timer
     if (this.editorChangeDebounceTimer !== null) {
       window.clearTimeout(this.editorChangeDebounceTimer);
     }
 
-    // Set new timer to check after 500ms of no typing
     this.editorChangeDebounceTimer = window.setTimeout(() => {
       this.checkCursorInCommentForce();
       this.editorChangeDebounceTimer = null;
