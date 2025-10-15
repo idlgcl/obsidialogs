@@ -1,39 +1,42 @@
 export interface Comment {
   title: string;
   body: string;
+  source: string;
+  filePath: string;
 }
 
 export class CommentParser {
-  parse(text: string): Comment[] {
-    const cleanText = text.replace(/\[\[[^\]]+\]\]/g, "");
-    const segments = cleanText.split("\n");
-    const pattern = /^(.*?)\.\s+(.*)$/;
+  parseLineAsComment(
+    line: string,
+    filename: string,
+    fullPath: string
+  ): Comment | null {
+    // Remove wiki links
+    const cleanLine = line.replace(/\[\[[^\]]+\]\]/g, "");
 
-    const results: Comment[] = [];
-
-    for (const segment of segments) {
-      if (segment.startsWith("#")) {
-        continue;
-      }
-
-      if (!segment.endsWith(":")) {
-        continue;
-      }
-
-      const match = segment.match(pattern);
-
-      if (!match) {
-        continue;
-      }
-
-      const [, title, description] = match;
-
-      results.push({
-        title: title.trim() + ".",
-        body: description.trim(),
-      });
+    if (cleanLine.startsWith("#")) {
+      return null;
     }
 
-    return results;
+    if (!cleanLine.endsWith(":")) {
+      return null;
+    }
+
+    // Comment pattern "Title. body:"
+    const pattern = /^(.*?)\.\s+(.*)$/;
+    const match = cleanLine.match(pattern);
+
+    if (!match) {
+      return null;
+    }
+
+    const [, title, description] = match;
+
+    return {
+      title: title.trim() + ".",
+      body: description.trim(),
+      source: filename,
+      filePath: fullPath,
+    };
   }
 }
