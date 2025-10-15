@@ -6,7 +6,7 @@ import {
 } from "../utils/comment-parser";
 import { ArticleAutocompleteField } from "./article-input";
 import { Article } from "../../types";
-import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from "../idealogs-annotator";
+import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from "./idealogs-annotator";
 import { ApiService } from "../../utils/api";
 import {
   AnnotationData,
