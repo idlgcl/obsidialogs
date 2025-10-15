@@ -21,6 +21,7 @@ export default class IdealogsPlugin extends Plugin {
   private commentParser: CommentParser;
   private cursorCheckInterval: number | null = null;
   private lastCursorLine = -1;
+  private editorChangeDebounceTimer: number | null = null;
 
   async onload() {
     this.apiService = new ApiService();
@@ -54,10 +55,29 @@ export default class IdealogsPlugin extends Plugin {
       })
     );
 
+    this.registerEvent(
+      this.app.workspace.on("editor-change", () => {
+        this.debouncedCheckCursorInComment();
+      })
+    );
+
     // Check cursor position every 200ms
     this.cursorCheckInterval = window.setInterval(() => {
       this.checkCursorInComment();
     }, 200);
+  }
+
+  private debouncedCheckCursorInComment(): void {
+    // Clear existing timer
+    if (this.editorChangeDebounceTimer !== null) {
+      window.clearTimeout(this.editorChangeDebounceTimer);
+    }
+
+    // Set new timer to check after 500ms of no typing
+    this.editorChangeDebounceTimer = window.setTimeout(() => {
+      this.checkCursorInCommentForce();
+      this.editorChangeDebounceTimer = null;
+    }, 500);
   }
 
   private checkCursorInComment(): void {
@@ -100,6 +120,43 @@ export default class IdealogsPlugin extends Plugin {
       console.log("Line:", cursorLine);
       console.log("Comment:", comment);
       console.log("========================");
+    }
+  }
+
+  private checkCursorInCommentForce(): void {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+    if (!activeView) {
+      return;
+    }
+
+    const mode = activeView.getMode();
+    if (mode !== "source") {
+      return;
+    }
+
+    const editor = activeView.editor;
+    const cursor = editor.getCursor();
+    const cursorLine = cursor.line;
+
+    const file = activeView.file;
+    if (!file) {
+      return;
+    }
+
+    const lineText = editor.getLine(cursorLine);
+
+    const comment = this.commentParser.parseLineAsComment(
+      lineText,
+      file.name,
+      file.path
+    );
+
+    if (comment) {
+      console.log("=== Cursor in Comment (typing) ===");
+      console.log("Line:", cursorLine);
+      console.log("Comment:", comment);
+      console.log("==================================");
     }
   }
 
