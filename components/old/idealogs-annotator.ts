@@ -12,12 +12,12 @@ import {
   ViewStateResult,
 } from "obsidian";
 import { WordProcessor } from "../utils/word-processor";
-import { ApiService } from "../utils/api";
-import { IdealogsAnnotation } from "../types";
+import { ApiService } from "../../utils/api";
+import { IdealogsAnnotation } from "../../types";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
+} from "../../utils/old/annotation-service";
 
 export const IDEALOGS_ANNOTATOR = "idealogs-annotator";
 

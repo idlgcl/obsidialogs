@@ -4,14 +4,14 @@ import {
   Comment,
   parseComments,
 } from "../utils/comment-parser";
-import { ArticleAutocompleteField } from "./old/article-input";
-import { Article } from "../types";
-import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from "./idealogs-annotator";
-import { ApiService } from "../utils/api";
+import { ArticleAutocompleteField } from "./article-input";
+import { Article } from "../../types";
+import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from "../idealogs-annotator";
+import { ApiService } from "../../utils/api";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
+} from "../../utils/old/annotation-service";
 
 import { v4 as uuidv4 } from "uuid";
 

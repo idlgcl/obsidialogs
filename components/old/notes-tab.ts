@@ -2,7 +2,7 @@ import { Component, MarkdownView, App } from "obsidian";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
+} from "../../utils/old/annotation-service";
 import { Note, noteToAnnotationData, parseNotes } from "../utils/note-parser";
 
 export interface NotesTabOptions {

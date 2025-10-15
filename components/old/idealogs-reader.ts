@@ -11,8 +11,8 @@ import { WordProcessor } from "../utils/word-processor";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
-import { ApiService } from "../utils/api";
+} from "../../utils/old/annotation-service";
+import { ApiService } from "../../utils/api";
 
 export const IDEALOGS_READER = "idealogs-reader";
 

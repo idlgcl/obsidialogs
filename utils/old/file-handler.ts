@@ -1,6 +1,6 @@
 import { App, TFile, MarkdownView } from "obsidian";
 import { ApiService } from "./api";
-import { IDL_RIGHT_PANEL } from "components/right-panel";
+import { IDL_RIGHT_PANEL } from "components/old/right-panel";
 import { AnnotationService } from "./old/annotation-service";
 
 const IDEALOGS_FILE_PATTERNS = ["@Ix", "@0x", "@Tx", "@Fx"];

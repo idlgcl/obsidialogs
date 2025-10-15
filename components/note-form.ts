@@ -1,7 +1,10 @@
 import { Component, Notice, App } from "obsidian";
-import { ArticleAutocompleteField } from "./article-input";
+import { ArticleAutocompleteField } from "./old/article-input";
 import { Article } from "../types";
-import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from "./idealogs-annotator";
+import {
+  IDEALOGS_ANNOTATOR,
+  IdealogsAnnotator,
+} from "./old/idealogs-annotator";
 import { ApiService } from "../utils/api";
 import {
   AnnotationData,

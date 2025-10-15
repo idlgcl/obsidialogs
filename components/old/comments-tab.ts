@@ -2,7 +2,7 @@ import { Component, MarkdownView, App } from "obsidian";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
+} from "../../utils/old/annotation-service";
 import { parseComments } from "../utils/comment-parser";
 
 export interface CommentsTabOptions {
