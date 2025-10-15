@@ -3,289 +3,294 @@ import { RightPanelListView } from "./right-panel-list-view";
 import { RightPanelFormView } from "./right-panel-form-view";
 import { CommentForm } from "./comment-form";
 import { NoteForm } from "./note-form";
-import { AnnotationData, AnnotationService } from '../utils/annotation-service';
+import {
+  AnnotationData,
+  AnnotationService,
+} from "../utils/old/annotation-service";
 import { Note } from "utils/note-parser";
 import { IDEALOGS_ANNOTATOR } from "./idealogs-annotator";
 
-export const IDL_RIGHT_PANEL = 'idl-right-panel';
+export const IDL_RIGHT_PANEL = "idl-right-panel";
 
 export class RightPanel extends ItemView {
-    private listView: RightPanelListView;
-    private formView: RightPanelFormView;
-    private commentForm: CommentForm | null = null;
-    private noteForm: NoteForm | null = null;
-    private component: Component;
-    private activeFilePath: string;
-    private annotationService: AnnotationService;
-    private lastActiveFilePath = '';
+  private listView: RightPanelListView;
+  private formView: RightPanelFormView;
+  private commentForm: CommentForm | null = null;
+  private noteForm: NoteForm | null = null;
+  private component: Component;
+  private activeFilePath: string;
+  private annotationService: AnnotationService;
+  private lastActiveFilePath = "";
 
+  constructor(leaf: WorkspaceLeaf, annotationService: AnnotationService) {
+    super(leaf);
+    this.component = new Component();
+    this.annotationService = annotationService;
+  }
 
-    constructor(leaf: WorkspaceLeaf, annotationService: AnnotationService) {
-        super(leaf);
-        this.component = new Component();
-        this.annotationService = annotationService;
-    }
+  async onOpen() {
+    this.listView = new RightPanelListView({
+      container: this.contentEl,
+      onSelectItem: () => this.showFormView(),
+      onSelectComment: (comment) => this.showCommentView(comment),
+      onSelectNote: (note) => this.showNoteView(note),
+      onNewComment: () => this.showNewCommentForm(),
+      onNewNote: () => this.showNewNoteForm(),
+      app: this.app,
+    });
 
-    async onOpen() {
-        this.listView = new RightPanelListView({
-            container: this.contentEl,
-            onSelectItem: () => this.showFormView(),
-            onSelectComment: (comment) => this.showCommentView(comment),
-            onSelectNote: (note) => this.showNoteView(note),
-            onNewComment: () => this.showNewCommentForm(),
-            onNewNote: () => this.showNewNoteForm(),
-            app: this.app 
-        });
+    this.formView = new RightPanelFormView({
+      container: this.contentEl,
+      onBack: () => this.showListView(),
+    });
 
-        this.formView = new RightPanelFormView({
-            container: this.contentEl,
-            onBack: () => this.showListView()
-        });
-        
-        this.component.addChild(this.listView);
-        this.component.addChild(this.formView);
-        
-        this.showListView();
+    this.component.addChild(this.listView);
+    this.component.addChild(this.formView);
 
-        this.registerEvent(
-            this.app.workspace.on('active-leaf-change', () => {
-                const previousPath = this.activeFilePath;
-                this.setActiveFilePath();
+    this.showListView();
 
-                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-                if (this.commentForm && 
-                    activeView && 
-                    this.activeFilePath !== previousPath) {
-                    
-                    this.commentForm.updateActiveFilePath(this.activeFilePath);
-                }
-                
-                if (this.noteForm && 
-                    activeView && 
-                    this.activeFilePath !== previousPath) {
-                    
-                    this.noteForm.updateActiveFilePath(this.activeFilePath);
-                }
-                
-                this.registerEditorChangeHandler();
-            })
-        );
-        
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        const previousPath = this.activeFilePath;
+        this.setActiveFilePath();
+
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (
+          this.commentForm &&
+          activeView &&
+          this.activeFilePath !== previousPath
+        ) {
+          this.commentForm.updateActiveFilePath(this.activeFilePath);
+        }
+
+        if (
+          this.noteForm &&
+          activeView &&
+          this.activeFilePath !== previousPath
+        ) {
+          this.noteForm.updateActiveFilePath(this.activeFilePath);
+        }
+
         this.registerEditorChangeHandler();
+      })
+    );
+
+    this.registerEditorChangeHandler();
+  }
+
+  showCommentView(comment: AnnotationData) {
+    this.listView.hide();
+    this.formView.hide();
+
+    if (this.commentForm) {
+      this.component.removeChild(this.commentForm);
+      this.commentForm.onunload();
+      this.commentForm = null;
     }
 
-    showCommentView(comment: AnnotationData) {
-        this.listView.hide();
-        this.formView.hide();
-        
-        if (this.commentForm) {
-            this.component.removeChild(this.commentForm);
-            this.commentForm.onunload();
-            this.commentForm = null;
-        }
-        
-        if (this.noteForm) {
-            this.component.removeChild(this.noteForm);
-            this.noteForm.onunload();
-            this.noteForm = null;
-        }
-        
-        const commentCopy = {...comment};
-        
-        this.commentForm = new CommentForm({
-            container: this.contentEl,
-            onBack: () => this.showListView(),
-            activeFilePath: this.activeFilePath,
-            app: this.app,
-            commentData: commentCopy,
-        });
-        
-        this.component.addChild(this.commentForm);
-        this.commentForm.show();
-    }
-    
-    showNoteView(note: AnnotationData, originalNote?: Note) {
-        this.listView.hide();
-        this.formView.hide();
-        
-        if (this.commentForm) {
-            this.component.removeChild(this.commentForm);
-            this.commentForm.onunload();
-            this.commentForm = null;
-        }
-        
-        if (this.noteForm) {
-            this.component.removeChild(this.noteForm);
-            this.noteForm.onunload();
-            this.noteForm = null;
-        }
-        
-        this.noteForm = new NoteForm({
-            container: this.contentEl,
-            onBack: () => this.showListView(),
-            activeFilePath: this.activeFilePath,
-            app: this.app,
-            noteData: note,
-            note: originalNote
-        });
-        
-        this.component.addChild(this.noteForm);
-        this.noteForm.show();
-    }
-    
-    showListView() {
-        this.listView.show();
-        this.formView.hide();
-
-        this.updateAnnotations();
-
-        if (this.commentForm) {
-            this.component.removeChild(this.commentForm);
-            this.commentForm.onunload();
-            this.commentForm = null;
-        }
-        
-        if (this.noteForm) {
-            this.component.removeChild(this.noteForm);
-            this.noteForm.onunload();
-            this.noteForm = null;
-        }
+    if (this.noteForm) {
+      this.component.removeChild(this.noteForm);
+      this.noteForm.onunload();
+      this.noteForm = null;
     }
 
-    showFormView() {
-        this.listView.hide();
-        this.formView.show();
+    const commentCopy = { ...comment };
+
+    this.commentForm = new CommentForm({
+      container: this.contentEl,
+      onBack: () => this.showListView(),
+      activeFilePath: this.activeFilePath,
+      app: this.app,
+      commentData: commentCopy,
+    });
+
+    this.component.addChild(this.commentForm);
+    this.commentForm.show();
+  }
+
+  showNoteView(note: AnnotationData, originalNote?: Note) {
+    this.listView.hide();
+    this.formView.hide();
+
+    if (this.commentForm) {
+      this.component.removeChild(this.commentForm);
+      this.commentForm.onunload();
+      this.commentForm = null;
     }
 
-    showNewCommentForm() {
-        this.listView.hide();
-        this.formView.hide();
-        
-        if (this.commentForm) {
-            this.component.removeChild(this.commentForm);
-            this.commentForm.onunload();
-            this.commentForm = null;
-        }
-        
-        if (this.noteForm) {
-            this.component.removeChild(this.noteForm);
-            this.noteForm.onunload();
-            this.noteForm = null;
-        }
-        
-        this.commentForm = new CommentForm({
-            container: this.contentEl,
-            onBack: () => this.showListView(),
-            activeFilePath: this.activeFilePath,
-            app: this.app
-        });
-        
-        this.component.addChild(this.commentForm);
-        this.commentForm.show();
-    }
-    
-    showNewNoteForm() {
-        this.listView.hide();
-        this.formView.hide();
-        
-        if (this.commentForm) {
-            this.component.removeChild(this.commentForm);
-            this.commentForm.onunload();
-            this.commentForm = null;
-        }
-        
-        if (this.noteForm) {
-            this.component.removeChild(this.noteForm);
-            this.noteForm.onunload();
-            this.noteForm = null;
-        }
-        
-        this.noteForm = new NoteForm({
-            container: this.contentEl,
-            onBack: () => this.showListView(),
-            activeFilePath: this.activeFilePath,
-            app: this.app
-        });
-        
-        this.component.addChild(this.noteForm);
-        this.noteForm.show();
+    if (this.noteForm) {
+      this.component.removeChild(this.noteForm);
+      this.noteForm.onunload();
+      this.noteForm = null;
     }
 
-    private async updateAnnotations(): Promise<void> {
-        if (this.listView && this.activeFilePath && this.annotationService) {
-            await this.annotationService.validateAllAnnotations(this.activeFilePath);
-            
-            this.listView.updateComments(this.annotationService, this.activeFilePath);
-            this.listView.updateNotes(this.annotationService, this.activeFilePath);
-        }
-    }
-    
-    private editorChangeTimeout: number | null = null;
-    
-    private registerEditorChangeHandler(): void {
-        this.registerEvent(
-            this.app.workspace.on("editor-change", () => {
-                this.handleEditorChanges();
-            })
-        );
-    }
-    
-    private handleEditorChanges = (): void => {
-        if (this.editorChangeTimeout) {
-            window.clearTimeout(this.editorChangeTimeout);
-        }
-        
-        this.editorChangeTimeout = window.setTimeout(() => {
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-            if (!activeView) return;
-            
-            if (this.listView) {
-                this.listView.updateNotes(this.annotationService, this.activeFilePath);
-            }
-            
-            this.editorChangeTimeout = null;
-        }, 500);
+    this.noteForm = new NoteForm({
+      container: this.contentEl,
+      onBack: () => this.showListView(),
+      activeFilePath: this.activeFilePath,
+      app: this.app,
+      noteData: note,
+      note: originalNote,
+    });
+
+    this.component.addChild(this.noteForm);
+    this.noteForm.show();
+  }
+
+  showListView() {
+    this.listView.show();
+    this.formView.hide();
+
+    this.updateAnnotations();
+
+    if (this.commentForm) {
+      this.component.removeChild(this.commentForm);
+      this.commentForm.onunload();
+      this.commentForm = null;
     }
 
-    getViewType(): string {
-        return IDL_RIGHT_PANEL;
+    if (this.noteForm) {
+      this.component.removeChild(this.noteForm);
+      this.noteForm.onunload();
+      this.noteForm = null;
+    }
+  }
+
+  showFormView() {
+    this.listView.hide();
+    this.formView.show();
+  }
+
+  showNewCommentForm() {
+    this.listView.hide();
+    this.formView.hide();
+
+    if (this.commentForm) {
+      this.component.removeChild(this.commentForm);
+      this.commentForm.onunload();
+      this.commentForm = null;
     }
 
-    getDisplayText(): string {
-        return 'Idealogs';
+    if (this.noteForm) {
+      this.component.removeChild(this.noteForm);
+      this.noteForm.onunload();
+      this.noteForm = null;
     }
 
-    getIcon(): string {
-        return "brackets";
+    this.commentForm = new CommentForm({
+      container: this.contentEl,
+      onBack: () => this.showListView(),
+      activeFilePath: this.activeFilePath,
+      app: this.app,
+    });
+
+    this.component.addChild(this.commentForm);
+    this.commentForm.show();
+  }
+
+  showNewNoteForm() {
+    this.listView.hide();
+    this.formView.hide();
+
+    if (this.commentForm) {
+      this.component.removeChild(this.commentForm);
+      this.commentForm.onunload();
+      this.commentForm = null;
     }
 
-    private setActiveFilePath(): void {
-        const file = this.app.workspace.getActiveFile();
-        const formActive = this.commentForm !== null || this.noteForm !== null;
-        const annotatorOpen = this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR).length > 0;
-        
-        if (file?.path) {
-            this.activeFilePath = file.path;
-            this.lastActiveFilePath = file.path;
-        } else if (formActive || annotatorOpen) {
-            this.activeFilePath = this.lastActiveFilePath;
-        } else {
-            this.activeFilePath = '';
-        }
-        
-        if (this.activeFilePath === '' && !annotatorOpen && !formActive) {
-            this.leaf.detach();
-        } else {
-            this.updateAnnotations();
-        }
+    if (this.noteForm) {
+      this.component.removeChild(this.noteForm);
+      this.noteForm.onunload();
+      this.noteForm = null;
     }
 
-    async onClose() {
-        if (this.editorChangeTimeout) {
-            window.clearTimeout(this.editorChangeTimeout);
-        }
-        
-        this.component.unload();
-        return super.onClose();
+    this.noteForm = new NoteForm({
+      container: this.contentEl,
+      onBack: () => this.showListView(),
+      activeFilePath: this.activeFilePath,
+      app: this.app,
+    });
+
+    this.component.addChild(this.noteForm);
+    this.noteForm.show();
+  }
+
+  private async updateAnnotations(): Promise<void> {
+    if (this.listView && this.activeFilePath && this.annotationService) {
+      await this.annotationService.validateAllAnnotations(this.activeFilePath);
+
+      this.listView.updateComments(this.annotationService, this.activeFilePath);
+      this.listView.updateNotes(this.annotationService, this.activeFilePath);
     }
+  }
+
+  private editorChangeTimeout: number | null = null;
+
+  private registerEditorChangeHandler(): void {
+    this.registerEvent(
+      this.app.workspace.on("editor-change", () => {
+        this.handleEditorChanges();
+      })
+    );
+  }
+
+  private handleEditorChanges = (): void => {
+    if (this.editorChangeTimeout) {
+      window.clearTimeout(this.editorChangeTimeout);
+    }
+
+    this.editorChangeTimeout = window.setTimeout(() => {
+      const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (!activeView) return;
+
+      if (this.listView) {
+        this.listView.updateNotes(this.annotationService, this.activeFilePath);
+      }
+
+      this.editorChangeTimeout = null;
+    }, 500);
+  };
+
+  getViewType(): string {
+    return IDL_RIGHT_PANEL;
+  }
+
+  getDisplayText(): string {
+    return "Idealogs";
+  }
+
+  getIcon(): string {
+    return "brackets";
+  }
+
+  private setActiveFilePath(): void {
+    const file = this.app.workspace.getActiveFile();
+    const formActive = this.commentForm !== null || this.noteForm !== null;
+    const annotatorOpen =
+      this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR).length > 0;
+
+    if (file?.path) {
+      this.activeFilePath = file.path;
+      this.lastActiveFilePath = file.path;
+    } else if (formActive || annotatorOpen) {
+      this.activeFilePath = this.lastActiveFilePath;
+    } else {
+      this.activeFilePath = "";
+    }
+
+    if (this.activeFilePath === "" && !annotatorOpen && !formActive) {
+      this.leaf.detach();
+    } else {
+      this.updateAnnotations();
+    }
+  }
+
+  async onClose() {
+    if (this.editorChangeTimeout) {
+      window.clearTimeout(this.editorChangeTimeout);
+    }
+
+    this.component.unload();
+    return super.onClose();
+  }
 }
