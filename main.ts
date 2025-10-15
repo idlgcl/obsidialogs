@@ -19,6 +19,7 @@ export default class IdealogsPlugin extends Plugin {
   private restoreLinkOpening: (() => void) | null = null;
   private previousFile: TFile | null = null;
   private commentParser: CommentParser;
+  private parseDebounceTimer: number | null = null;
 
   async onload() {
     this.apiService = new ApiService();
@@ -59,6 +60,23 @@ export default class IdealogsPlugin extends Plugin {
         this.parseActiveViewComments();
       })
     );
+
+    this.registerEvent(
+      this.app.workspace.on("editor-change", () => {
+        this.debouncedParseComments();
+      })
+    );
+  }
+
+  private debouncedParseComments(): void {
+    if (this.parseDebounceTimer !== null) {
+      window.clearTimeout(this.parseDebounceTimer);
+    }
+
+    this.parseDebounceTimer = window.setTimeout(() => {
+      this.parseActiveViewComments();
+      this.parseDebounceTimer = null;
+    }, 500);
   }
 
   private parseActiveViewComments(): void {
