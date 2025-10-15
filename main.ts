@@ -19,7 +19,8 @@ export default class IdealogsPlugin extends Plugin {
   private restoreLinkOpening: (() => void) | null = null;
   private previousFile: TFile | null = null;
   private commentParser: CommentParser;
-  private parseDebounceTimer: number | null = null;
+  private cursorCheckInterval: number | null = null;
+  private lastCursorLine = -1;
 
   async onload() {
     this.apiService = new ApiService();
@@ -49,62 +50,57 @@ export default class IdealogsPlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        console.log("active-leaf-change");
         this.handleFileChange();
       })
     );
 
-    this.registerEvent(
-      this.app.workspace.on("file-open", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        this.parseActiveViewComments();
-      })
-    );
-
-    this.registerEvent(
-      this.app.workspace.on("editor-change", () => {
-        this.debouncedParseComments();
-      })
-    );
+    // Check cursor position every 200ms
+    this.cursorCheckInterval = window.setInterval(() => {
+      this.checkCursorInComment();
+    }, 200);
   }
 
-  private debouncedParseComments(): void {
-    if (this.parseDebounceTimer !== null) {
-      window.clearTimeout(this.parseDebounceTimer);
-    }
-
-    this.parseDebounceTimer = window.setTimeout(() => {
-      this.parseActiveViewComments();
-      this.parseDebounceTimer = null;
-    }, 500);
-  }
-
-  private parseActiveViewComments(): void {
+  private checkCursorInComment(): void {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
     if (!activeView) {
-      console.log("No active markdown view found");
       return;
     }
 
-    const file = activeView.file;
-
     const mode = activeView.getMode();
-
     if (mode !== "source") {
-      console.log("Not in edit mode, skipping");
       return;
     }
 
     const editor = activeView.editor;
-    const content = editor.getValue();
+    const cursor = editor.getCursor();
+    const cursorLine = cursor.line;
 
-    const comments = this.commentParser.parse(content);
+    if (cursorLine === this.lastCursorLine) {
+      return;
+    }
 
-    console.log("=== Comment Parser Debug ===");
-    console.log("Current file:", file?.path);
-    console.log("Parsed comments:", comments);
-    console.log("=========================");
+    this.lastCursorLine = cursorLine;
+
+    const file = activeView.file;
+    if (!file) {
+      return;
+    }
+
+    const lineText = editor.getLine(cursorLine);
+
+    const comment = this.commentParser.parseLineAsComment(
+      lineText,
+      file.name,
+      file.path
+    );
+
+    if (comment) {
+      console.log("=== Cursor in Comment ===");
+      console.log("Line:", cursorLine);
+      console.log("Comment:", comment);
+      console.log("========================");
+    }
   }
 
   private async handleFileChange(): Promise<void> {
@@ -139,6 +135,11 @@ export default class IdealogsPlugin extends Plugin {
     // Restore original openLinkText function
     if (this.restoreLinkOpening) {
       this.restoreLinkOpening();
+    }
+
+    // Clear cursor check interval
+    if (this.cursorCheckInterval !== null) {
+      window.clearInterval(this.cursorCheckInterval);
     }
   }
 }
