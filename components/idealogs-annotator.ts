@@ -1,906 +1,1004 @@
-import { parseYaml } from 'obsidian';
+import { parseYaml } from "obsidian";
 
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, Component, setIcon, TFile, MarkdownView, Notice, ViewStateResult } from 'obsidian';
-import { WordProcessor } from '../utils/word-processor';
-import { ApiService } from '../utils/api';
-import { IdealogsAnnotation } from '../types';
-import { AnnotationData, AnnotationService } from '../utils/annotation-service';
+import {
+  ItemView,
+  WorkspaceLeaf,
+  MarkdownRenderer,
+  Component,
+  setIcon,
+  TFile,
+  MarkdownView,
+  Notice,
+  ViewStateResult,
+} from "obsidian";
+import { WordProcessor } from "../utils/word-processor";
+import { ApiService } from "../utils/api";
+import { IdealogsAnnotation } from "../types";
+import {
+  AnnotationData,
+  AnnotationService,
+} from "../utils/old/annotation-service";
 
-export const IDEALOGS_ANNOTATOR = 'idealogs-annotator';
+export const IDEALOGS_ANNOTATOR = "idealogs-annotator";
 
-type AnnotatorMode = 'WEB' | 'LOCAL' | 'ANNOTATOR';
+type AnnotatorMode = "WEB" | "LOCAL" | "ANNOTATOR";
 
 export class IdealogsAnnotator extends ItemView {
-    private articleHeaderEl: HTMLElement;
-    private articleContentEl: HTMLElement;
-    private articleId: string;
-    private articleTitle = '';
-    private articleContent = '';
-    private component: Component;
-    private apiService: ApiService;
-    private annotationService: AnnotationService;
-    private annotationsByWordIndex: Map<number, {annotation: IdealogsAnnotation, isLocal: boolean}[]> = new Map();
-    private localModeAnnotationsByWordIndex: Map<number, {annotation: AnnotationData}[]> = new Map();
-    private mode: AnnotatorMode;
-    private altKeyHandler: (e: KeyboardEvent) => void;
-    private fileOpenHandlerRef: (file: TFile | null) => void;
-    private isParentArticle = false;
+  private articleHeaderEl: HTMLElement;
+  private articleContentEl: HTMLElement;
+  private articleId: string;
+  private articleTitle = "";
+  private articleContent = "";
+  private component: Component;
+  private apiService: ApiService;
+  private annotationService: AnnotationService;
+  private annotationsByWordIndex: Map<
+    number,
+    { annotation: IdealogsAnnotation; isLocal: boolean }[]
+  > = new Map();
+  private localModeAnnotationsByWordIndex: Map<
+    number,
+    { annotation: AnnotationData }[]
+  > = new Map();
+  private mode: AnnotatorMode;
+  private altKeyHandler: (e: KeyboardEvent) => void;
+  private fileOpenHandlerRef: (file: TFile | null) => void;
+  private isParentArticle = false;
 
-    private writingNumbers: Map<string, number> = new Map();
-    private nextWritingNumber = 1;
+  private writingNumbers: Map<string, number> = new Map();
+  private nextWritingNumber = 1;
 
-    constructor(leaf: WorkspaceLeaf, mode?: AnnotatorMode) {
-        super(leaf);
-        this.navigation = true;
-        this.writingNumbers = new Map();
-        this.nextWritingNumber = 1;
+  constructor(leaf: WorkspaceLeaf, mode?: AnnotatorMode) {
+    super(leaf);
+    this.navigation = true;
+    this.writingNumbers = new Map();
+    this.nextWritingNumber = 1;
 
-        this.articleId = '';
-        this.component = new Component();
-        this.articleHeaderEl = this.contentEl.createDiv();
-        this.articleContentEl = this.contentEl.createDiv();
-        this.apiService = new ApiService();
-        this.annotationService = new AnnotationService(this.app);
-        if (mode) {
-            this.mode = mode;
+    this.articleId = "";
+    this.component = new Component();
+    this.articleHeaderEl = this.contentEl.createDiv();
+    this.articleContentEl = this.contentEl.createDiv();
+    this.apiService = new ApiService();
+    this.annotationService = new AnnotationService(this.app);
+    if (mode) {
+      this.mode = mode;
+    }
+
+    this.altKeyHandler = (e: KeyboardEvent) => {
+      if (e.type === "keydown" && e.key === "Alt") {
+        this.articleContentEl.classList.add("alt-key-pressed");
+      } else if (e.type === "keyup" && e.key === "Alt") {
+        this.articleContentEl.classList.remove("alt-key-pressed");
+      }
+    };
+
+    document.addEventListener("keydown", this.altKeyHandler);
+    document.addEventListener("keyup", this.altKeyHandler);
+
+    this.setUpActionButtons();
+
+    this.fileOpenHandlerRef = this.handleFileOpen.bind(this);
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", this.fileOpenHandlerRef)
+    );
+  }
+
+  private handleFileOpen(file: TFile | null): void {
+    if (this.mode === "LOCAL" && file && file.basename !== this.articleId) {
+      this.leaf.detach();
+    }
+  }
+
+  setMode(mode: AnnotatorMode): void {
+    this.mode = mode;
+  }
+
+  async setState(state: any, result: ViewStateResult): Promise<void> {
+    this.writingNumbers = new Map();
+    this.nextWritingNumber = 1;
+    this.localModeAnnotationsByWordIndex = new Map();
+
+    if (state && state.mode) {
+      this.mode = state.mode;
+    }
+    if (state && state.articleId) {
+      this.articleId = state.articleId;
+
+      result.history = true;
+
+      if (this.mode === "WEB") {
+        await this.loadWebArticleContent();
+        await this.loadAnnotations(true, true);
+      } else if (this.mode === "LOCAL") {
+        const fileName = `${this.articleId}.md`;
+        const file = this.app.vault.getAbstractFileByPath(fileName);
+        if (file instanceof TFile) {
+          const content = await this.app.vault.read(file);
+          await this.setLocalContent(content);
         }
+      } else if (this.mode === "ANNOTATOR") {
+        await this.loadWebArticleContent();
+      }
+    }
+  }
 
-        this.altKeyHandler = (e: KeyboardEvent) => {
-            if (e.type === 'keydown' && e.key === 'Alt') {
-                this.articleContentEl.classList.add('alt-key-pressed');
-            } else if (e.type === 'keyup' && e.key === 'Alt') {
-                this.articleContentEl.classList.remove('alt-key-pressed');
+  getState(): any {
+    return {
+      articleId: this.articleId,
+      mode: this.mode,
+    };
+  }
+
+  private getLinkDisplayText(articleId: string, kind: string): string {
+    if (!kind) return articleId;
+
+    switch (kind.toLowerCase()) {
+      case "question":
+        return "[?]";
+      case "insight":
+        return "[!]";
+      case "writing": {
+        if (!this.writingNumbers.has(articleId)) {
+          this.writingNumbers.set(articleId, this.nextWritingNumber++);
+        }
+        const numberValue = this.writingNumbers.get(articleId);
+        return numberValue !== undefined
+          ? `[${numberValue.toString()}]`
+          : "[0]";
+      }
+      default:
+        return articleId;
+    }
+  }
+
+  private async processIdealogsLinks(): Promise<void> {
+    const internalLinks =
+      this.articleContentEl.querySelectorAll("a.internal-link");
+
+    Array.from(internalLinks).forEach(async (link) => {
+      if (link instanceof HTMLAnchorElement) {
+        const href = link.getAttribute("href");
+        if (href) {
+          let kind = "";
+          if (href.startsWith("@Tx")) {
+            kind = "writing";
+          } else if (href.startsWith("@Fx")) {
+            kind = "question";
+          } else if (href.startsWith("@Ix")) {
+            kind = "insight";
+          }
+
+          if (kind) {
+            const displayText = this.getLinkDisplayText(href, kind);
+            if (displayText !== href) {
+              link.textContent = displayText;
             }
-        };
-        
-        document.addEventListener('keydown', this.altKeyHandler);
-        document.addEventListener('keyup', this.altKeyHandler);
+          }
+        }
+      }
+    });
+  }
 
-        this.setUpActionButtons();
+  private attachLinkHandlers(): void {
+    const childArticleLinks =
+      this.articleContentEl.querySelectorAll("a.idl-article-link");
+    childArticleLinks.forEach((link) => {
+      if (link instanceof HTMLAnchorElement) {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          const href = link.getAttribute("href");
+          if (href) {
+            this.app.workspace.openLinkText(href, "", false);
+          }
+        });
+      }
+    });
 
-        this.fileOpenHandlerRef = this.handleFileOpen.bind(this);
-        
-        this.registerEvent(
-            this.app.workspace.on('file-open', this.fileOpenHandlerRef)
+    const internalLinks =
+      this.articleContentEl.querySelectorAll("a.internal-link");
+    internalLinks.forEach((link) => {
+      if (link instanceof HTMLAnchorElement) {
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          const href = link.getAttribute("href");
+          if (href) {
+            this.app.workspace.openLinkText(href, "", false);
+          }
+        });
+      }
+    });
+
+    const externalLinks =
+      this.articleContentEl.querySelectorAll("a.external-link");
+    externalLinks.forEach((link) => {
+      if (
+        link instanceof HTMLAnchorElement &&
+        !link.hasAttribute("data-href-handled")
+      ) {
+        link.setAttribute("data-href-handled", "true");
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          const href = link.getAttribute("href");
+          if (href) {
+            window.open(href, "_blank");
+          }
+        });
+      }
+    });
+  }
+
+  setUpActionButtons(): void {
+    this.addAction("book-open", "Open in Editor", () => {
+      if (this.mode === "WEB") {
+        new Notice("Cant open web article in editor.");
+        return;
+      }
+      this.openInEditor();
+    });
+    this.addAction("edit", "Open in Editor", () => {
+      if (this.mode === "WEB") {
+        new Notice("Cant open web article in editor.");
+        return;
+      }
+      this.openInEditor();
+    });
+  }
+
+  async openInEditor(): Promise<void> {
+    if (!this.articleId) return;
+
+    const fileName = `${this.articleId}.md`;
+    const file = this.app.vault.getAbstractFileByPath(fileName);
+
+    if (file instanceof TFile) {
+      const leaf = this.app.workspace.getLeaf("tab");
+      await leaf.openFile(file);
+      this.app.workspace.revealLeaf(leaf);
+
+      // @ts-ignore
+      const plugin = this.app.plugins.plugins["idealogs-annotator"];
+      if (plugin && plugin.fileHandler) {
+        plugin.fileHandler.handleFileOpen(file);
+      }
+
+      this.leaf.detach();
+
+      setTimeout(() => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) return;
+
+        const existingButton = view.containerEl.querySelector(
+          ".idealogs-reader-button"
         );
+        if (existingButton) existingButton.remove();
+
+        const viewActionsEl = view.containerEl.querySelector(".view-actions");
+        if (!viewActionsEl) return;
+
+        const button = document.createElement("button");
+        button.className = "view-action clickable-icon idealogs-reader-button";
+        button.setAttribute("aria-label", "Open in Idealogs Reader");
+        setIcon(button, "book-open-text");
+
+        button.addEventListener("click", () => {
+          // @ts-ignore
+          const plugin = this.app.plugins.plugins["idealogs-annotator"];
+          if (plugin && typeof plugin.openAnnotatorViewByFile === "function") {
+            plugin.openAnnotatorViewByFile(file);
+          }
+        });
+
+        viewActionsEl.insertAdjacentElement("afterbegin", button);
+      }, 100);
     }
-    
-    private handleFileOpen(file: TFile | null): void {
-        if (this.mode === 'LOCAL' && file && file.basename !== this.articleId) {
-            this.leaf.detach();
+  }
+
+  getViewType(): string {
+    return IDEALOGS_ANNOTATOR;
+  }
+
+  getDisplayText(): string {
+    return this.articleTitle || this.articleId;
+  }
+
+  async setLocalContent(content: string): Promise<void> {
+    this.articleContent = content;
+
+    this.articleTitle = this.articleId;
+
+    this.articleHeaderEl.empty();
+    this.articleHeaderEl.createEl("div", {
+      text: this.articleId,
+      cls: "inline-title",
+    });
+
+    await this.render();
+
+    try {
+      const allWordSpans = this.getAllWordSpans();
+      allWordSpans.forEach((span) => {
+        span.classList.remove(
+          "idl-annotated-word",
+          "source-annotation",
+          "target-annotation"
+        );
+        span.removeAttribute("data-has-annotations");
+
+        const newSpan = span.cloneNode(true) as HTMLElement;
+        span.parentNode?.replaceChild(newSpan, span);
+      });
+
+      const existingContainers = this.articleContentEl.querySelectorAll(
+        ".idl-annotations-container"
+      );
+      existingContainers.forEach((el) => el.remove());
+
+      this.annotationsByWordIndex.clear();
+
+      const annotations = await this.annotationService.loadAnnotations(
+        this.articleId
+      );
+
+      for (const commentId in annotations.comments) {
+        const comment = annotations.comments[commentId];
+        if (comment.isValid !== false) {
+          this.highlightComments(comment);
         }
-    }
-    
-    setMode(mode: AnnotatorMode): void {
-        this.mode = mode;
-    }
+      }
 
-    async setState(state: any, result: ViewStateResult): Promise<void> {
-        this.writingNumbers = new Map();
-        this.nextWritingNumber = 1;
-        this.localModeAnnotationsByWordIndex = new Map()
-
-        if (state && state.mode) {
-            this.mode = state.mode;
+      for (const noteId in annotations.notes) {
+        const note = annotations.notes[noteId];
+        if (note.isValid !== false) {
+          const article = await this.apiService.fetchArticleById(note.target);
+          console.log(article, note.target);
+          if (!article.isParent) {
+            this.highlightNotes(note);
+          }
         }
-        if (state && state.articleId) {
-            this.articleId = state.articleId;
-
-            result.history = true;
-
-            if (this.mode === 'WEB') {
-                await this.loadWebArticleContent();
-                await this.loadAnnotations(true, true)
-            }
-            else if (this.mode === 'LOCAL') {
-                const fileName = `${this.articleId}.md`;
-                const file = this.app.vault.getAbstractFileByPath(fileName);
-                if (file instanceof TFile) {
-                    const content = await this.app.vault.read(file);
-                    await this.setLocalContent(content);
-                }
-            }
-            else if (this.mode === 'ANNOTATOR') {
-                await this.loadWebArticleContent();
-            }
-        }
+      }
+    } catch (error) {
+      console.error("Error loading annotations:", error);
     }
 
-    getState(): any {
-        return {
-            articleId: this.articleId,
-            mode: this.mode
-        };
-    }
+    await this.processIdealogsLinks();
+  }
 
+  async loadWebArticleContent(): Promise<void> {
+    try {
+      const [content, articleDetails] = await Promise.allSettled([
+        this.apiService.fetchFileContent(this.articleId),
+        this.apiService.fetchArticleById(this.articleId),
+      ]);
 
-    private getLinkDisplayText(articleId: string, kind: string): string {
-        if (!kind) return articleId;
-        
-        switch (kind.toLowerCase()) {
-            case 'question':
-                return '[?]';
-            case 'insight':
-                return '[!]';
-            case 'writing': {
-                if (!this.writingNumbers.has(articleId)) {
-                    this.writingNumbers.set(articleId, this.nextWritingNumber++);
-                }
-                const numberValue = this.writingNumbers.get(articleId);
-                return numberValue !== undefined ? `[${numberValue.toString()}]` : '[0]';
-            }
-            default:
-                return articleId;
-        }
-    }
+      if (content.status === "fulfilled") {
+        this.articleContent = content.value;
+      } else {
+        this.articleContent = "Failed to load article content";
+        console.error("Error loading article content:", content.reason);
+      }
 
-    private async processIdealogsLinks(): Promise<void> {
-        const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
-        
-        Array.from(internalLinks).forEach(async (link) => {
-            if (link instanceof HTMLAnchorElement) {
-                const href = link.getAttribute('href');
-                if (href) {
-                    let kind = '';
-                    if (href.startsWith('@Tx')) {
-                        kind = 'writing';
-                    } else if (href.startsWith('@Fx')) {
-                        kind = 'question';
-                    } else if (href.startsWith('@Ix')) {
-                        kind = 'insight';
-                    }
-                    
-                    if (kind) {
-                        const displayText = this.getLinkDisplayText(href, kind);
-                        if (displayText !== href) {
-                            link.textContent = displayText;
-                        }
-                    }
-                }
-            }
-        });
-    }
-    
-    private attachLinkHandlers(): void {
-        const childArticleLinks = this.articleContentEl.querySelectorAll('a.idl-article-link');
-        childArticleLinks.forEach(link => {
-            if (link instanceof HTMLAnchorElement) {
-                link.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    const href = link.getAttribute('href');
-                    if (href) {
-                        this.app.workspace.openLinkText(href, '', false);
-                    }
-                });
-            }
-        });
-
-        const internalLinks = this.articleContentEl.querySelectorAll('a.internal-link');
-        internalLinks.forEach(link => {
-            if (link instanceof HTMLAnchorElement) {
-                link.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    const href = link.getAttribute('href');
-                    if (href) {
-                        this.app.workspace.openLinkText(href, '', false);
-                    }
-                });
-            }
-        });
-        
-        const externalLinks = this.articleContentEl.querySelectorAll('a.external-link');
-        externalLinks.forEach(link => {
-            if (link instanceof HTMLAnchorElement && !link.hasAttribute('data-href-handled')) {
-                link.setAttribute('data-href-handled', 'true');
-                link.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    const href = link.getAttribute('href');
-                    if (href) {
-                        window.open(href, '_blank');
-                    }
-                });
-            }
-        });
-    }
-
-    setUpActionButtons(): void {
-        this.addAction("book-open", "Open in Editor", () => {
-            if (this.mode === 'WEB') {
-                new Notice('Cant open web article in editor.')
-                return;
-            }
-            this.openInEditor()
-        });
-        this.addAction("edit", "Open in Editor", () => {
-            if (this.mode === 'WEB') {
-                new Notice('Cant open web article in editor.')
-                return;
-            }
-            this.openInEditor()
-        });
-    }
-
-    async openInEditor(): Promise<void> {
-            if (!this.articleId) return;
-            
-            const fileName = `${this.articleId}.md`;
-            const file = this.app.vault.getAbstractFileByPath(fileName);
-            
-            if (file instanceof TFile) {
-                const leaf = this.app.workspace.getLeaf('tab');
-                await leaf.openFile(file);
-                this.app.workspace.revealLeaf(leaf);
-    
-                // @ts-ignore
-                const plugin = this.app.plugins.plugins['idealogs-annotator'];
-                if (plugin && plugin.fileHandler) {
-                    plugin.fileHandler.handleFileOpen(file);
-                }
-    
-                this.leaf.detach();
-                
-                setTimeout(() => {
-                    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-                    if (!view) return;
-                    
-                    const existingButton = view.containerEl.querySelector('.idealogs-reader-button');
-                    if (existingButton) existingButton.remove();
-                    
-                    const viewActionsEl = view.containerEl.querySelector('.view-actions');
-                    if (!viewActionsEl) return;
-                    
-                    const button = document.createElement('button');
-                    button.className = 'view-action clickable-icon idealogs-reader-button';
-                    button.setAttribute('aria-label', 'Open in Idealogs Reader');
-                    setIcon(button, 'book-open-text');
-                    
-                    button.addEventListener('click', () => {
-                        // @ts-ignore
-                        const plugin = this.app.plugins.plugins['idealogs-annotator'];
-                        if (plugin && typeof plugin.openAnnotatorViewByFile === 'function') {
-                            plugin.openAnnotatorViewByFile(file);
-                        }
-                    });
-                    
-                    viewActionsEl.insertAdjacentElement('afterbegin', button);
-                }, 100); 
-            }
-        }
-
-    getViewType(): string {
-        return IDEALOGS_ANNOTATOR;
-    }
-
-    getDisplayText(): string {
-        return this.articleTitle || this.articleId;
-    }
-
-    async setLocalContent(content: string): Promise<void> {
-        this.articleContent = content;
-
+      this.articleHeaderEl.empty();
+      if (articleDetails.status === "fulfilled") {
+        this.articleTitle = articleDetails.value.title || this.articleId;
+        this.isParentArticle = articleDetails.value.isParent;
+      } else {
         this.articleTitle = this.articleId;
-    
-        this.articleHeaderEl.empty();
-        this.articleHeaderEl.createEl('div', { text: this.articleId, cls: 'inline-title' });
-        
-        await this.render();
-        
-        try {
-            const allWordSpans = this.getAllWordSpans();
-            allWordSpans.forEach(span => {
-                span.classList.remove('idl-annotated-word', 'source-annotation', 'target-annotation');
-                span.removeAttribute('data-has-annotations');
-                
-                const newSpan = span.cloneNode(true) as HTMLElement;
-                span.parentNode?.replaceChild(newSpan, span);
+      }
+
+      this.articleHeaderEl.createEl("div", {
+        text: this.articleTitle,
+        cls: "inline-title",
+      });
+
+      await this.render();
+
+      await this.processIdealogsLinks();
+    } catch (error) {
+      console.error("Unexpected error in loadWebArticleContent:", error);
+      this.articleContent = "An error occurred while loading the article";
+      this.articleTitle = this.articleId;
+      this.articleHeaderEl.empty();
+      await this.render();
+    }
+  }
+
+  async loadAnnotations(local: boolean, web: boolean): Promise<void> {
+    if (!this.articleId) return;
+
+    if (!local && !web) return;
+
+    try {
+      const allWordSpans = this.getAllWordSpans();
+      allWordSpans.forEach((span) => {
+        span.classList.remove(
+          "idl-annotated-word",
+          "source-annotation",
+          "target-annotation"
+        );
+        span.removeAttribute("data-has-annotations");
+
+        const newSpan = span.cloneNode(true) as HTMLElement;
+        span.parentNode?.replaceChild(newSpan, span);
+      });
+
+      const existingContainers = this.articleContentEl.querySelectorAll(
+        ".idl-annotations-container"
+      );
+      existingContainers.forEach((el) => el.remove());
+
+      this.annotationsByWordIndex.clear();
+
+      const webAnnotations =
+        web === true
+          ? await this.apiService.fetchAnnotations(
+              this.articleId,
+              this.articleId
+            )
+          : [];
+      const localAnnotations =
+        local === true ? await this.getLocalAnnotations() : [];
+
+      for (const annotation of localAnnotations) {
+        this.markAnnotatedWords(annotation, true);
+      }
+
+      for (const annotation of webAnnotations) {
+        this.markAnnotatedWords(annotation, false);
+      }
+    } catch (error) {
+      console.error("Error loading annotations:", error);
+    }
+  }
+
+  private async getLocalAnnotations(): Promise<IdealogsAnnotation[]> {
+    try {
+      const annotations = await this.annotationService.loadAnnotations(
+        this.articleId
+      );
+      const idealogsAnnotations: IdealogsAnnotation[] = [];
+
+      for (const commentId in annotations.comments) {
+        const comment = annotations.comments[commentId];
+        idealogsAnnotations.push(
+          this.mapToIdealogsAnnotation(comment, "Comment")
+        );
+      }
+
+      for (const noteId in annotations.notes) {
+        const note = annotations.notes[noteId];
+        idealogsAnnotations.push(this.mapToIdealogsAnnotation(note, "Note"));
+      }
+
+      return idealogsAnnotations;
+    } catch (error) {
+      console.error("Error loading local annotations:", error);
+      return [];
+    }
+  }
+
+  private mapToIdealogsAnnotation(
+    annotation: AnnotationData,
+    kind: string
+  ): IdealogsAnnotation {
+    const isValid = annotation.isValid !== false;
+
+    return {
+      id: parseInt(annotation.id) || 0,
+      kind: kind,
+      commitId: 0,
+      isValid: isValid,
+      validationMessage: annotation.validationMessage,
+      commitIsMerged: true,
+
+      sourceId: annotation.src,
+      sTxtStart: annotation.src_txt_start,
+      sTxtEnd: annotation.src_txt_end,
+      sTxtDisplay: annotation.src_txt_display,
+      sTxt: annotation.src_txt,
+      sTxtDisplayRange: annotation.src_txt_display_range,
+      sTxtRange: annotation.src_range,
+
+      targetId: this.articleId,
+      tTxtStart: annotation.target_txt_start,
+      tTxtEnd: annotation.target_txt_end,
+      tTxtDisplay: annotation.target_txt_display,
+      tTxt: annotation.target_txt,
+      tTxtDisplayRange: annotation.target_txt_display_range,
+      tTxtRange: annotation.target_range,
+    };
+  }
+
+  getAllWordSpans(): HTMLElement[] {
+    if (!this.articleContentEl) return [];
+    const spans = this.articleContentEl.querySelectorAll(
+      "span[data-word-index]"
+    );
+    return Array.from(spans) as HTMLElement[];
+  }
+
+  markAnnotatedWords(annotation: IdealogsAnnotation, isLocal: boolean): void {
+    const isFromCurrentArticle = this.articleId === annotation.sourceId;
+    const isToCurrentArticle = this.articleId === annotation.targetId;
+
+    if (!isFromCurrentArticle && !isToCurrentArticle) return;
+
+    const indices = isFromCurrentArticle
+      ? annotation.sTxtDisplayRange
+      : annotation.tTxtDisplayRange;
+
+    if (!indices || indices.length === 0) return;
+
+    indices.forEach((index: number) => {
+      if (!this.annotationsByWordIndex.has(index)) {
+        this.annotationsByWordIndex.set(index, []);
+      }
+
+      const annotationsArray = this.annotationsByWordIndex.get(index);
+      if (isLocal) {
+        annotationsArray?.unshift({ annotation, isLocal: true });
+      } else {
+        annotationsArray?.push({ annotation, isLocal: false });
+      }
+    });
+
+    indices.forEach((index: number) => {
+      const span = this.articleContentEl.querySelector(
+        `span[data-word-index="${index}"]`
+      );
+      if (!span) return;
+
+      span.classList.add("idl-annotated-word");
+      span.classList.add(
+        isFromCurrentArticle ? "source-annotation" : "target-annotation"
+      );
+
+      if (isLocal) {
+        span.classList.add("local-annotation");
+      }
+
+      if (!span.hasAttribute("data-has-annotations")) {
+        span.setAttribute("data-has-annotations", "true");
+
+        span.addEventListener("click", (e) => {
+          this.toggleAnnotationsForWord(index, span as HTMLElement);
+          e.stopPropagation();
+        });
+      }
+    });
+  }
+
+  private toggleAnnotationsForWord(
+    wordIndex: number,
+    element: HTMLElement
+  ): void {
+    const existingContainer = this.articleContentEl.querySelector(
+      `.idl-annotations-container[data-for-word="${wordIndex}"]`
+    );
+
+    if (existingContainer) {
+      existingContainer.remove();
+      return;
+    }
+
+    const annotations = this.annotationsByWordIndex.get(wordIndex);
+    if (!annotations || annotations.length === 0) return;
+
+    const container = document.createElement("div");
+    container.className = "idl-annotations-container";
+    container.setAttribute("data-for-word", wordIndex.toString());
+
+    annotations.forEach(({ annotation, isLocal }) => {
+      const isFromCurrentArticle = this.articleId === annotation.sourceId;
+      const annotationEl = document.createElement("div");
+      annotationEl.className = "idl-annotation-item";
+
+      annotationEl.classList.add(
+        isFromCurrentArticle ? "from-current" : "to-current"
+      );
+
+      if (isLocal) {
+        annotationEl.classList.add("local-annotation-item");
+      }
+
+      if (annotation.isValid === false) {
+        annotationEl.classList.add("idl-invalid-annotation");
+      }
+
+      const textEl = document.createElement("div");
+      let textContent = isFromCurrentArticle
+        ? annotation.tTxt
+        : annotation.sTxt;
+
+      if (annotation.kind === "Comment") {
+        textContent = textContent.replace(annotation.sTxtDisplay, "").trim();
+      }
+
+      textEl.textContent = textContent;
+
+      annotationEl.appendChild(textEl);
+
+      const displayId = annotation.sourceId;
+      console.log(displayId);
+
+      const linkEl = document.createElement("div");
+      linkEl.style.marginTop = "4px";
+      linkEl.style.fontSize = "0.85em";
+
+      const link = document.createElement("a");
+      link.className = "internal-link";
+      if (displayId.endsWith(".md")) {
+        link.textContent = displayId;
+      } else {
+        link.textContent = `@${displayId}`;
+      }
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.app.workspace.openLinkText(annotation.sourceId, "", "tab");
+      });
+
+      linkEl.appendChild(link);
+      annotationEl.appendChild(linkEl);
+
+      container.appendChild(annotationEl);
+    });
+
+    element.after(container);
+  }
+
+  private formatBibliography(data: any): string {
+    try {
+      let result = "";
+
+      // Format authors
+      if (data.author && Array.isArray(data.author)) {
+        const authorCount = data.author.length;
+        const authors = data.author
+          .map((author: any, index: number) => {
+            if (author.family && author.given) {
+              const initial = author.given.charAt(0);
+              const formattedAuthor = `${author.family}, ${initial}.`;
+
+              // connectors between authors
+              if (index === authorCount - 2) {
+                return formattedAuthor + " & ";
+              } else if (index < authorCount - 2) {
+                return formattedAuthor + ", ";
+              }
+              return formattedAuthor;
+            }
+            return author.name || "";
+          })
+          .join("");
+
+        result += authors;
+      }
+
+      // Date in parentheses
+      const hasYear = data.issued && data.issued.year;
+      result += " ";
+      result += "(";
+      if (hasYear) {
+        result += data.issued.year;
+      } else {
+        result += "n.d.";
+      }
+      result += ")";
+      result += ".";
+
+      // Title
+      if (data.title) {
+        result += " ";
+        result += data.title;
+      }
+
+      // Volume in parentheses
+      if (data.volume) {
+        result += " ";
+        result += `(Vol. ${data.volume})`;
+        result += ".";
+      }
+
+      // Publisher
+      if (data.publisher) {
+        result += " ";
+        result += data.publisher;
+        result += ".";
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Error formatting bibliography:", error);
+      return "Error formatting bibliography data.";
+    }
+  }
+
+  private async renderParentArticle(containerEl: HTMLElement): Promise<void> {
+    try {
+      let yamlContent = this.articleContent;
+      if (yamlContent.startsWith("---") && yamlContent.includes("---", 3)) {
+        const endIndex = yamlContent.indexOf("---", 3);
+        yamlContent = yamlContent.substring(3, endIndex).trim();
+      }
+
+      const parsedYaml = parseYaml(yamlContent);
+
+      const bibContainer = containerEl.createDiv({
+        cls: "idl-bib-container",
+      });
+
+      const bibText = this.formatBibliography(parsedYaml);
+      bibContainer.setText(bibText);
+
+      if (parsedYaml.children && Array.isArray(parsedYaml.children)) {
+        for (const child of parsedYaml.children) {
+          if (child && typeof child === "object" && child.id) {
+            const childContainer = containerEl.createDiv({
+              cls: "idl-child-container",
             });
-            
-            const existingContainers = this.articleContentEl.querySelectorAll('.idl-annotations-container');
-            existingContainers.forEach(el => el.remove());
-            
-            this.annotationsByWordIndex.clear();
-            
-            const annotations = await this.annotationService.loadAnnotations(this.articleId);
-            
-            for (const commentId in annotations.comments) {
-                const comment = annotations.comments[commentId];
-                if (comment.isValid !== false) {
-                    this.highlightComments(comment);
-                }
-            }
-            
-            for (const noteId in annotations.notes) {
-                const note = annotations.notes[noteId];
-                if (note.isValid !== false) {
-                    const article = await this.apiService.fetchArticleById(note.target)
-                    console.log(article, note.target)
-                    if (!article.isParent) {
-                        this.highlightNotes(note);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error loading annotations:', error);
-        }
-        
-        await this.processIdealogsLinks();
-    }
-    
 
-    async loadWebArticleContent(): Promise<void> {
-        try {
-            const [content, articleDetails] = await Promise.allSettled([
-                this.apiService.fetchFileContent(this.articleId),
-                this.apiService.fetchArticleById(this.articleId)
-            ]);
-
-            if (content.status === 'fulfilled') {
-                this.articleContent = content.value;
-            } else {
-                this.articleContent = 'Failed to load article content';
-                console.error('Error loading article content:', content.reason);
-            }
-
-            this.articleHeaderEl.empty();
-            if (articleDetails.status === 'fulfilled') {
-                this.articleTitle = articleDetails.value.title || this.articleId;
-                this.isParentArticle = articleDetails.value.isParent
-            } else {
-                this.articleTitle = this.articleId;
-            }
-                
-            this.articleHeaderEl.createEl('div', { text: this.articleTitle, cls: 'inline-title' });
-            
-            await this.render();
-
-            await this.processIdealogsLinks();
-        } catch (error) {
-            console.error('Unexpected error in loadWebArticleContent:', error);
-            this.articleContent = 'An error occurred while loading the article';
-            this.articleTitle = this.articleId;
-            this.articleHeaderEl.empty();
-            await this.render();
-        }
-    }
-
-    async loadAnnotations(local: boolean, web: boolean): Promise<void> {
-        if (!this.articleId) return;
-
-        if (!local && !web) return;
-        
-        try {
-            const allWordSpans = this.getAllWordSpans();
-            allWordSpans.forEach(span => {
-                span.classList.remove('idl-annotated-word', 'source-annotation', 'target-annotation');
-                span.removeAttribute('data-has-annotations');
-                
-                const newSpan = span.cloneNode(true) as HTMLElement;
-                span.parentNode?.replaceChild(newSpan, span);
+            const flexContainer = childContainer.createDiv({
+              cls: "idl-flex-container",
             });
-            
-            const existingContainers = this.articleContentEl.querySelectorAll('.idl-annotations-container');
-            existingContainers.forEach(el => el.remove());
-            
-            this.annotationsByWordIndex.clear();
 
-            const webAnnotations = web === true ? await this.apiService.fetchAnnotations(this.articleId, this.articleId) : [];
-            const localAnnotations = local === true ? await this.getLocalAnnotations() : [];
-
-            for (const annotation of localAnnotations) {
-                this.markAnnotatedWords(annotation, true);
-            }
-            
-            for (const annotation of webAnnotations) {
-                this.markAnnotatedWords(annotation, false);
-            }
-        } catch (error) {
-            console.error('Error loading annotations:', error);
-        }
-    }
-
-    private async getLocalAnnotations(): Promise<IdealogsAnnotation[]> {
-        try {
-            const annotations = await this.annotationService.loadAnnotations(this.articleId);
-            const idealogsAnnotations: IdealogsAnnotation[] = [];
-            
-            
-            for (const commentId in annotations.comments) {
-                const comment = annotations.comments[commentId];
-                idealogsAnnotations.push(this.mapToIdealogsAnnotation(comment, 'Comment'));
-            }
-            
-            for (const noteId in annotations.notes) {
-                const note = annotations.notes[noteId];
-                idealogsAnnotations.push(this.mapToIdealogsAnnotation(note, 'Note'));
-            }
-            
-            return idealogsAnnotations;
-        } catch (error) {
-            console.error('Error loading local annotations:', error);
-            return [];
-        }
-    }
-
-    private mapToIdealogsAnnotation(annotation: AnnotationData, kind: string): IdealogsAnnotation {
-        const isValid = annotation.isValid !== false;
-        
-        return {
-            id: parseInt(annotation.id) || 0,
-            kind: kind,
-            commitId: 0,
-            isValid: isValid,
-            validationMessage: annotation.validationMessage,
-            commitIsMerged: true,
-            
-            sourceId: annotation.src,
-            sTxtStart: annotation.src_txt_start,
-            sTxtEnd: annotation.src_txt_end,
-            sTxtDisplay: annotation.src_txt_display,
-            sTxt: annotation.src_txt,
-            sTxtDisplayRange: annotation.src_txt_display_range,
-            sTxtRange: annotation.src_range,
-            
-            targetId: this.articleId,
-            tTxtStart: annotation.target_txt_start,
-            tTxtEnd: annotation.target_txt_end,
-            tTxtDisplay: annotation.target_txt_display,
-            tTxt: annotation.target_txt,
-            tTxtDisplayRange: annotation.target_txt_display_range,
-            tTxtRange: annotation.target_range
-        };
-    }
-
-    getAllWordSpans(): HTMLElement[] {
-        if (!this.articleContentEl) return [];
-        const spans = this.articleContentEl.querySelectorAll('span[data-word-index]');
-        return Array.from(spans) as HTMLElement[];
-    }
-
-    markAnnotatedWords(annotation: IdealogsAnnotation, isLocal: boolean): void {
-        const isFromCurrentArticle = this.articleId === annotation.sourceId;
-        const isToCurrentArticle = this.articleId === annotation.targetId;
-
-        if (!isFromCurrentArticle && !isToCurrentArticle) return;
-        
-        const indices = isFromCurrentArticle 
-            ? annotation.sTxtDisplayRange 
-            : annotation.tTxtDisplayRange;
-        
-        if (!indices || indices.length === 0) return;
-        
-        indices.forEach((index: number) => {
-            if (!this.annotationsByWordIndex.has(index)) {
-                this.annotationsByWordIndex.set(index, []);
-            }
-            
-            const annotationsArray = this.annotationsByWordIndex.get(index);
-            if (isLocal) {
-                annotationsArray?.unshift({annotation, isLocal: true});
-            } else {
-                annotationsArray?.push({annotation, isLocal: false});
-            }
-        });
-        
-        indices.forEach((index: number) => {
-            const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
-            if (!span) return;
-            
-            span.classList.add('idl-annotated-word');
-            span.classList.add(isFromCurrentArticle ? 'source-annotation' : 'target-annotation');
-            
-            if (isLocal) {
-                span.classList.add('local-annotation');
-            }
-            
-            if (!span.hasAttribute('data-has-annotations')) {
-                span.setAttribute('data-has-annotations', 'true');
-                
-                span.addEventListener('click', (e) => {
-                    this.toggleAnnotationsForWord(index, span as HTMLElement);
-                    e.stopPropagation();
-                });
-            }
-        });
-    }
-
-    private toggleAnnotationsForWord(wordIndex: number, element: HTMLElement): void {
-        const existingContainer = this.articleContentEl.querySelector(`.idl-annotations-container[data-for-word="${wordIndex}"]`);
-        
-        if (existingContainer) {
-            existingContainer.remove();
-            return;
-        }
-        
-        const annotations = this.annotationsByWordIndex.get(wordIndex);
-        if (!annotations || annotations.length === 0) return;
-        
-        const container = document.createElement('div');
-        container.className = 'idl-annotations-container';
-        container.setAttribute('data-for-word', wordIndex.toString());
-        
-        annotations.forEach(({annotation, isLocal}) => {
-            const isFromCurrentArticle = this.articleId === annotation.sourceId;
-            const annotationEl = document.createElement('div');
-            annotationEl.className = 'idl-annotation-item';
-            
-            annotationEl.classList.add(isFromCurrentArticle ? 'from-current' : 'to-current');
-            
-            if (isLocal) {
-                annotationEl.classList.add('local-annotation-item');
-            }
-            
-            if (annotation.isValid === false) {
-                annotationEl.classList.add('idl-invalid-annotation');
-            }
-            
-            const textEl = document.createElement('div');
-            let textContent = isFromCurrentArticle ? annotation.tTxt : annotation.sTxt;
-            
-            if (annotation.kind === 'Comment') {
-                textContent = textContent.replace(annotation.sTxtDisplay, '').trim()
-            }
-
-            textEl.textContent = textContent;
-            
-            annotationEl.appendChild(textEl);
-            
-            const displayId = annotation.sourceId;
-            console.log(displayId)
-        
-            const linkEl = document.createElement('div');
-            linkEl.style.marginTop = '4px';
-            linkEl.style.fontSize = '0.85em';
-            
-            const link = document.createElement('a');
-            link.className = 'internal-link';
-            if (displayId.endsWith('.md')) {
-                link.textContent = displayId;
-            } else {
-                link.textContent = `@${displayId}`;
-            }
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.app.workspace.openLinkText(annotation.sourceId, '', 'tab');
+            const linkContainer = flexContainer.createDiv();
+            const link = linkContainer.createEl("a", {
+              cls: "idl-article-link ",
+              text: child.id,
             });
-            
-            linkEl.appendChild(link);
-            annotationEl.appendChild(linkEl);
-            
-            container.appendChild(annotationEl);
-        });
-        
-        element.after(container);
-    }
+            link.setAttribute("href", child.id);
 
-    private formatBibliography(data: any): string {
-        try {
-            let result = '';
-            
-            // Format authors
-            if (data.author && Array.isArray(data.author)) {
-                const authorCount = data.author.length;
-                const authors = data.author.map((author: any, index: number) => {
-                    if (author.family && author.given) {
-                        const initial = author.given.charAt(0);
-                        const formattedAuthor = `${author.family}, ${initial}.`;
-                        
-                        // connectors between authors
-                        if (index === authorCount - 2) {
-                            return formattedAuthor + ' & ';
-                        } else if (index < authorCount - 2) {
-                            return formattedAuthor + ', ';
-                        }
-                        return formattedAuthor;
-                    }
-                    return author.name || '';
-                }).join('');
-                
-                result += authors;
-            }
-            
-            // Date in parentheses
-            const hasYear = data.issued && data.issued.year;
-            result += ' ';
-            result += '(';
-            if (hasYear) {
-                result += data.issued.year;
-            } else {
-                result += 'n.d.';
-            }
-            result += ')';
-            result += '.';
-            
-            // Title
-            if (data.title) {
-                result += ' ';
-                result += data.title;
-            }
-            
-            // Volume in parentheses
-            if (data.volume) {
-                result += ' ';
-                result += `(Vol. ${data.volume})`;
-                result += '.';
-            }
-            
-            // Publisher
-            if (data.publisher) {
-                result += ' ';
-                result += data.publisher;
-                result += '.';
-            }
-            
-            return result;
-        } catch (error) {
-            console.error('Error formatting bibliography:', error);
-            return 'Error formatting bibliography data.';
+            const titleContainer = flexContainer.createDiv();
+            const titleText = child.title.replace(` - ${child.id}`, "");
+            titleContainer.setText(titleText);
+          }
         }
+      }
+    } catch (error) {
+      console.error("Error rendering parent article:", error);
+      containerEl.createEl("p", {
+        text: "Error rendering parent article content.",
+      });
+    }
+  }
+
+  private async render(): Promise<void> {
+    this.articleHeaderEl.empty();
+    this.articleContentEl.empty();
+
+    this.articleContentEl.addClass("markdown-reading-view");
+
+    const previewView = this.articleContentEl.createDiv({
+      cls: "markdown-preview-view markdown-rendered node-insert-event is-readable-line-width allow-fold-headings allow-fold-lists show-indentation-guide show-properties",
+    });
+
+    const previewSection = previewView.createDiv({
+      cls: "markdown-preview-sizer markdown-preview-section idealogs-article-content",
+    });
+
+    previewSection.createDiv({
+      cls: "markdown-preview-pusher",
+      attr: { style: "width: 1px; height: 0.1px; margin-bottom: 0px;" },
+    });
+
+    const headerDiv = previewSection.createDiv({ cls: "mod-header mod-ui" });
+    headerDiv.createDiv({
+      cls: "inline-title",
+      text: this.articleTitle || this.articleId,
+      attr: {
+        contenteditable: "false",
+        spellcheck: "true",
+        autocapitalize: "on",
+        tabindex: "-1",
+        enterkeyhint: "done",
+      },
+    });
+
+    console.log("article-content", this.isParentArticle, this.articleContent);
+
+    if (this.isParentArticle) {
+      await this.renderParentArticle(previewSection);
+    } else {
+      await MarkdownRenderer.render(
+        this.app,
+        this.articleContent,
+        previewSection,
+        "",
+        this.component
+      );
+
+      const processor = new WordProcessor({ articleId: this.articleId });
+      processor.processMarkdown(previewSection);
     }
 
+    this.attachLinkHandlers();
+  }
 
-    private async renderParentArticle(containerEl: HTMLElement): Promise<void> {
-        try {
-            let yamlContent = this.articleContent;
-            if (yamlContent.startsWith("---") && yamlContent.includes("---", 3)) {
-                const endIndex = yamlContent.indexOf("---", 3);
-                yamlContent = yamlContent.substring(3, endIndex).trim();
-            }
-            
-            const parsedYaml = parseYaml(yamlContent);
-            
-            const bibContainer = containerEl.createDiv({
-                cls: 'idl-bib-container'
-            });
-            
-            const bibText = this.formatBibliography(parsedYaml);
-            bibContainer.setText(bibText);
-            
-            if (parsedYaml.children && Array.isArray(parsedYaml.children)) {
-                for (const child of parsedYaml.children) {
-                    if (child && typeof child === 'object' && child.id) {
-                        const childContainer = containerEl.createDiv({
-                            cls: 'idl-child-container'
-                        });
-                        
-                        const flexContainer = childContainer.createDiv({
-                            cls: 'idl-flex-container'
-                        });
-                        
-                        const linkContainer = flexContainer.createDiv();
-                        const link = linkContainer.createEl('a', {
-                            cls: 'idl-article-link ',
-                            text: child.id
-                        });
-                        link.setAttribute('href', child.id);
-                        
-                        const titleContainer = flexContainer.createDiv();
-                        const titleText = child.title.replace(` - ${child.id}`, '');
-                        titleContainer.setText(titleText);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error rendering parent article:', error);
-            containerEl.createEl('p', {
-                text: 'Error rendering parent article content.'
-            });
+  // for LOCAL mode
+  private highlightComments(comment: AnnotationData): void {
+    if (comment.isValid === false) return;
+
+    if (
+      !comment.src_txt_display_range ||
+      comment.src_txt_display_range.length === 0
+    )
+      return;
+
+    const indices = comment.src_txt_display_range;
+
+    indices.forEach((index: number) => {
+      if (!this.localModeAnnotationsByWordIndex.has(index)) {
+        this.localModeAnnotationsByWordIndex.set(index, []);
+      }
+      this.localModeAnnotationsByWordIndex.get(index)?.push({
+        annotation: comment,
+      });
+    });
+
+    indices.forEach((index: number) => {
+      const span = this.articleContentEl.querySelector(
+        `span[data-word-index="${index}"]`
+      );
+      if (!span) return;
+
+      span.classList.add("idl-annotated-word");
+      span.classList.add("source-annotation");
+      span.classList.add("local-annotation");
+
+      if (!span.hasAttribute("data-has-annotations")) {
+        span.setAttribute("data-has-annotations", "true");
+
+        span.addEventListener("click", (e) => {
+          this.toggleLocalModeAnnotationsForWord(index, span as HTMLElement);
+          e.stopPropagation();
+        });
+      }
+    });
+  }
+
+  private highlightNotes(note: AnnotationData): void {
+    if (note.isValid === false) return;
+
+    const displayText = note.src_txt_display;
+    if (!displayText) return;
+
+    const allSpans = this.getAllWordSpans();
+    if (allSpans.length === 0) return;
+
+    const matchingSpans: HTMLElement[] = [];
+
+    if (
+      note.noteMeta &&
+      note.noteMeta.previousWordsIndex &&
+      note.noteMeta.linkTextIndex
+    ) {
+      const linkIndex = note.noteMeta.linkTextIndex[0];
+      const linkSpan = allSpans.find((span) => {
+        const index = parseInt(span.getAttribute("data-word-index") || "-1");
+        return index === linkIndex;
+      });
+
+      if (linkSpan) {
+        const previousIndices = note.noteMeta.previousWordsIndex;
+        for (const index of previousIndices) {
+          const span = allSpans.find(
+            (s) => parseInt(s.getAttribute("data-word-index") || "-1") === index
+          );
+          if (span) matchingSpans.push(span);
         }
-    }
-    
-    
 
+        const displayWords = displayText
+          .split(/\s+/)
+          .filter((w) => w.length > 0);
+        const filteredSpans = matchingSpans.filter((span) =>
+          displayWords.some(
+            (word) =>
+              span.textContent === word || span.textContent?.includes(word)
+          )
+        );
 
-    private async render(): Promise<void> {
-        this.articleHeaderEl.empty();
-        this.articleContentEl.empty();
-        
-        this.articleContentEl.addClass('markdown-reading-view');
-        
-        const previewView = this.articleContentEl.createDiv({
-            cls: 'markdown-preview-view markdown-rendered node-insert-event is-readable-line-width allow-fold-headings allow-fold-lists show-indentation-guide show-properties'
-        });
-        
-        const previewSection = previewView.createDiv({
-            cls: 'markdown-preview-sizer markdown-preview-section idealogs-article-content'
-        });
-        
-        previewSection.createDiv({ cls: 'markdown-preview-pusher', attr: { style: 'width: 1px; height: 0.1px; margin-bottom: 0px;' } });
-        
-        const headerDiv = previewSection.createDiv({ cls: 'mod-header mod-ui' });
-        headerDiv.createDiv({ 
-            cls: 'inline-title', 
-            text: this.articleTitle || this.articleId,
-            attr: { 
-                contenteditable: 'false',
-                spellcheck: 'true',
-                autocapitalize: 'on',
-                tabindex: '-1',
-                enterkeyhint: 'done'
-            }
-        });
+        if (filteredSpans.length > 0) {
+          const indices = filteredSpans.map((span) =>
+            parseInt(span.getAttribute("data-word-index") || "0")
+          );
 
-        console.log('article-content', this.isParentArticle, this.articleContent)
-        
-        if (this.isParentArticle) {
-            await this.renderParentArticle(previewSection);
-        } else {
-            await MarkdownRenderer.render(
-                this.app,
-                this.articleContent,
-                previewSection,
-                '',
-                this.component
-            );
-            
-            const processor = new WordProcessor({ articleId: this.articleId });
-            processor.processMarkdown(previewSection);
-        }
-        
-        this.attachLinkHandlers();
-    }
-
-    // for LOCAL mode
-    private highlightComments(comment: AnnotationData): void {
-        if (comment.isValid === false) return;
-    
-        if (!comment.src_txt_display_range || comment.src_txt_display_range.length === 0) return;
-        
-        const indices = comment.src_txt_display_range;
-        
-        indices.forEach((index: number) => {
+          indices.forEach((index) => {
             if (!this.localModeAnnotationsByWordIndex.has(index)) {
-                this.localModeAnnotationsByWordIndex.set(index, []);
+              this.localModeAnnotationsByWordIndex.set(index, []);
             }
             this.localModeAnnotationsByWordIndex.get(index)?.push({
-                annotation: comment
+              annotation: note,
             });
-        });
-        
-        indices.forEach((index: number) => {
-            const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
+          });
+
+          indices.forEach((index) => {
+            const span = this.articleContentEl.querySelector(
+              `span[data-word-index="${index}"]`
+            );
             if (!span) return;
-            
-            span.classList.add('idl-annotated-word');
-            span.classList.add('source-annotation');
-            span.classList.add('local-annotation');
-            
-            if (!span.hasAttribute('data-has-annotations')) {
-                span.setAttribute('data-has-annotations', 'true');
-                
-                span.addEventListener('click', (e) => {
-                    this.toggleLocalModeAnnotationsForWord(index, span as HTMLElement);
-                    e.stopPropagation();
-                });
-            }
-        });
-    }
-    
-    private highlightNotes(note: AnnotationData): void {
-        if (note.isValid === false) return;
-        
-        const displayText = note.src_txt_display;
-        if (!displayText) return;
-        
-        const allSpans = this.getAllWordSpans();
-        if (allSpans.length === 0) return;
-        
-        const matchingSpans: HTMLElement[] = [];
-        
-        if (note.noteMeta && note.noteMeta.previousWordsIndex && note.noteMeta.linkTextIndex) {
-            const linkIndex = note.noteMeta.linkTextIndex[0];
-            const linkSpan = allSpans.find(span => {
-                const index = parseInt(span.getAttribute('data-word-index') || '-1');
-                return index === linkIndex;
-            });
-            
-            if (linkSpan) {
-                const previousIndices = note.noteMeta.previousWordsIndex;
-                for (const index of previousIndices) {
-                    const span = allSpans.find(s => 
-                        parseInt(s.getAttribute('data-word-index') || '-1') === index
-                    );
-                    if (span) matchingSpans.push(span);
-                }
-                
-                const displayWords = displayText.split(/\s+/).filter(w => w.length > 0);
-                const filteredSpans = matchingSpans.filter(span => 
-                    displayWords.some(word => span.textContent === word || 
-                                             span.textContent?.includes(word))
+
+            span.classList.add("idl-annotated-word");
+            span.classList.add("source-annotation");
+            span.classList.add("local-annotation");
+
+            if (!span.hasAttribute("data-has-annotations")) {
+              span.setAttribute("data-has-annotations", "true");
+
+              span.addEventListener("click", (e) => {
+                this.toggleLocalModeAnnotationsForWord(
+                  index,
+                  span as HTMLElement
                 );
-                
-                if (filteredSpans.length > 0) {
-                    const indices = filteredSpans.map(span => 
-                        parseInt(span.getAttribute('data-word-index') || '0')
-                    );
-                    
-                    indices.forEach(index => {
-                        if (!this.localModeAnnotationsByWordIndex.has(index)) {
-                            this.localModeAnnotationsByWordIndex.set(index, []);
-                        }
-                        this.localModeAnnotationsByWordIndex.get(index)?.push({
-                            annotation: note,
-                        });
-                    });
-                    
-                    indices.forEach(index => {
-                        const span = this.articleContentEl.querySelector(`span[data-word-index="${index}"]`);
-                        if (!span) return;
-                        
-                        span.classList.add('idl-annotated-word');
-                        span.classList.add('source-annotation');
-                        span.classList.add('local-annotation');
-                        
-                        if (!span.hasAttribute('data-has-annotations')) {
-                            span.setAttribute('data-has-annotations', 'true');
-                            
-                            span.addEventListener('click', (e) => {
-                                this.toggleLocalModeAnnotationsForWord(index, span as HTMLElement);
-                                e.stopPropagation();
-                            });
-                        }
-                    });
-                    
-                    return; 
-                }
+                e.stopPropagation();
+              });
             }
+          });
+
+          return;
         }
+      }
+    }
+  }
+
+  private toggleLocalModeAnnotationsForWord(
+    wordIndex: number,
+    element: HTMLElement
+  ): void {
+    const existingContainer = this.articleContentEl.querySelector(
+      `.idl-annotations-container[data-for-word="${wordIndex}"]`
+    );
+
+    if (existingContainer) {
+      existingContainer.remove();
+      return;
     }
 
-    private toggleLocalModeAnnotationsForWord(wordIndex: number, element: HTMLElement): void {
-        const existingContainer = this.articleContentEl.querySelector(`.idl-annotations-container[data-for-word="${wordIndex}"]`);
-        
-        if (existingContainer) {
-            existingContainer.remove();
-            return;
-        }
-        
-        const annotations = this.localModeAnnotationsByWordIndex.get(wordIndex);
-        if (!annotations || annotations.length === 0) return;
-        
-        const container = document.createElement('div');
-        container.className = 'idl-annotations-container';
-        container.setAttribute('data-for-word', wordIndex.toString());
-        
-        annotations.forEach(({annotation}, i) => {
-            const annotationEl = document.createElement('div');
-            annotationEl.className = 'idl-annotation-item';
-            
-            const textEl = document.createElement('div');
-            textEl.textContent = annotation.target_txt;
-            annotationEl.appendChild(textEl);
-            
-            if (annotation.target) {
-                const linkEl = document.createElement('div');
-                linkEl.style.marginTop = '4px';
-                linkEl.style.fontSize = '0.85em';
-                
-                const link = document.createElement('a');
-                link.className = 'internal-link';
-                link.setAttribute('href', annotation.target);
-                link.textContent = `@${annotation.target}`;
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.app.workspace.openLinkText(annotation.target, '', 'tab');
-                });
-                
-                linkEl.appendChild(link);
-                annotationEl.appendChild(linkEl);
-            }
-            
-            container.appendChild(annotationEl);
+    const annotations = this.localModeAnnotationsByWordIndex.get(wordIndex);
+    if (!annotations || annotations.length === 0) return;
+
+    const container = document.createElement("div");
+    container.className = "idl-annotations-container";
+    container.setAttribute("data-for-word", wordIndex.toString());
+
+    annotations.forEach(({ annotation }, i) => {
+      const annotationEl = document.createElement("div");
+      annotationEl.className = "idl-annotation-item";
+
+      const textEl = document.createElement("div");
+      textEl.textContent = annotation.target_txt;
+      annotationEl.appendChild(textEl);
+
+      if (annotation.target) {
+        const linkEl = document.createElement("div");
+        linkEl.style.marginTop = "4px";
+        linkEl.style.fontSize = "0.85em";
+
+        const link = document.createElement("a");
+        link.className = "internal-link";
+        link.setAttribute("href", annotation.target);
+        link.textContent = `@${annotation.target}`;
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.app.workspace.openLinkText(annotation.target, "", "tab");
         });
-        
-        element.after(container);
-    }
-    
 
-    async onClose() {
-        document.removeEventListener('keydown', this.altKeyHandler);
-        document.removeEventListener('keyup', this.altKeyHandler);
-        
-        this.app.workspace.off('file-open', this.fileOpenHandlerRef);
-        
-        this.component.unload();
-        return super.onClose();
-    }
+        linkEl.appendChild(link);
+        annotationEl.appendChild(linkEl);
+      }
+
+      container.appendChild(annotationEl);
+    });
+
+    element.after(container);
+  }
+
+  async onClose() {
+    document.removeEventListener("keydown", this.altKeyHandler);
+    document.removeEventListener("keyup", this.altKeyHandler);
+
+    this.app.workspace.off("file-open", this.fileOpenHandlerRef);
+
+    this.component.unload();
+    return super.onClose();
+  }
 }
