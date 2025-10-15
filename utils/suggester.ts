@@ -7,9 +7,9 @@ import {
   EditorSuggestTriggerInfo,
   Editor,
 } from "obsidian";
-import { Article } from "../../types";
-import { ApiService } from "../../utils/api";
-import { ARTICLE_TRIGGER_PATTERN, API_DEBOUNCE_DELAY } from "../../constants";
+import { Article } from "../types";
+import { ApiService } from "./api";
+import { ARTICLE_TRIGGER_PATTERN, API_DEBOUNCE_DELAY } from "../constants";
 
 export class ArticleSuggest extends EditorSuggest<Article> {
   private apiService: ApiService;

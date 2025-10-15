@@ -1,5 +1,5 @@
 import { App, Plugin, MarkdownView } from "obsidian";
-import { ArticleSuggest } from "../../components/old/suggester";
+import { ArticleSuggest } from "../../utils/suggester";
 import { Article } from "../../types";
 import { ApiService } from "../../utils/api";
 

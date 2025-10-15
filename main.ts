@@ -1,5 +1,5 @@
 import { Plugin, TFile, MarkdownView } from "obsidian";
-import { ArticleSuggest } from "./components/suggester";
+import { ArticleSuggest } from "./utils/suggester";
 import { patchDefaultSuggester } from "./utils/suggest-patcher";
 import { ApiService } from "./utils/api";
 import {
