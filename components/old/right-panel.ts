@@ -1,14 +1,14 @@
 import { ItemView, WorkspaceLeaf, Component, MarkdownView } from "obsidian";
-import { RightPanelListView } from "./old/right-panel-list-view";
-import { RightPanelFormView } from "./old/right-panel-form-view";
-import { CommentForm } from "./old/comment-form";
-import { NoteForm } from "./old/note-form";
+import { RightPanelListView } from "./right-panel-list-view";
+import { RightPanelFormView } from "./right-panel-form-view";
+import { CommentForm } from "./comment-form";
+import { NoteForm } from "./note-form";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
+} from "../../utils/old/annotation-service";
 import { Note } from "utils/note-parser";
-import { IDEALOGS_ANNOTATOR } from "./old/idealogs-annotator";
+import { IDEALOGS_ANNOTATOR } from "./idealogs-annotator";
 
 export const IDL_RIGHT_PANEL = "idl-right-panel";
 

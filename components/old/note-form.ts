@@ -1,29 +1,25 @@
-import { Component, MarkdownView, Notice, App } from "obsidian";
-import {
-  annotationToComment,
-  Comment,
-  parseComments,
-} from "../utils/comment-parser";
-import { ArticleAutocompleteField } from "./old/article-input";
-import { Article } from "../types";
+import { Component, Notice, App } from "obsidian";
+import { ArticleAutocompleteField } from "./article-input";
+import { Article } from "../../types";
 import { IDEALOGS_ANNOTATOR, IdealogsAnnotator } from "./idealogs-annotator";
-import { ApiService } from "../utils/api";
+import { ApiService } from "../../utils/api";
 import {
   AnnotationData,
   AnnotationService,
-} from "../utils/old/annotation-service";
+} from "../../utils/old/annotation-service";
 
-import { v4 as uuidv4 } from "uuid";
+import { Note } from "utils/note-parser";
 
-export interface CommentFormOptions {
+export interface NoteFormOptions {
   container: HTMLElement;
   onBack: () => void;
   activeFilePath: string;
   app: App;
-  commentData?: AnnotationData;
+  noteData?: AnnotationData;
+  note?: Note;
 }
 
-export class CommentForm extends Component {
+export class NoteForm extends Component {
   private app: App;
   private container: HTMLElement;
   private contentEl: HTMLElement;
@@ -31,19 +27,25 @@ export class CommentForm extends Component {
   private activeFilePath: string;
   private apiService: ApiService;
   private annotationService: AnnotationService;
-  private commentData: AnnotationData;
   public isTargetArticleSelection = false;
+  private noteData: AnnotationData | undefined;
+  private targetArticle: Article;
 
-  private comments: Comment[] = [];
-  private textDisplayDropdown: HTMLSelectElement;
-  private commentTextarea: HTMLTextAreaElement;
+  private note?: Note;
+
+  private textStart: HTMLInputElement;
+  private textEnd: HTMLInputElement;
+  private textDisplay: HTMLInputElement;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
   private targetTextStartInput: HTMLInputElement;
+  private targetTextStartField: HTMLElement;
   private targetTextEndInput: HTMLInputElement;
+  private targetTextEndField: HTMLElement;
   private targetTextDisplayInput: HTMLInputElement;
+  private targetTextDisplayField: HTMLElement;
 
-  constructor(options: CommentFormOptions) {
+  constructor(options: NoteFormOptions) {
     super();
     this.container = options.container;
     this.onBack = options.onBack;
@@ -51,132 +53,55 @@ export class CommentForm extends Component {
     this.app = options.app;
     this.apiService = new ApiService();
     this.annotationService = new AnnotationService(this.app);
+    this.noteData = options.noteData;
+    this.note = options.note || this.noteData?.noteMeta;
 
-    if (options.commentData) {
-      this.commentData = { ...options.commentData };
-    }
     this.createForm();
 
-    if (this.commentData) {
-      this.populateForm(this.commentData);
-      this.setFormReadOnly();
-    } else {
-      this.loadCommentsFromFile();
-      this.resetFormFields();
+    if (this.noteData) {
+      this.populateForm(this.noteData);
     }
   }
 
-  private populateForm(commentData: AnnotationData): void {
-    this.textDisplayDropdown.innerHTML = "";
-    const option = document.createElement("option");
-    option.value = commentData.id;
-    option.text = commentData.src_txt_display;
-    option.selected = true;
-    this.textDisplayDropdown.appendChild(option);
+  private async populateForm(noteData: AnnotationData): Promise<void> {
+    this.textStart.value = noteData.src_txt_start || "";
+    this.textEnd.value = noteData.src_txt_end || "";
+    this.textDisplay.value = noteData.src_txt_display || "";
 
-    this.commentTextarea.value = commentData.src_txt
-      .replace(commentData.src_txt_display, "")
-      .trim();
+    this.targetTextStartInput.value = noteData.target_txt_start || "";
+    this.targetTextEndInput.value = noteData.target_txt_end || "";
+    this.targetTextDisplayInput.value = noteData.target_txt_display || "";
 
-    this.articleAutocomplete?.setValue(commentData.target);
-    this.selectedArticle = {
-      id: commentData.target,
-      title: commentData.target,
-      kind: "",
-      isParent: false,
-    };
+    this.articleAutocomplete?.setValue(noteData.target || "");
 
-    this.targetTextStartInput.value = commentData.target_txt_start;
-    this.targetTextEndInput.value = commentData.target_txt_end;
-    this.targetTextDisplayInput.value = commentData.target_txt_display;
+    if (noteData.target) {
+      this.articleAutocomplete?.setDisabled(true);
 
-    if (this.selectedArticle) {
-      this.openArticleView(this.selectedArticle);
+      this.targetArticle = await this.apiService.fetchArticleById(
+        noteData.target
+      );
+
+      this.selectedArticle = {
+        id: noteData.target,
+        title: noteData.target,
+        kind: "",
+        isParent: this.targetArticle.isParent,
+      };
+
+      if (this.selectedArticle) {
+        this.openArticleView(this.selectedArticle);
+      }
+
+      if (this.targetArticle.isParent) {
+        this.targetTextStartField.hidden = true;
+        this.targetTextEndField.hidden = true;
+        this.targetTextDisplayField.hidden = true;
+      }
     }
-  }
-
-  private setFormReadOnly(): void {
-    this.textDisplayDropdown.disabled = true;
-    this.commentTextarea.disabled = true;
-  }
-
-  private async loadCommentsFromFile(): Promise<void> {
-    setTimeout(async () => {
-      const markdownLeaves = this.app.workspace.getLeavesOfType("markdown");
-      let content = "";
-
-      for (const leaf of markdownLeaves) {
-        const view = leaf.view;
-        if (
-          view instanceof MarkdownView &&
-          view.file &&
-          view.file.path === this.activeFilePath
-        ) {
-          content = view.editor.getValue();
-          break;
-        }
-      }
-
-      if (content) {
-        this.comments = parseComments(content);
-
-        try {
-          const annotations = await this.annotationService.loadAnnotations(
-            this.activeFilePath
-          );
-          const savedComments = annotations.comments;
-
-          this.comments = this.comments.filter((comment) => {
-            const commentText = `${comment.title} ${comment.body}`.trim();
-
-            for (const commentId in savedComments) {
-              const savedComment = savedComments[commentId];
-              const savedText = savedComment.src_txt.trim();
-
-              if (commentText === savedText) {
-                return false;
-              }
-            }
-
-            return true;
-          });
-        } catch (error) {
-          console.error("Error loading annotations:", error);
-        }
-
-        this.updateCommentDropdown();
-      }
-    }, 500);
-  }
-
-  private resetFormFields(): void {
-    this.commentTextarea.value = "";
-    this.targetTextDisplayInput.value = "";
-    this.targetTextStartInput.value = "";
-    this.targetTextEndInput.value = "";
-    this.articleAutocomplete?.setValue("");
-  }
-
-  private updateCommentDropdown(): void {
-    this.textDisplayDropdown.innerHTML = "";
-
-    const placeholderOption = document.createElement("option");
-    placeholderOption.value = "";
-    placeholderOption.text = "Select a comment...";
-    placeholderOption.disabled = true;
-    placeholderOption.selected = true;
-    this.textDisplayDropdown.appendChild(placeholderOption);
-
-    this.comments.forEach((comment, index) => {
-      const option = document.createElement("option");
-      option.value = index.toString();
-      option.text = comment.title;
-      this.textDisplayDropdown.appendChild(option);
-    });
   }
 
   private createForm(): void {
-    this.contentEl = this.container.createDiv({ cls: "idl-comment-form" });
+    this.contentEl = this.container.createDiv({ cls: "idl-note-form" });
 
     const headerContainer = this.contentEl.createDiv({ cls: "form-header" });
     const backButton = headerContainer.createEl("button", {
@@ -184,11 +109,13 @@ export class CommentForm extends Component {
     });
     backButton.addEventListener("click", this.onBack);
 
-    headerContainer.createEl("h3", { text: "Comment" });
+    headerContainer.createEl("h3", {
+      text: this.noteData ? "Edit Note" : "New Note",
+    });
 
     const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
 
-    const isInvalid = this.commentData && this.commentData.isValid === false;
+    const isInvalid = this.noteData && this.noteData.isValid === false;
     if (isInvalid) {
       const validationWarningEl = formContainer.createDiv({
         cls: "idl-validation-warning",
@@ -201,35 +128,34 @@ export class CommentForm extends Component {
       validationWarningEl.createDiv({
         cls: "idl-warning-message",
         text:
-          this.commentData.validationMessage ||
-          "Annotation may be invalid due to document changes",
+          this.noteData?.validationMessage ||
+          "Note may be invalid due to document changes",
       });
     }
 
-    // Text Display field (dropdown)
+    // Original form elements
+    const srcRangeFields = formContainer.createDiv({
+      cls: "idl-form-field idl-range-field",
+    });
+
+    const startField = srcRangeFields.createDiv({ cls: "idl-start-field" });
+    startField.createEl("label", { text: "Text Start" });
+    this.textStart = startField.createEl("input", {
+      type: "text",
+    });
+
+    const endField = srcRangeFields.createDiv({ cls: "idl-end-field" });
+    endField.createEl("label", { text: "Text End" });
+    this.textEnd = endField.createEl("input", {
+      type: "text",
+    });
+
     const textDisplayField = formContainer.createDiv({ cls: "idl-form-field" });
     textDisplayField.createEl("label", { text: "Text Display" });
-    this.textDisplayDropdown = textDisplayField.createEl("select", {
-      cls: "idl-comment-dropdown",
+    this.textDisplay = textDisplayField.createEl("input", {
+      type: "text",
     });
 
-    this.textDisplayDropdown.addEventListener("change", (e) => {
-      const target = e.target as HTMLSelectElement;
-      const commentIndex = parseInt(target.value);
-      if (!isNaN(commentIndex) && this.comments[commentIndex]) {
-        this.commentTextarea.value = this.comments[commentIndex].body;
-      }
-    });
-
-    // Comment field
-    const commentField = formContainer.createDiv({ cls: "idl-form-field" });
-    commentField.createEl("label", { text: "Comment" });
-    this.commentTextarea = commentField.createEl("textarea", {
-      attr: { rows: "4" },
-    });
-    this.commentTextarea.disabled = true;
-
-    // Target Article field
     const targetArticleField = formContainer.createDiv({
       cls: "idl-form-field",
     });
@@ -246,81 +172,44 @@ export class CommentForm extends Component {
     });
     this.addChild(this.articleAutocomplete);
 
-    // Target text range fields
-    const textRangeFields = formContainer.createDiv({
+    this.targetTextDisplayField = formContainer.createDiv({
+      cls: "idl-form-field",
+    });
+    this.targetTextDisplayField.createEl("label", {
+      text: "Target Text Display",
+    });
+    this.targetTextDisplayInput = this.targetTextDisplayField.createEl(
+      "input",
+      {
+        type: "text",
+      }
+    );
+
+    const targetSrcRangeFields = formContainer.createDiv({
       cls: "idl-form-field idl-range-field",
     });
 
-    const startField = textRangeFields.createDiv({ cls: "idl-start-field" });
-    startField.createEl("label", { text: "Target Text Start" });
-    this.targetTextStartInput = startField.createEl("input", {
+    this.targetTextStartField = targetSrcRangeFields.createDiv({
+      cls: "idl-start-field",
+    });
+    this.targetTextStartField.createEl("label", { text: "Target Text Start" });
+    this.targetTextStartInput = this.targetTextStartField.createEl("input", {
       type: "text",
     });
 
-    const endField = textRangeFields.createDiv({ cls: "idl-end-field" });
-    endField.createEl("label", { text: "Target Text End" });
-    this.targetTextEndInput = endField.createEl("input", {
+    this.targetTextEndField = targetSrcRangeFields.createDiv({
+      cls: "idl-end-field",
+    });
+    this.targetTextEndField.createEl("label", { text: "Target Text End" });
+    this.targetTextEndInput = this.targetTextEndField.createEl("input", {
       type: "text",
     });
 
-    // Target text display field
-    const targetDisplayField = formContainer.createDiv({
-      cls: "idl-form-field",
-    });
-    targetDisplayField.createEl("label", { text: "Target Text Display" });
-    this.targetTextDisplayInput = targetDisplayField.createEl("input", {
-      type: "text",
-    });
-
+    // Buttons container
     const buttonContainer = formContainer.createDiv({ cls: "idl-btns" });
-
-    if (this.commentData && this.commentData.isValid === false) {
-      const deleteButton = buttonContainer.createEl("button", {
-        text: "Delete",
-        cls: "idl-delete-btn",
-      });
-      deleteButton.addEventListener("click", () => this.handleDelete());
-    }
-
     const saveButton = buttonContainer.createEl("button", { text: "Save" });
 
-    if (isInvalid) {
-      saveButton.disabled = true;
-      saveButton.setAttribute("title", "Cannot save invalid comment");
-    } else {
-      saveButton.addEventListener("click", () => this.handleSave());
-    }
-  }
-
-  private async handleDelete(): Promise<void> {
-    if (!this.commentData || !this.commentData.id) {
-      new Notice("Error: No comment ID found");
-      return;
-    }
-
-    try {
-      await this.annotationService.deleteAnnotation(
-        this.activeFilePath,
-        this.commentData.id,
-        "comment"
-      );
-
-      if (
-        this.commentData.target &&
-        this.commentData.target !== this.activeFilePath
-      ) {
-        await this.annotationService.deleteAnnotation(
-          this.commentData.target,
-          this.commentData.id,
-          "comment"
-        );
-      }
-
-      new Notice("Comment deleted successfully");
-      this.onBack();
-    } catch (error) {
-      new Notice(`Error deleting comment: ${error.message}`);
-    }
+    saveButton.addEventListener("click", () => this.handleSave());
   }
 
   private async openArticleView(article: Article): Promise<void> {
@@ -350,8 +239,6 @@ export class CommentForm extends Component {
           },
         });
       }
-
-      // const articleView = articleLeaf.view as IdealogsAnnotator;
     } catch (error) {
       console.error("Error opening article view:", error);
       this.isTargetArticleSelection = false;
@@ -369,33 +256,79 @@ export class CommentForm extends Component {
       return;
     }
 
-    let comment: Comment;
-    let commentId: string;
+    const textStart = this.textStart.value.trim();
+    const textEnd = this.textEnd.value.trim();
+    const textDisplay = this.textDisplay.value.trim();
 
-    if (!this.commentData) {
-      const commentIndex = parseInt(this.textDisplayDropdown.value);
-      if (
-        isNaN(commentIndex) ||
-        commentIndex < 0 ||
-        commentIndex >= this.comments.length
-      ) {
-        new Notice("Please select a comment");
-        return;
-      }
-
-      comment = this.comments[commentIndex];
-      commentId = uuidv4(); // TODO :: do it in annotation service
-    } else {
-      comment = annotationToComment(this.commentData);
-      commentId = this.commentData.id;
+    if (!textStart || !textEnd || !textDisplay) {
+      new Notice("Please fill all required fields");
+      return;
     }
 
+    try {
+      const fileContent = await this.app.vault.adapter.read(
+        this.activeFilePath
+      );
+      const linkText = this.note?.linkText || `[[${this.selectedArticle.id}]]`;
+
+      const correctSequencePattern = new RegExp(
+        `${textDisplay}\\s*${linkText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`
+      );
+
+      if (!correctSequencePattern.test(fileContent)) {
+        new Notice(
+          `Text display "${textDisplay}" must appear directly before the link`
+        );
+        return;
+      }
+    } catch (error) {
+      console.error("Error validating text display position:", error);
+    }
+
+    const targetArticlePath = this.selectedArticle.id;
     const targetTextStart = this.targetTextStartInput.value.trim();
     const targetTextEnd = this.targetTextEndInput.value.trim();
     const targetTextDisplay = this.targetTextDisplayInput.value.trim();
 
-    if (!targetTextStart || !targetTextEnd || !targetTextDisplay) {
-      new Notice("Please fill in all target text fields");
+    if (this.targetArticle.isParent) {
+      try {
+        const noteId = this.note?.id;
+
+        await this.annotationService.saveNote({
+          id: noteId,
+          sourceFilePath: this.activeFilePath,
+          textStart,
+          textEnd,
+          textDisplay,
+          targetArticle: targetArticlePath,
+          targetTextStart,
+          targetTextEnd,
+          targetTextDisplay,
+          noteMeta: this.note, // TODO: we need to update noteMeta
+        });
+
+        const articleLeaves =
+          this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+        if (articleLeaves.length > 0) {
+          const articleView = articleLeaves[0].view as IdealogsAnnotator;
+          await articleView.loadAnnotations(true, true);
+        }
+
+        new Notice("Note saved successfully");
+        this.onBack();
+        return;
+      } catch (error) {
+        new Notice(`Error saving note: ${error.message}`);
+      }
+    }
+
+    if (
+      !targetArticlePath ||
+      !targetTextStart ||
+      !targetTextEnd ||
+      !targetTextDisplay
+    ) {
+      new Notice("Please fill all target fields");
       return;
     }
 
@@ -464,34 +397,41 @@ export class CommentForm extends Component {
 
       this.highlightWords(targetDisplaySpans, articleView);
 
-      await this.annotationService.saveComment({
-        commentId,
-        textDisplay: comment.title,
-        commentBody: this.commentTextarea.value,
-        targetArticle: this.selectedArticle.id,
-        targetTextStart,
-        targetTextEnd,
-        targetTextDisplay,
-        targetStartIndex,
-        targetEndIndex,
-        targetFullText,
-        targetRangeIndices,
-        targetDisplayIndices,
-        srcIndices: comment.indices,
-        sourceFilePath: this.activeFilePath,
-      });
+      try {
+        const noteId = this.note?.id;
 
-      const articleLeaves =
-        this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
-      if (articleLeaves.length > 0) {
-        const articleView = articleLeaves[0].view as IdealogsAnnotator;
-        await articleView.loadAnnotations(true, true);
+        await this.annotationService.saveNote({
+          id: noteId,
+          sourceFilePath: this.activeFilePath,
+          textStart,
+          textEnd,
+          textDisplay,
+          targetArticle: targetArticlePath,
+          targetTextStart,
+          targetTextEnd,
+          targetTextDisplay,
+          targetStartIndex,
+          targetEndIndex,
+          targetFullText,
+          targetRangeIndices,
+          targetDisplayIndices,
+          noteMeta: this.note, // TODO: we need to update noteMeta
+        });
+
+        const articleLeaves =
+          this.app.workspace.getLeavesOfType(IDEALOGS_ANNOTATOR);
+        if (articleLeaves.length > 0) {
+          const articleView = articleLeaves[0].view as IdealogsAnnotator;
+          await articleView.loadAnnotations(true, true);
+        }
+
+        new Notice("Note saved successfully");
+        this.onBack();
+      } catch (error) {
+        new Notice(`Error saving note: ${error.message}`);
       }
-
-      new Notice("Comment saved successfully");
-      this.onBack();
     } catch (error) {
-      new Notice(`Error saving comment: ${error.message}`);
+      new Notice(`Error processing note: ${error.message}`);
     }
   }
 
@@ -615,10 +555,7 @@ export class CommentForm extends Component {
   public updateActiveFilePath(filePath: string): void {
     this.activeFilePath = filePath;
 
-    if (!this.isTargetArticleSelection) {
-      this.loadCommentsFromFile();
-      this.resetFormFields();
-    } else {
+    if (this.isTargetArticleSelection) {
       this.isTargetArticleSelection = false;
     }
   }
