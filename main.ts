@@ -7,10 +7,12 @@ import {
   CommonLinkHandler,
   patchLinkOpening,
 } from "./utils/link-handlers";
+import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
 
 export default class IdealogsPlugin extends Plugin {
   private articleSuggest: ArticleSuggest;
   private apiService: ApiService;
+  private fileTracker: IdealogsFileTracker;
   private writingLinkHandler: WritingLinkHandler;
   private commonLinkHandler: CommonLinkHandler;
   private restoreLinkOpening: (() => void) | null = null;
@@ -18,8 +20,17 @@ export default class IdealogsPlugin extends Plugin {
 
   async onload() {
     this.apiService = new ApiService();
-    this.writingLinkHandler = new WritingLinkHandler(this.app, this.apiService);
-    this.commonLinkHandler = new CommonLinkHandler(this.app, this.apiService);
+    this.fileTracker = new IdealogsFileTracker();
+    this.writingLinkHandler = new WritingLinkHandler(
+      this.app,
+      this.apiService,
+      this.fileTracker
+    );
+    this.commonLinkHandler = new CommonLinkHandler(
+      this.app,
+      this.apiService,
+      this.fileTracker
+    );
 
     this.articleSuggest = new ArticleSuggest(this, this.apiService);
     this.registerEditorSuggest(this.articleSuggest);
@@ -34,6 +45,7 @@ export default class IdealogsPlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
+        console.log("active-leaf-change");
         this.handleFileChange();
       })
     );
@@ -50,9 +62,10 @@ export default class IdealogsPlugin extends Plugin {
           return file === this.previousFile?.path;
         });
 
-      if (!isStillOpen && this.isIdealogsArticle(this.previousFile.basename)) {
+      if (!isStillOpen && this.isIdealogsArticle(this.previousFile.name)) {
         try {
           await this.app.vault.delete(this.previousFile);
+          this.fileTracker.untrack(this.previousFile.name);
         } catch (error) {
           console.error("Error deleting Idealogs article:", error);
         }
@@ -62,8 +75,8 @@ export default class IdealogsPlugin extends Plugin {
     this.previousFile = currentFile;
   }
 
-  private isIdealogsArticle(basename: string): boolean {
-    return /^(Tx|Fx|Ix)/.test(basename);
+  private isIdealogsArticle(fileName: string): boolean {
+    return this.fileTracker.isTracked(fileName);
   }
 
   onunload() {
