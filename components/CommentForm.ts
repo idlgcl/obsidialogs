@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
+import { ArticleSplitViewHandler } from "../utils/article-split-handler";
 
 export const COMMENT_FORM_VIEW = "comment-form-view";
 
@@ -9,6 +10,7 @@ export class CommentFormView extends ItemView {
   private currentComment: Comment | null = null;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
+  private articleSplitHandler: ArticleSplitViewHandler | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -36,6 +38,10 @@ export class CommentFormView extends ItemView {
       this.articleAutocomplete.unload();
       this.articleAutocomplete = null;
     }
+  }
+
+  setArticleSplitHandler(handler: ArticleSplitViewHandler): void {
+    this.articleSplitHandler = handler;
   }
 
   updateComment(comment: Comment): void {
@@ -99,7 +105,11 @@ export class CommentFormView extends ItemView {
       placeholder: "Search for an article...",
       onChange: (article) => {
         this.selectedArticle = article;
-        console.log("Selected article:", article);
+
+        // Open article in split using the handler
+        if (this.articleSplitHandler) {
+          this.articleSplitHandler.openArticle(article);
+        }
       },
     });
 
