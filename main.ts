@@ -8,7 +8,8 @@ import {
   patchLinkOpening,
 } from "./utils/link-handlers";
 import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
-import { CommentParser } from "./utils/parsers";
+import { CommentParser, Comment } from "./utils/parsers";
+import { COMMENT_FORM_VIEW, CommentFormView } from "components/CommentForm";
 
 export default class IdealogsPlugin extends Plugin {
   private articleSuggest: ArticleSuggest;
@@ -22,6 +23,7 @@ export default class IdealogsPlugin extends Plugin {
   private cursorCheckInterval: number | null = null;
   private lastCursorLine = -1;
   private editorChangeDebounceTimer: number | null = null;
+  private commentFormRevealed = false;
 
   async onload() {
     this.apiService = new ApiService();
@@ -41,6 +43,10 @@ export default class IdealogsPlugin extends Plugin {
     this.articleSuggest = new ArticleSuggest(this, this.apiService);
     this.registerEditorSuggest(this.articleSuggest);
 
+    // Views
+    this.registerView(COMMENT_FORM_VIEW, (leaf) => new CommentFormView(leaf));
+
+    // Patches
     patchDefaultSuggester(this.app);
 
     this.restoreLinkOpening = patchLinkOpening(
@@ -49,6 +55,7 @@ export default class IdealogsPlugin extends Plugin {
       this.commonLinkHandler
     );
 
+    // Events
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
         this.handleFileChange();
@@ -61,10 +68,27 @@ export default class IdealogsPlugin extends Plugin {
       })
     );
 
+    // Track when CommentFormView becomes active/revealed
+    this.registerEvent(
+      this.app.workspace.on("layout-change", () => {
+        this.checkCommentFormVisibility();
+      })
+    );
+
     // Check cursor position every 200ms
     this.cursorCheckInterval = window.setInterval(() => {
       this.checkCursorInComment();
     }, 200);
+  }
+
+  private checkCommentFormVisibility(): void {
+    const existingRightPanelLeaves =
+      this.app.workspace.getLeavesOfType(COMMENT_FORM_VIEW);
+
+    // If no leaves exist, the user manually closed the panel
+    if (existingRightPanelLeaves.length === 0) {
+      this.commentFormRevealed = false;
+    }
   }
 
   private debouncedCheckCursorInComment(): void {
@@ -73,20 +97,22 @@ export default class IdealogsPlugin extends Plugin {
     }
 
     this.editorChangeDebounceTimer = window.setTimeout(() => {
-      this.checkCursorInCommentForce();
+      this.checkCursorInComment(true);
       this.editorChangeDebounceTimer = null;
     }, 500);
   }
 
-  private checkCursorInComment(): void {
+  private checkCursorInComment(force = false): void {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
     if (!activeView) {
+      this.closeCommentFormPanel();
       return;
     }
 
     const mode = activeView.getMode();
     if (mode !== "source") {
+      this.closeCommentFormPanel();
       return;
     }
 
@@ -94,7 +120,8 @@ export default class IdealogsPlugin extends Plugin {
     const cursor = editor.getCursor();
     const cursorLine = cursor.line;
 
-    if (cursorLine === this.lastCursorLine) {
+    // Skip if line hasn't changed (unless forced)
+    if (!force && cursorLine === this.lastCursorLine) {
       return;
     }
 
@@ -102,6 +129,7 @@ export default class IdealogsPlugin extends Plugin {
 
     const file = activeView.file;
     if (!file) {
+      this.closeCommentFormPanel();
       return;
     }
 
@@ -114,48 +142,60 @@ export default class IdealogsPlugin extends Plugin {
     );
 
     if (comment) {
-      console.log("=== Cursor in Comment ===");
-      console.log("Line:", cursorLine);
-      console.log("Comment:", comment);
-      console.log("========================");
+      this.showCommentFormPanel(comment);
+    } else {
+      this.closeCommentFormPanel();
     }
   }
 
-  private checkCursorInCommentForce(): void {
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+  private showCommentFormPanel(comment: Comment): void {
+    const existingRightPanelLeaves =
+      this.app.workspace.getLeavesOfType(COMMENT_FORM_VIEW);
 
-    if (!activeView) {
+    let rightLeaf;
+    if (existingRightPanelLeaves.length > 0) {
+      console.log("Using existing leaf");
+      rightLeaf = existingRightPanelLeaves[0];
+      // Mark as revealed since panel already exists
+      this.commentFormRevealed = true;
+    } else {
+      rightLeaf = this.app.workspace.getRightLeaf(false);
+      if (rightLeaf) {
+        rightLeaf.setViewState({
+          type: COMMENT_FORM_VIEW,
+          active: false,
+        });
+
+        // Automatically reveal the right sidebar to show the panel
+        this.app.workspace.rightSplit.expand();
+
+        this.commentFormRevealed = true;
+      }
+    }
+
+    if (rightLeaf) {
+      const view = rightLeaf.view as CommentFormView;
+      if (view && view.updateComment) {
+        view.updateComment(comment);
+      }
+    }
+  }
+
+  private closeCommentFormPanel(force = false): void {
+    // Don't auto-close if the panel has been manually revealed by the user (unless forced)
+    if (!force && this.commentFormRevealed) {
       return;
     }
 
-    const mode = activeView.getMode();
-    if (mode !== "source") {
-      return;
+    const existingRightPanelLeaves =
+      this.app.workspace.getLeavesOfType(COMMENT_FORM_VIEW);
+
+    if (existingRightPanelLeaves.length > 0) {
+      existingRightPanelLeaves.forEach((leaf) => leaf.detach());
+      console.log("Panel detached");
     }
 
-    const editor = activeView.editor;
-    const cursor = editor.getCursor();
-    const cursorLine = cursor.line;
-
-    const file = activeView.file;
-    if (!file) {
-      return;
-    }
-
-    const lineText = editor.getLine(cursorLine);
-
-    const comment = this.commentParser.parseLineAsComment(
-      lineText,
-      file.name,
-      file.path
-    );
-
-    if (comment) {
-      console.log("=== Cursor in Comment (typing) ===");
-      console.log("Line:", cursorLine);
-      console.log("Comment:", comment);
-      console.log("==================================");
-    }
+    this.commentFormRevealed = false;
   }
 
   private async handleFileChange(): Promise<void> {
@@ -177,6 +217,9 @@ export default class IdealogsPlugin extends Plugin {
           console.error("Error deleting Idealogs article:", error);
         }
       }
+
+      // Reset revealed state when switching files
+      this.commentFormRevealed = false;
     }
 
     this.previousFile = currentFile;
