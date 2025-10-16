@@ -16,9 +16,13 @@ export class ArticleAutocompleteField extends Component {
   private apiService: ApiService;
   private inputEl: HTMLInputElement;
   private suggestionsEl: HTMLElement;
+  private loadingEl: HTMLElement;
   private selectedArticle: Article | null = null;
   private suggestions: Article[] = [];
   private isOpen = false;
+  private isLoading = false;
+  private debounceTimer: number | null = null;
+  private readonly DEBOUNCE_DELAY = 300; // ms
 
   constructor(private options: ArticleAutocompleteOptions) {
     super();
@@ -52,6 +56,10 @@ export class ArticleAutocompleteField extends Component {
     const searchIcon = inputContainer.createDiv({ cls: "article-search-icon" });
     setIcon(searchIcon, "search");
 
+    this.loadingEl = inputContainer.createDiv({ cls: "article-loading-icon" });
+    setIcon(this.loadingEl, "loader");
+    this.loadingEl.hide();
+
     this.suggestionsEl = container.createDiv({ cls: "article-suggestions" });
     this.suggestionsEl.hide();
 
@@ -60,28 +68,59 @@ export class ArticleAutocompleteField extends Component {
     this.registerDomEvent(document, "click", this.onDocumentClick.bind(this));
   }
 
-  private async onInput(): Promise<void> {
+  private onInput(): void {
+    // Clear existing debounce timer
+    if (this.debounceTimer !== null) {
+      window.clearTimeout(this.debounceTimer);
+    }
+
     const query = this.inputEl.value.trim();
 
     if (!query) {
+      this.hideLoading();
       this.closeSuggestions();
       return;
     }
 
+    this.showLoading();
+
+    this.debounceTimer = window.setTimeout(() => {
+      this.performSearch(query);
+    }, this.DEBOUNCE_DELAY);
+  }
+
+  private async performSearch(query: string): Promise<void> {
     try {
       const response = await this.apiService.fetchArticleSuggestions(query);
       this.suggestions = response.items || [];
+
+      this.hideLoading();
 
       if (this.suggestions.length > 0) {
         this.renderSuggestions();
         this.openSuggestions();
       } else {
-        this.closeSuggestions();
+        this.renderNoResults();
+        this.openSuggestions();
       }
     } catch (error) {
       console.error("Error fetching article suggestions:", error);
-      this.closeSuggestions();
+      this.hideLoading();
+      this.renderError();
+      this.openSuggestions();
     }
+  }
+
+  private showLoading(): void {
+    this.isLoading = true;
+    this.loadingEl.show();
+    this.loadingEl.addClass("spinning");
+  }
+
+  private hideLoading(): void {
+    this.isLoading = false;
+    this.loadingEl.hide();
+    this.loadingEl.removeClass("spinning");
   }
 
   private onFocus(): void {
@@ -131,6 +170,22 @@ export class ArticleAutocompleteField extends Component {
     });
   }
 
+  private renderNoResults(): void {
+    this.suggestionsEl.empty();
+    this.suggestionsEl.createDiv({
+      cls: "article-suggestion-empty",
+      text: "No articles found",
+    });
+  }
+
+  private renderError(): void {
+    this.suggestionsEl.empty();
+    this.suggestionsEl.createDiv({
+      cls: "article-suggestion-error",
+      text: "Error loading suggestions",
+    });
+  }
+
   private selectArticle(article: Article): void {
     this.selectedArticle = article;
     this.inputEl.value = article.id;
@@ -173,6 +228,9 @@ export class ArticleAutocompleteField extends Component {
 
   onunload(): void {
     super.onunload();
+    if (this.debounceTimer !== null) {
+      window.clearTimeout(this.debounceTimer);
+    }
     this.suggestionsEl.remove();
   }
 }
