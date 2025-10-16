@@ -22,35 +22,35 @@ export class ArticleSplitViewHandler {
 
   async openArticle(article: Article): Promise<void> {
     try {
-      // Fetch article content from API
       const content = await this.apiService.fetchFileContent(article.id);
 
-      // Sanitize article title for filename
       const sanitizedTitle = article.title.replace(/[/\\:*?"<>|]/g, "");
       const fileName = `${sanitizedTitle}.md`;
 
-      // Get or create the file
       let file = this.app.vault.getAbstractFileByPath(fileName);
 
       if (file instanceof TFile) {
-        // Update existing file
         await this.app.vault.modify(file, content);
       } else {
-        // Create new file
         file = await this.app.vault.create(fileName, content);
       }
 
-      // Track the file
       this.fileTracker.track(fileName, article.id);
 
-      // Open in split or reuse existing split leaf
+      let isLeafValid = false;
       if (this.articleSplitLeaf && this.articleSplitLeaf.view) {
-        // Reuse existing split
-        await this.articleSplitLeaf.openFile(file as TFile, {
+        try {
+          isLeafValid = this.articleSplitLeaf.view.containerEl.isConnected;
+        } catch {
+          isLeafValid = false;
+        }
+      }
+
+      if (isLeafValid) {
+        await this.articleSplitLeaf?.openFile(file as TFile, {
           state: { mode: "preview" },
         });
 
-        // Delete previous article file if tracked
         if (
           this.previousArticleFile &&
           this.fileTracker.isTracked(this.previousArticleFile.name)
@@ -63,24 +63,21 @@ export class ArticleSplitViewHandler {
           }
         }
       } else {
-        // Create new split
         const leaf = this.app.workspace.getLeaf("split");
         this.articleSplitLeaf = leaf;
         await leaf.openFile(file as TFile, { state: { mode: "preview" } });
       }
 
-      // Update previous file reference
       this.previousArticleFile = file as TFile;
 
       console.log("Article opened in split:", article.title);
     } catch (error) {
       console.error("Error opening article in split:", error);
-      throw error; // Re-throw so caller can handle if needed
+      throw error;
     }
   }
 
   async cleanup(): Promise<void> {
-    // Clean up article file if it was tracked
     if (
       this.previousArticleFile &&
       this.fileTracker.isTracked(this.previousArticleFile.name)
@@ -97,7 +94,6 @@ export class ArticleSplitViewHandler {
     this.previousArticleFile = null;
   }
 
-  // Optional: Method to close the split leaf
   closeSplit(): void {
     if (this.articleSplitLeaf) {
       this.articleSplitLeaf.detach();
