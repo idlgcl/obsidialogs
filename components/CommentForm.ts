@@ -1,10 +1,14 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { Comment } from "../utils/parsers";
+import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
+import { Article } from "../types";
 
 export const COMMENT_FORM_VIEW = "comment-form-view";
 
 export class CommentFormView extends ItemView {
   private currentComment: Comment | null = null;
+  private articleAutocomplete: ArticleAutocompleteField | null = null;
+  private selectedArticle: Article | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -26,7 +30,13 @@ export class CommentFormView extends ItemView {
     this.render();
   }
 
-  async onClose() {}
+  async onClose() {
+    // Clean up autocomplete
+    if (this.articleAutocomplete) {
+      this.articleAutocomplete.unload();
+      this.articleAutocomplete = null;
+    }
+  }
 
   updateComment(comment: Comment): void {
     this.currentComment = comment;
@@ -76,10 +86,25 @@ export class CommentFormView extends ItemView {
       cls: "idl-form-field",
     });
     targetArticleField.createEl("label", { text: "Target Article" });
-    const targetArticleInput = targetArticleField.createEl("input", {
-      type: "text",
-      attr: { placeholder: "Search for an article..." },
+
+    // Clean up old if exists
+    if (this.articleAutocomplete) {
+      this.articleAutocomplete.unload();
+      this.articleAutocomplete = null;
+    }
+
+    // Create new autocomplete
+    this.articleAutocomplete = new ArticleAutocompleteField({
+      container: targetArticleField,
+      placeholder: "Search for an article...",
+      onChange: (article) => {
+        this.selectedArticle = article;
+        console.log("Selected article:", article);
+      },
     });
+
+    // Load the component
+    this.articleAutocomplete.load();
 
     // Target text range fields
     const textRangeFields = formContainer.createDiv({
