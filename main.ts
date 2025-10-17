@@ -12,6 +12,7 @@ import { CommentParser, Comment } from "./utils/parsers";
 import { COMMENT_FORM_VIEW, CommentFormView } from "components/CommentForm";
 import { ArticleSplitViewHandler } from "./utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "./utils/annotation-service";
+import { EditorView } from "@codemirror/view";
 
 export default class IdealogsPlugin extends Plugin {
   private articleSuggest: ArticleSuggest;
@@ -52,6 +53,8 @@ export default class IdealogsPlugin extends Plugin {
     this.articleSuggest = new ArticleSuggest(this, this.apiService);
     this.registerEditorSuggest(this.articleSuggest);
 
+    this.registerEditorExtension(this.createCommentClickExtension());
+
     this.registerView(COMMENT_FORM_VIEW, (leaf) => {
       const view = new CommentFormView(leaf);
       view.setArticleSplitHandler(this.articleSplitHandler);
@@ -87,6 +90,59 @@ export default class IdealogsPlugin extends Plugin {
     }, 200);
   }
 
+  private createCommentClickExtension() {
+    const handleCommentTitleClick = this.handleCommentTitleClick.bind(this);
+    const app = this.app;
+    const commentParser = new CommentParser();
+
+    return EditorView.domEventHandlers({
+      mousedown: (event: MouseEvent, view: EditorView) => {
+        if (!event.ctrlKey && !event.metaKey) {
+          return false;
+        }
+
+        try {
+          const pos = view.posAtCoords({
+            x: event.clientX,
+            y: event.clientY,
+          });
+
+          if (pos === null) {
+            return false;
+          }
+
+          const line = view.state.doc.lineAt(pos);
+          const lineText = line.text;
+
+          const activeView = app.workspace.getActiveViewOfType(MarkdownView);
+          if (!activeView?.file) {
+            return false;
+          }
+
+          const comment = commentParser.parseLineAsComment(
+            lineText,
+            activeView.file.name,
+            activeView.file.path
+          );
+
+          if (comment) {
+            const charOffset = pos - line.from;
+            const titleEndPos = lineText.indexOf(".");
+
+            if (titleEndPos !== -1 && charOffset <= titleEndPos) {
+              handleCommentTitleClick(comment);
+              return true;
+            }
+          }
+        } catch (error) {
+          console.error("[Idealogs] Error handling click:", error);
+        }
+
+        return false;
+      },
+    });
+  }
+
   private debouncedCheckCursorInComment(): void {
     if (this.editorChangeDebounceTimer !== null) {
       window.clearTimeout(this.editorChangeDebounceTimer);
@@ -96,6 +152,20 @@ export default class IdealogsPlugin extends Plugin {
       this.checkCursorInComment(true);
       this.editorChangeDebounceTimer = null;
     }, 500);
+  }
+
+  private async handleCommentTitleClick(comment: Comment): Promise<void> {
+    const words = comment.body.split(" ");
+    const savedAnnotation = await this.annotationService.findCommentBySource(
+      comment.filePath,
+      comment.title,
+      comment.title.split(" ")[0],
+      words[words.length - 1]
+    );
+
+    if (savedAnnotation) {
+      this.showCommentFormPanel(comment, savedAnnotation, true);
+    }
   }
 
   private async checkCursorInComment(force = false): Promise<void> {
@@ -147,7 +217,8 @@ export default class IdealogsPlugin extends Plugin {
 
   private showCommentFormPanel(
     comment: Comment,
-    savedAnnotation: AnnotationData | null = null
+    savedAnnotation: AnnotationData | null = null,
+    openTargetArticle = false
   ): void {
     const existingRightPanelLeaves =
       this.app.workspace.getLeavesOfType(COMMENT_FORM_VIEW);
@@ -170,7 +241,7 @@ export default class IdealogsPlugin extends Plugin {
     if (rightLeaf) {
       const view = rightLeaf.view as CommentFormView;
       if (view && view.updateComment) {
-        view.updateComment(comment, savedAnnotation);
+        view.updateComment(comment, savedAnnotation, openTargetArticle);
       }
     }
   }
