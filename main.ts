@@ -8,7 +8,7 @@ import {
   patchLinkOpening,
 } from "./utils/link-handlers";
 import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
-import { CommentParser, Comment } from "./utils/parsers";
+import { CommentParser, Comment, NoteParser, Note } from "./utils/parsers";
 import { COMMENT_FORM_VIEW, CommentFormView } from "components/CommentForm";
 import { ArticleSplitViewHandler } from "./utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "./utils/annotation-service";
@@ -25,6 +25,7 @@ export default class IdealogsPlugin extends Plugin {
   private restoreLinkOpening: (() => void) | null = null;
   private previousFile: TFile | null = null;
   private commentParser: CommentParser;
+  private noteParser: NoteParser;
   private cursorCheckInterval: number | null = null;
   private lastCursorLine = -1;
   private editorChangeDebounceTimer: number | null = null;
@@ -33,6 +34,7 @@ export default class IdealogsPlugin extends Plugin {
     this.apiService = new ApiService();
     this.fileTracker = new IdealogsFileTracker();
     this.commentParser = new CommentParser();
+    this.noteParser = new NoteParser();
     this.annotationService = new AnnotationService(this.app);
     this.writingLinkHandler = new WritingLinkHandler(
       this.app,
@@ -54,6 +56,7 @@ export default class IdealogsPlugin extends Plugin {
     this.registerEditorSuggest(this.articleSuggest);
 
     this.registerEditorExtension(this.createCommentClickExtension());
+    this.registerEditorExtension(this.createNoteClickExtension());
 
     this.registerView(COMMENT_FORM_VIEW, (leaf) => {
       const view = new CommentFormView(leaf);
@@ -143,6 +146,68 @@ export default class IdealogsPlugin extends Plugin {
     });
   }
 
+  private createNoteClickExtension() {
+    const handleNoteLinkClick = this.handleNoteLinkClick.bind(this);
+    const app = this.app;
+    const noteParser = this.noteParser;
+
+    return EditorView.domEventHandlers({
+      mousedown: (event: MouseEvent, view: EditorView) => {
+        try {
+          const pos = view.posAtCoords({
+            x: event.clientX,
+            y: event.clientY,
+          });
+
+          if (pos === null) {
+            return false;
+          }
+
+          const line = view.state.doc.lineAt(pos);
+          const lineText = line.text;
+
+          // Check if line contains a note link pattern
+          if (!lineText.match(/\[\[@Tx[^\]]+\]\]/)) {
+            return false;
+          }
+
+          const activeView = app.workspace.getActiveViewOfType(MarkdownView);
+          if (!activeView?.file) {
+            return false;
+          }
+
+          const note = noteParser.parseLineAsNote(
+            lineText,
+            activeView.file.name,
+            activeView.file.path
+          );
+
+          if (note) {
+            // Check if click is within the note link
+            const linkPattern = /\[\[@(Tx[^\]]+)\]\]/g;
+            let match;
+            const charOffset = pos - line.from;
+
+            while ((match = linkPattern.exec(lineText)) !== null) {
+              const linkStart = match.index;
+              const linkEnd = match.index + match[0].length;
+
+              if (charOffset >= linkStart && charOffset <= linkEnd) {
+                handleNoteLinkClick(note);
+                event.preventDefault();
+                return true;
+              }
+            }
+          }
+        } catch (error) {
+          console.error("[Idealogs] Error handling note click:", error);
+        }
+
+        return false;
+      },
+    });
+  }
+
   private debouncedCheckCursorInComment(): void {
     if (this.editorChangeDebounceTimer !== null) {
       window.clearTimeout(this.editorChangeDebounceTimer);
@@ -166,6 +231,10 @@ export default class IdealogsPlugin extends Plugin {
     if (savedAnnotation) {
       this.showCommentFormPanel(comment, savedAnnotation, true);
     }
+  }
+
+  private handleNoteLinkClick(note: Note): void {
+    console.log("[Idealogs] Found note:", note);
   }
 
   private async checkCursorInComment(force = false): Promise<void> {
