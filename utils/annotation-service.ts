@@ -152,6 +152,28 @@ export class AnnotationService {
     return commentData.commentId;
   }
 
+  async findCommentBySource(
+    sourceFilePath: string,
+    textDisplay: string,
+    textStart: string,
+    textEnd: string
+  ): Promise<AnnotationData | null> {
+    const annotations = await this.loadAnnotations(sourceFilePath);
+
+    for (const commentId in annotations.comments) {
+      const comment = annotations.comments[commentId];
+      if (
+        comment.src_txt_display === textDisplay &&
+        comment.src_txt_start === textStart &&
+        comment.src_txt_end === textEnd
+      ) {
+        return comment;
+      }
+    }
+
+    return null;
+  }
+
   async deleteAnnotation(
     filePath: string,
     annotationId: string,
