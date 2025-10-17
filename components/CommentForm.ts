@@ -3,18 +3,21 @@ import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
 import { ArticleSplitViewHandler } from "../utils/article-split-handler";
-import { AnnotationService } from "../utils/annotation-service";
+import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
+import { ApiService } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
 
 export const COMMENT_FORM_VIEW = "comment-form-view";
 
 export class CommentFormView extends ItemView {
   private currentComment: Comment | null = null;
+  private savedAnnotation: AnnotationData | null = null;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
   private articleSplitHandler: ArticleSplitViewHandler | null = null;
   private annotationService: AnnotationService | null = null;
+  private apiService: ApiService;
   private targetTextStartInput: HTMLInputElement | null = null;
   private targetTextEndInput: HTMLInputElement | null = null;
   private targetTextDisplayInput: HTMLInputElement | null = null;
@@ -22,6 +25,7 @@ export class CommentFormView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
+    this.apiService = new ApiService();
   }
 
   setAnnotationService(service: AnnotationService): void {
@@ -56,8 +60,12 @@ export class CommentFormView extends ItemView {
     this.articleSplitHandler = handler;
   }
 
-  updateComment(comment: Comment): void {
+  updateComment(
+    comment: Comment,
+    savedAnnotation: AnnotationData | null = null
+  ): void {
     this.currentComment = comment;
+    this.savedAnnotation = savedAnnotation;
     this.render();
   }
 
@@ -111,7 +119,6 @@ export class CommentFormView extends ItemView {
       this.articleAutocomplete = null;
     }
 
-    // Create new autocomplete
     this.articleAutocomplete = new ArticleAutocompleteField({
       container: targetArticleField,
       placeholder: "Search for an article...",
@@ -126,7 +133,6 @@ export class CommentFormView extends ItemView {
       },
     });
 
-    // Load the component
     this.articleAutocomplete.load();
 
     // Target text range fields
@@ -168,6 +174,10 @@ export class CommentFormView extends ItemView {
     this.saveButton = buttonContainer.createEl("button", { text: "Save" });
     this.saveButton.disabled = true;
     this.saveButton.addEventListener("click", () => this.handleSave());
+
+    if (this.savedAnnotation) {
+      this.loadSavedAnnotation();
+    }
   }
 
   private validateForm(): void {
@@ -268,15 +278,51 @@ export class CommentFormView extends ItemView {
       });
 
       new Notice("Comment saved successfully");
-
-      if (this.targetTextStartInput) this.targetTextStartInput.value = "";
-      if (this.targetTextEndInput) this.targetTextEndInput.value = "";
-      if (this.targetTextDisplayInput) this.targetTextDisplayInput.value = "";
-      this.selectedArticle = null;
-      if (this.saveButton) this.saveButton.disabled = true;
     } catch (error) {
       new Notice(`Error saving comment: ${error.message}`);
       console.error("Error saving comment:", error);
     }
+  }
+
+  private async loadSavedAnnotation(): Promise<void> {
+    if (!this.savedAnnotation) return;
+
+    if (this.targetTextStartInput) {
+      this.targetTextStartInput.value = this.savedAnnotation.target_txt_start;
+    }
+    if (this.targetTextEndInput) {
+      this.targetTextEndInput.value = this.savedAnnotation.target_txt_end;
+    }
+    if (this.targetTextDisplayInput) {
+      this.targetTextDisplayInput.value =
+        this.savedAnnotation.target_txt_display;
+    }
+
+    if (this.articleAutocomplete) {
+      this.articleAutocomplete.setValue(this.savedAnnotation.target);
+    }
+
+    // try {
+    //   const targetArticle = await this.apiService.fetchArticleById(
+    //     this.savedAnnotation.target
+    //   );
+
+    //   this.selectedArticle = targetArticle;
+
+    //   if (this.articleAutocomplete) {
+    //     this.articleAutocomplete.setValue(targetArticle.id);
+    //   }
+
+    //   if (this.articleSplitHandler) {
+    //     await this.articleSplitHandler.openArticle(targetArticle);
+    //   }
+
+    //   this.validateForm();
+    // } catch (error) {
+    //   console.error("Error loading saved annotation:", error);
+    //   new Notice(
+    //     `Failed to load target article: ${this.savedAnnotation.target}`
+    //   );
+    // }
   }
 }
