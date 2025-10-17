@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
+import { Component, Notice, App } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
@@ -8,10 +8,21 @@ import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
 
-export const COMMENT_FORM_VIEW = "comment-form-view";
+export interface CommentFormOptions {
+  container: HTMLElement;
+  app: App;
+  comment: Comment;
+  savedAnnotation?: AnnotationData | null;
+  openTargetArticle?: boolean;
+  articleSplitHandler?: ArticleSplitViewHandler | null;
+  annotationService?: AnnotationService | null;
+}
 
-export class CommentFormView extends ItemView {
-  private currentComment: Comment | null = null;
+export class CommentFormComponent extends Component {
+  private container: HTMLElement;
+  private contentEl: HTMLElement;
+  private app: App;
+  private currentComment: Comment;
   private savedAnnotation: AnnotationData | null = null;
   private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
@@ -24,73 +35,36 @@ export class CommentFormView extends ItemView {
   private targetTextDisplayInput: HTMLInputElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
 
-  constructor(leaf: WorkspaceLeaf) {
-    super(leaf);
+  constructor(options: CommentFormOptions) {
+    super();
+    this.container = options.container;
+    this.app = options.app;
+    this.currentComment = options.comment;
+    this.savedAnnotation = options.savedAnnotation || null;
+    this.shouldOpenArticle = options.openTargetArticle || false;
+    this.articleSplitHandler = options.articleSplitHandler || null;
+    this.annotationService = options.annotationService || null;
     this.apiService = new ApiService();
-  }
 
-  setAnnotationService(service: AnnotationService): void {
-    this.annotationService = service;
-  }
+    this.createForm();
 
-  getViewType() {
-    return COMMENT_FORM_VIEW;
-  }
-
-  getDisplayText(): string {
-    return "Comment Form";
-  }
-
-  getIcon(): string {
-    return "brackets";
-  }
-
-  async onOpen() {
-    this.render();
-  }
-
-  async onClose() {
-    // Clean up autocomplete
-    if (this.articleAutocomplete) {
-      this.articleAutocomplete.unload();
-      this.articleAutocomplete = null;
+    if (this.savedAnnotation) {
+      this.loadSavedAnnotation();
+      if (this.shouldOpenArticle) {
+        this.openTargetArticle();
+      }
     }
   }
 
-  setArticleSplitHandler(handler: ArticleSplitViewHandler): void {
-    this.articleSplitHandler = handler;
-  }
-
-  updateComment(
-    comment: Comment,
-    savedAnnotation: AnnotationData | null = null,
-    openTargetArticle = false
-  ): void {
-    this.currentComment = comment;
-    this.savedAnnotation = savedAnnotation;
-    this.shouldOpenArticle = openTargetArticle;
-    this.render();
-  }
-
-  private render(): void {
-    const container = this.contentEl;
-    container.empty();
-    container.addClass("idl-comment-form");
-
-    if (!this.currentComment) {
-      container.createEl("div", {
-        text: "No comment selected",
-        cls: "comment-form-placeholder",
-      });
-      return;
-    }
+  private createForm(): void {
+    this.contentEl = this.container.createDiv({ cls: "idl-comment-form" });
 
     // Header
-    const headerContainer = container.createDiv({ cls: "form-header" });
+    const headerContainer = this.contentEl.createDiv({ cls: "form-header" });
     headerContainer.createEl("h3", { text: "Comment" });
 
     // Form container
-    const formContainer = container.createDiv({ cls: "idl-form" });
+    const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
 
     // Text Display field
     const textDisplayField = formContainer.createDiv({ cls: "idl-form-field" });
@@ -115,12 +89,6 @@ export class CommentFormView extends ItemView {
       cls: "idl-form-field",
     });
     targetArticleField.createEl("label", { text: "Target Article" });
-
-    // Clean up old if exists
-    if (this.articleAutocomplete) {
-      this.articleAutocomplete.unload();
-      this.articleAutocomplete = null;
-    }
 
     this.articleAutocomplete = new ArticleAutocompleteField({
       container: targetArticleField,
@@ -177,13 +145,6 @@ export class CommentFormView extends ItemView {
     this.saveButton = buttonContainer.createEl("button", { text: "Save" });
     this.saveButton.disabled = true;
     this.saveButton.addEventListener("click", () => this.handleSave());
-
-    if (this.savedAnnotation) {
-      this.loadSavedAnnotation();
-      if (this.shouldOpenArticle) {
-        this.openTargetArticle();
-      }
-    }
   }
 
   private validateForm(): void {
@@ -334,5 +295,21 @@ export class CommentFormView extends ItemView {
         `Failed to load target article: ${this.savedAnnotation.target}`
       );
     }
+  }
+
+  show(): void {
+    this.contentEl.style.display = "block";
+  }
+
+  hide(): void {
+    this.contentEl.style.display = "none";
+  }
+
+  onunload(): void {
+    if (this.articleAutocomplete) {
+      this.articleAutocomplete.unload();
+      this.articleAutocomplete = null;
+    }
+    this.contentEl.remove();
   }
 }
