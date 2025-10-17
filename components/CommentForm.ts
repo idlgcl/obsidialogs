@@ -13,6 +13,7 @@ export const COMMENT_FORM_VIEW = "comment-form-view";
 export class CommentFormView extends ItemView {
   private currentComment: Comment | null = null;
   private savedAnnotation: AnnotationData | null = null;
+  private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
   private articleSplitHandler: ArticleSplitViewHandler | null = null;
@@ -62,10 +63,12 @@ export class CommentFormView extends ItemView {
 
   updateComment(
     comment: Comment,
-    savedAnnotation: AnnotationData | null = null
+    savedAnnotation: AnnotationData | null = null,
+    openTargetArticle = false
   ): void {
     this.currentComment = comment;
     this.savedAnnotation = savedAnnotation;
+    this.shouldOpenArticle = openTargetArticle;
     this.render();
   }
 
@@ -177,6 +180,9 @@ export class CommentFormView extends ItemView {
 
     if (this.savedAnnotation) {
       this.loadSavedAnnotation();
+      if (this.shouldOpenArticle) {
+        this.openTargetArticle();
+      }
     }
   }
 
@@ -301,28 +307,32 @@ export class CommentFormView extends ItemView {
     if (this.articleAutocomplete) {
       this.articleAutocomplete.setValue(this.savedAnnotation.target);
     }
+  }
 
-    // try {
-    //   const targetArticle = await this.apiService.fetchArticleById(
-    //     this.savedAnnotation.target
-    //   );
+  private async openTargetArticle(): Promise<void> {
+    if (!this.savedAnnotation) return;
 
-    //   this.selectedArticle = targetArticle;
+    try {
+      const targetArticle = await this.apiService.fetchArticleById(
+        this.savedAnnotation.target
+      );
 
-    //   if (this.articleAutocomplete) {
-    //     this.articleAutocomplete.setValue(targetArticle.id);
-    //   }
+      this.selectedArticle = targetArticle;
 
-    //   if (this.articleSplitHandler) {
-    //     await this.articleSplitHandler.openArticle(targetArticle);
-    //   }
+      if (this.articleAutocomplete) {
+        this.articleAutocomplete.setValue(targetArticle.id);
+      }
 
-    //   this.validateForm();
-    // } catch (error) {
-    //   console.error("Error loading saved annotation:", error);
-    //   new Notice(
-    //     `Failed to load target article: ${this.savedAnnotation.target}`
-    //   );
-    // }
+      if (this.articleSplitHandler) {
+        await this.articleSplitHandler.openArticle(targetArticle);
+      }
+
+      this.validateForm();
+    } catch (error) {
+      console.error("Error loading saved annotation:", error);
+      new Notice(
+        `Failed to load target article: ${this.savedAnnotation.target}`
+      );
+    }
   }
 }
