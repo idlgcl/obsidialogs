@@ -11,6 +11,7 @@ import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
 import { CommentParser, Comment } from "./utils/parsers";
 import { COMMENT_FORM_VIEW, CommentFormView } from "components/CommentForm";
 import { ArticleSplitViewHandler } from "./utils/article-split-handler";
+import { AnnotationService } from "./utils/annotation-service";
 
 export default class IdealogsPlugin extends Plugin {
   private articleSuggest: ArticleSuggest;
@@ -19,6 +20,7 @@ export default class IdealogsPlugin extends Plugin {
   private writingLinkHandler: WritingLinkHandler;
   private commonLinkHandler: CommonLinkHandler;
   private articleSplitHandler: ArticleSplitViewHandler;
+  private annotationService: AnnotationService;
   private restoreLinkOpening: (() => void) | null = null;
   private previousFile: TFile | null = null;
   private commentParser: CommentParser;
@@ -30,6 +32,7 @@ export default class IdealogsPlugin extends Plugin {
     this.apiService = new ApiService();
     this.fileTracker = new IdealogsFileTracker();
     this.commentParser = new CommentParser();
+    this.annotationService = new AnnotationService(this.app);
     this.writingLinkHandler = new WritingLinkHandler(
       this.app,
       this.apiService,
@@ -49,10 +52,10 @@ export default class IdealogsPlugin extends Plugin {
     this.articleSuggest = new ArticleSuggest(this, this.apiService);
     this.registerEditorSuggest(this.articleSuggest);
 
-    // Views
     this.registerView(COMMENT_FORM_VIEW, (leaf) => {
       const view = new CommentFormView(leaf);
       view.setArticleSplitHandler(this.articleSplitHandler);
+      view.setAnnotationService(this.annotationService);
       return view;
     });
 
