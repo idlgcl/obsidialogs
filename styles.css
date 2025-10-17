@@ -133,6 +133,25 @@
     color: var(--text-muted);
 }
 
+.article-loading-icon {
+    position: absolute;
+    right: 8px;
+    color: var(--text-muted);
+}
+
+.article-loading-icon.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .article-suggestions {
     position: absolute;
     z-index: 1000;
@@ -151,6 +170,18 @@
 
 .article-suggestion-item:hover {
     background-color: var(--background-secondary);
+}
+
+.article-suggestion-empty,
+.article-suggestion-error {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.article-suggestion-error {
+    color: var(--text-error);
 }
 
 /* Tabs */
