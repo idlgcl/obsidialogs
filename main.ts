@@ -9,7 +9,10 @@ import {
 } from "./utils/link-handlers";
 import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
 import { CommentParser, Comment, NoteParser, Note } from "./utils/parsers";
-import { COMMENT_FORM_VIEW, CommentFormView } from "components/CommentForm";
+import {
+  ANNOTATION_FORM_VIEW,
+  AnnotationFormView,
+} from "components/AnnotationFormView";
 import { ArticleSplitViewHandler } from "./utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "./utils/annotation-service";
 import { EditorView } from "@codemirror/view";
@@ -58,8 +61,8 @@ export default class IdealogsPlugin extends Plugin {
     this.registerEditorExtension(this.createCommentClickExtension());
     this.registerEditorExtension(this.createNoteClickExtension());
 
-    this.registerView(COMMENT_FORM_VIEW, (leaf) => {
-      const view = new CommentFormView(leaf);
+    this.registerView(ANNOTATION_FORM_VIEW, (leaf) => {
+      const view = new AnnotationFormView(leaf);
       view.setArticleSplitHandler(this.articleSplitHandler);
       view.setAnnotationService(this.annotationService);
       return view;
@@ -229,12 +232,12 @@ export default class IdealogsPlugin extends Plugin {
     );
 
     if (savedAnnotation) {
-      this.showCommentFormPanel(comment, savedAnnotation, true);
+      this.showAnnotationFormPanel(comment, "comment", savedAnnotation, true);
     }
   }
 
   private handleNoteLinkClick(note: Note): void {
-    console.log("[Idealogs] Found note:", note);
+    this.showAnnotationFormPanel(note, "note");
   }
 
   private async checkCursorInComment(force = false): Promise<void> {
@@ -280,17 +283,18 @@ export default class IdealogsPlugin extends Plugin {
         comment.title.split(" ")[0],
         words[words.length - 1]
       );
-      this.showCommentFormPanel(comment, savedAnnotation);
+      this.showAnnotationFormPanel(comment, "comment", savedAnnotation);
     }
   }
 
-  private showCommentFormPanel(
-    comment: Comment,
+  private showAnnotationFormPanel(
+    data: Comment | Note,
+    type: "comment" | "note",
     savedAnnotation: AnnotationData | null = null,
     openTargetArticle = false
   ): void {
     const existingRightPanelLeaves =
-      this.app.workspace.getLeavesOfType(COMMENT_FORM_VIEW);
+      this.app.workspace.getLeavesOfType(ANNOTATION_FORM_VIEW);
 
     let rightLeaf;
     if (existingRightPanelLeaves.length > 0) {
@@ -299,7 +303,7 @@ export default class IdealogsPlugin extends Plugin {
       rightLeaf = this.app.workspace.getRightLeaf(false);
       if (rightLeaf) {
         rightLeaf.setViewState({
-          type: COMMENT_FORM_VIEW,
+          type: ANNOTATION_FORM_VIEW,
           active: false,
         });
 
@@ -308,9 +312,13 @@ export default class IdealogsPlugin extends Plugin {
     }
 
     if (rightLeaf) {
-      const view = rightLeaf.view as CommentFormView;
-      if (view && view.updateComment) {
-        view.updateComment(comment, savedAnnotation, openTargetArticle);
+      const view = rightLeaf.view as AnnotationFormView;
+      if (view) {
+        if (type === "comment") {
+          view.updateComment(data as Comment, savedAnnotation, openTargetArticle);
+        } else {
+          view.updateNote(data as Note, savedAnnotation, openTargetArticle);
+        }
       }
     }
   }
