@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
+import { Component, Notice, App } from "obsidian";
 import { Note } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
@@ -6,10 +6,21 @@ import { ArticleSplitViewHandler } from "../utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { ApiService } from "../utils/api";
 
-export const NOTE_FORM_VIEW = "note-form-view";
+export interface NoteFormOptions {
+  container: HTMLElement;
+  app: App;
+  note: Note;
+  savedAnnotation?: AnnotationData | null;
+  openTargetArticle?: boolean;
+  articleSplitHandler?: ArticleSplitViewHandler | null;
+  annotationService?: AnnotationService | null;
+}
 
-export class NoteFormView extends ItemView {
-  private currentNote: Note | null = null;
+export class NoteForm extends Component {
+  private container: HTMLElement;
+  private contentEl: HTMLElement;
+  private app: App;
+  private currentNote: Note;
   private savedAnnotation: AnnotationData | null = null;
   private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
@@ -27,73 +38,36 @@ export class NoteFormView extends ItemView {
   private targetTextDisplayInput: HTMLInputElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
 
-  constructor(leaf: WorkspaceLeaf) {
-    super(leaf);
+  constructor(options: NoteFormOptions) {
+    super();
+    this.container = options.container;
+    this.app = options.app;
+    this.currentNote = options.note;
+    this.savedAnnotation = options.savedAnnotation || null;
+    this.shouldOpenArticle = options.openTargetArticle || false;
+    this.articleSplitHandler = options.articleSplitHandler || null;
+    this.annotationService = options.annotationService || null;
     this.apiService = new ApiService();
-  }
 
-  setAnnotationService(service: AnnotationService): void {
-    this.annotationService = service;
-  }
+    this.createForm();
 
-  getViewType() {
-    return NOTE_FORM_VIEW;
-  }
-
-  getDisplayText(): string {
-    return "Note Form";
-  }
-
-  getIcon(): string {
-    return "file-text";
-  }
-
-  async onOpen() {
-    this.render();
-  }
-
-  async onClose() {
-    // Clean up autocomplete
-    if (this.articleAutocomplete) {
-      this.articleAutocomplete.unload();
-      this.articleAutocomplete = null;
+    if (this.savedAnnotation) {
+      this.loadSavedAnnotation();
+      if (this.shouldOpenArticle) {
+        this.openTargetArticle();
+      }
     }
   }
 
-  setArticleSplitHandler(handler: ArticleSplitViewHandler): void {
-    this.articleSplitHandler = handler;
-  }
-
-  updateNote(
-    note: Note,
-    savedAnnotation: AnnotationData | null = null,
-    openTargetArticle = false
-  ): void {
-    this.currentNote = note;
-    this.savedAnnotation = savedAnnotation;
-    this.shouldOpenArticle = openTargetArticle;
-    this.render();
-  }
-
-  private render(): void {
-    const container = this.contentEl;
-    container.empty();
-    container.addClass("idl-note-form");
-
-    if (!this.currentNote) {
-      container.createEl("div", {
-        text: "No note selected",
-        cls: "note-form-placeholder",
-      });
-      return;
-    }
+  private createForm(): void {
+    this.contentEl = this.container.createDiv({ cls: "idl-note-form" });
 
     // Header
-    const headerContainer = container.createDiv({ cls: "form-header" });
+    const headerContainer = this.contentEl.createDiv({ cls: "form-header" });
     headerContainer.createEl("h3", { text: "Note" });
 
     // Form container
-    const formContainer = container.createDiv({ cls: "idl-form" });
+    const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
 
     // Text Start and Text End (same row)
     const srcRangeFields = formContainer.createDiv({
@@ -199,14 +173,6 @@ export class NoteFormView extends ItemView {
     this.saveButton = buttonContainer.createEl("button", { text: "Save" });
     this.saveButton.disabled = true;
     this.saveButton.addEventListener("click", () => this.handleSave());
-
-    // Load saved annotation if exists
-    if (this.savedAnnotation) {
-      this.loadSavedAnnotation();
-      if (this.shouldOpenArticle) {
-        this.openTargetArticle();
-      }
-    }
   }
 
   private validateForm(): void {
@@ -325,5 +291,21 @@ export class NoteFormView extends ItemView {
         `Failed to load target article: ${this.savedAnnotation.target}`
       );
     }
+  }
+
+  show(): void {
+    this.contentEl.style.display = "block";
+  }
+
+  hide(): void {
+    this.contentEl.style.display = "none";
+  }
+
+  onunload(): void {
+    if (this.articleAutocomplete) {
+      this.articleAutocomplete.unload();
+      this.articleAutocomplete = null;
+    }
+    this.contentEl.remove();
   }
 }
