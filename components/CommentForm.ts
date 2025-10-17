@@ -1,8 +1,11 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
 import { ArticleSplitViewHandler } from "../utils/article-split-handler";
+import { AnnotationService } from "../utils/annotation-service";
+import { validateTargetTextFields } from "../utils/text-validator";
+import { v4 as uuidv4 } from "uuid";
 
 export const COMMENT_FORM_VIEW = "comment-form-view";
 
@@ -11,9 +14,18 @@ export class CommentFormView extends ItemView {
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
   private articleSplitHandler: ArticleSplitViewHandler | null = null;
+  private annotationService: AnnotationService | null = null;
+  private targetTextStartInput: HTMLInputElement | null = null;
+  private targetTextEndInput: HTMLInputElement | null = null;
+  private targetTextDisplayInput: HTMLInputElement | null = null;
+  private saveButton: HTMLButtonElement | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
+  }
+
+  setAnnotationService(service: AnnotationService): void {
+    this.annotationService = service;
   }
 
   getViewType() {
@@ -106,10 +118,11 @@ export class CommentFormView extends ItemView {
       onChange: (article) => {
         this.selectedArticle = article;
 
-        // Open article in split using the handler
         if (this.articleSplitHandler) {
           this.articleSplitHandler.openArticle(article);
         }
+
+        this.validateForm();
       },
     });
 
@@ -123,27 +136,147 @@ export class CommentFormView extends ItemView {
 
     const startField = textRangeFields.createDiv({ cls: "idl-start-field" });
     startField.createEl("label", { text: "Target Text Start" });
-    const targetTextStartInput = startField.createEl("input", {
+    this.targetTextStartInput = startField.createEl("input", {
       type: "text",
     });
 
     const endField = textRangeFields.createDiv({ cls: "idl-end-field" });
     endField.createEl("label", { text: "Target Text End" });
-    const targetTextEndInput = endField.createEl("input", {
+    this.targetTextEndInput = endField.createEl("input", {
       type: "text",
     });
 
-    // Target text display field
     const targetDisplayField = formContainer.createDiv({
       cls: "idl-form-field",
     });
     targetDisplayField.createEl("label", { text: "Target Text Display" });
-    const targetTextDisplayInput = targetDisplayField.createEl("input", {
+    this.targetTextDisplayInput = targetDisplayField.createEl("input", {
       type: "text",
     });
 
-    // Button container
+    this.targetTextStartInput.addEventListener("input", () =>
+      this.validateForm()
+    );
+    this.targetTextEndInput.addEventListener("input", () =>
+      this.validateForm()
+    );
+    this.targetTextDisplayInput.addEventListener("input", () =>
+      this.validateForm()
+    );
+
     const buttonContainer = formContainer.createDiv({ cls: "idl-btns" });
-    const saveButton = buttonContainer.createEl("button", { text: "Save" });
+    this.saveButton = buttonContainer.createEl("button", { text: "Save" });
+    this.saveButton.disabled = true;
+    this.saveButton.addEventListener("click", () => this.handleSave());
+  }
+
+  private validateForm(): void {
+    if (!this.saveButton) return;
+
+    const hasArticle = this.selectedArticle !== null;
+    const hasStart =
+      this.targetTextStartInput &&
+      this.targetTextStartInput.value.trim() !== "";
+    const hasEnd =
+      this.targetTextEndInput && this.targetTextEndInput.value.trim() !== "";
+    const hasDisplay =
+      this.targetTextDisplayInput &&
+      this.targetTextDisplayInput.value.trim() !== "";
+
+    this.saveButton.disabled = !(
+      hasArticle &&
+      hasStart &&
+      hasEnd &&
+      hasDisplay
+    );
+  }
+
+  private async handleSave(): Promise<void> {
+    if (!this.currentComment) {
+      new Notice("No comment selected");
+      return;
+    }
+
+    if (!this.selectedArticle) {
+      new Notice("Please select a target article");
+      return;
+    }
+
+    if (!this.articleSplitHandler) {
+      new Notice("Article handler not available");
+      return;
+    }
+
+    if (!this.annotationService) {
+      new Notice("Annotation service not available");
+      return;
+    }
+
+    if (
+      !this.targetTextStartInput ||
+      !this.targetTextEndInput ||
+      !this.targetTextDisplayInput
+    ) {
+      return;
+    }
+
+    const targetTextStart = this.targetTextStartInput.value.trim();
+    const targetTextEnd = this.targetTextEndInput.value.trim();
+    const targetTextDisplay = this.targetTextDisplayInput.value.trim();
+
+    if (!targetTextStart || !targetTextEnd || !targetTextDisplay) {
+      new Notice("Please fill in all target text fields");
+      return;
+    }
+
+    const articleContent = this.articleSplitHandler.getArticleContent();
+    if (!articleContent) {
+      new Notice(
+        "Article content not available. Please select an article first."
+      );
+      return;
+    }
+
+    const validation = validateTargetTextFields(
+      articleContent,
+      targetTextStart,
+      targetTextEnd,
+      targetTextDisplay
+    );
+
+    if (!validation.valid) {
+      new Notice(validation.error || "Validation failed");
+      return;
+    }
+
+    try {
+      const commentId = uuidv4();
+
+      await this.annotationService.saveComment({
+        commentId,
+        textDisplay: this.currentComment.title,
+        commentBody: this.currentComment.body,
+        targetArticle: this.selectedArticle.id,
+        targetTextStart,
+        targetTextEnd,
+        targetTextDisplay,
+        targetFullText: validation.rangeText || "",
+        targetStartOffset: validation.startOffset || 0,
+        targetEndOffset: validation.endOffset || 0,
+        targetDisplayOffset: validation.displayOffsetInRange || 0,
+        sourceFilePath: this.currentComment.filePath,
+      });
+
+      new Notice("Comment saved successfully");
+
+      if (this.targetTextStartInput) this.targetTextStartInput.value = "";
+      if (this.targetTextEndInput) this.targetTextEndInput.value = "";
+      if (this.targetTextDisplayInput) this.targetTextDisplayInput.value = "";
+      this.selectedArticle = null;
+      if (this.saveButton) this.saveButton.disabled = true;
+    } catch (error) {
+      new Notice(`Error saving comment: ${error.message}`);
+      console.error("Error saving comment:", error);
+    }
   }
 }
