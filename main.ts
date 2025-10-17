@@ -11,7 +11,7 @@ import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
 import { CommentParser, Comment } from "./utils/parsers";
 import { COMMENT_FORM_VIEW, CommentFormView } from "components/CommentForm";
 import { ArticleSplitViewHandler } from "./utils/article-split-handler";
-import { AnnotationService } from "./utils/annotation-service";
+import { AnnotationService, AnnotationData } from "./utils/annotation-service";
 
 export default class IdealogsPlugin extends Plugin {
   private articleSuggest: ArticleSuggest;
@@ -98,7 +98,7 @@ export default class IdealogsPlugin extends Plugin {
     }, 500);
   }
 
-  private checkCursorInComment(force = false): void {
+  private async checkCursorInComment(force = false): Promise<void> {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
     if (!activeView) {
@@ -114,7 +114,6 @@ export default class IdealogsPlugin extends Plugin {
     const cursor = editor.getCursor();
     const cursorLine = cursor.line;
 
-    // Skip if line hasn't changed (unless forced)
     if (!force && cursorLine === this.lastCursorLine) {
       return;
     }
@@ -135,11 +134,21 @@ export default class IdealogsPlugin extends Plugin {
     );
 
     if (comment) {
-      this.showCommentFormPanel(comment);
+      const words = comment.body.split(" ");
+      const savedAnnotation = await this.annotationService.findCommentBySource(
+        file.path,
+        comment.title,
+        comment.title.split(" ")[0],
+        words[words.length - 1]
+      );
+      this.showCommentFormPanel(comment, savedAnnotation);
     }
   }
 
-  private showCommentFormPanel(comment: Comment): void {
+  private showCommentFormPanel(
+    comment: Comment,
+    savedAnnotation: AnnotationData | null = null
+  ): void {
     const existingRightPanelLeaves =
       this.app.workspace.getLeavesOfType(COMMENT_FORM_VIEW);
 
@@ -154,7 +163,6 @@ export default class IdealogsPlugin extends Plugin {
           active: false,
         });
 
-        // Automatically reveal the right sidebar to show the panel
         this.app.workspace.rightSplit.expand();
       }
     }
@@ -162,7 +170,7 @@ export default class IdealogsPlugin extends Plugin {
     if (rightLeaf) {
       const view = rightLeaf.view as CommentFormView;
       if (view && view.updateComment) {
-        view.updateComment(comment);
+        view.updateComment(comment, savedAnnotation);
       }
     }
   }
