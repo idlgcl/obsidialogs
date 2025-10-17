@@ -9,6 +9,7 @@ export class ArticleSplitViewHandler {
   private fileTracker: IdealogsFileTracker;
   private articleSplitLeaf: WorkspaceLeaf | null = null;
   private previousArticleFile: TFile | null = null;
+  private currentArticleContent: string | null = null;
 
   constructor(
     app: App,
@@ -20,9 +21,14 @@ export class ArticleSplitViewHandler {
     this.fileTracker = fileTracker;
   }
 
+  getArticleContent(): string | null {
+    return this.currentArticleContent;
+  }
+
   async openArticle(article: Article): Promise<void> {
     try {
       const content = await this.apiService.fetchFileContent(article.id);
+      this.currentArticleContent = content;
 
       const sanitizedTitle = article.title.replace(/[/\\:*?"<>|]/g, "");
       const fileName = `${sanitizedTitle}.md`;
