@@ -47,7 +47,7 @@ export class ArticleSplitViewHandler {
       if (this.articleSplitLeaf && this.articleSplitLeaf.view) {
         try {
           isLeafValid = this.articleSplitLeaf.view.containerEl.isConnected;
-        } catch {
+        } catch (error) {
           isLeafValid = false;
         }
       }
@@ -65,7 +65,10 @@ export class ArticleSplitViewHandler {
             await this.app.vault.delete(this.previousArticleFile);
             this.fileTracker.untrack(this.previousArticleFile.name);
           } catch (error) {
-            console.error("Error deleting previous article file:", error);
+            console.error(
+              "[ArticleSplitHandler] Error deleting previous article file:",
+              error
+            );
           }
         }
       } else {
@@ -75,10 +78,11 @@ export class ArticleSplitViewHandler {
       }
 
       this.previousArticleFile = file as TFile;
-
-      console.log("Article opened in split:", article.title);
     } catch (error) {
-      console.error("Error opening article in split:", error);
+      console.error(
+        "[ArticleSplitHandler] Error opening article in split:",
+        error
+      );
       throw error;
     }
   }
@@ -92,7 +96,10 @@ export class ArticleSplitViewHandler {
         await this.app.vault.delete(this.previousArticleFile);
         this.fileTracker.untrack(this.previousArticleFile.name);
       } catch (error) {
-        console.error("Error cleaning up article file:", error);
+        console.error(
+          "[ArticleSplitHandler] Error cleaning up article file:",
+          error
+        );
       }
     }
 

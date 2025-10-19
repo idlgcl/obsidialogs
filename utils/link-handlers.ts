@@ -47,20 +47,41 @@ export class WritingLinkHandler {
 
       this.fileTracker.track(fileName, articleId);
 
+      let isLeafValid = false;
       if (this.writingSplitLeaf && this.writingSplitLeaf.view) {
-        await this.writingSplitLeaf.openFile(file as TFile, {
+        try {
+          isLeafValid = this.writingSplitLeaf.view.containerEl.isConnected;
+        } catch (error) {
+          isLeafValid = false;
+        }
+      }
+
+      // Store the old file reference
+      const fileToDelete = this.previousWritingFile;
+
+      // Update the current file reference
+      this.previousWritingFile = file as TFile;
+
+      if (isLeafValid) {
+        console.log("[WritingLinkHandler] Reusing existing split leaf");
+        await this.writingSplitLeaf?.openFile(file as TFile, {
           state: { mode: "preview" },
         });
 
+        // Delete the old file
         if (
-          this.previousWritingFile &&
-          this.fileTracker.isTracked(this.previousWritingFile.name)
+          fileToDelete &&
+          this.fileTracker.isTracked(fileToDelete.name) &&
+          fileToDelete.name !== (file as TFile).name
         ) {
           try {
-            await this.app.vault.delete(this.previousWritingFile);
-            this.fileTracker.untrack(this.previousWritingFile.name);
+            await this.app.vault.delete(fileToDelete);
+            this.fileTracker.untrack(fileToDelete.name);
           } catch (error) {
-            console.error("Error deleting previous writing file:", error);
+            console.error(
+              "[WritingLinkHandler] Error deleting previous writing file:",
+              error
+            );
           }
         }
       } else {
@@ -68,10 +89,8 @@ export class WritingLinkHandler {
         this.writingSplitLeaf = leaf;
         await leaf.openFile(file as TFile, { state: { mode: "preview" } });
       }
-
-      this.previousWritingFile = file as TFile;
     } catch (error) {
-      console.error("Error handling writing link:", error);
+      console.error("[WritingLinkHandler] Error handling writing link:", error);
     }
   }
 }
