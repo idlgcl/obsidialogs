@@ -1,7 +1,5 @@
 import { Component, Notice, App } from "obsidian";
 import { NoteMeta } from "../utils/parsers";
-import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
-import { Article } from "../types";
 import { ArticleSplitViewHandler } from "../utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
@@ -24,9 +22,6 @@ export class NoteForm extends Component {
   private app: App;
   private currentNote: NoteMeta;
   private savedAnnotation: AnnotationData | null = null;
-  private shouldOpenArticle = false;
-  private articleAutocomplete: ArticleAutocompleteField | null = null;
-  private selectedArticle: Article | null = null;
   private articleSplitHandler: ArticleSplitViewHandler | null = null;
   private annotationService: AnnotationService | null = null;
   private apiService: ApiService;
@@ -35,6 +30,7 @@ export class NoteForm extends Component {
   private textStartInput: HTMLInputElement | null = null;
   private textEndInput: HTMLInputElement | null = null;
   private textDisplayInput: HTMLInputElement | null = null;
+  private targetArticleInput: HTMLInputElement | null = null;
   private targetTextStartInput: HTMLInputElement | null = null;
   private targetTextEndInput: HTMLInputElement | null = null;
   private targetTextDisplayInput: HTMLInputElement | null = null;
@@ -46,7 +42,6 @@ export class NoteForm extends Component {
     this.app = options.app;
     this.currentNote = options.note;
     this.savedAnnotation = options.savedAnnotation || null;
-    this.shouldOpenArticle = options.openTargetArticle || false;
     this.articleSplitHandler = options.articleSplitHandler || null;
     this.annotationService = options.annotationService || null;
     this.apiService = new ApiService();
@@ -55,9 +50,10 @@ export class NoteForm extends Component {
 
     if (this.savedAnnotation) {
       this.loadSavedAnnotation();
-      if (this.shouldOpenArticle) {
-        this.openTargetArticle();
-      }
+    }
+
+    if (this.articleSplitHandler) {
+      this.openTargetArticleInSplit();
     }
   }
 
@@ -71,7 +67,7 @@ export class NoteForm extends Component {
     // Form container
     const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
 
-    // Text Start and Text End (same row)
+    // Text Start and Text End
     const srcRangeFields = formContainer.createDiv({
       cls: "idl-form-field idl-range-field",
     });
@@ -80,56 +76,40 @@ export class NoteForm extends Component {
     startField.createEl("label", { text: "Text Start" });
     this.textStartInput = startField.createEl("input", {
       type: "text",
+      value: this.currentNote.previousWords,
     });
+    // this.textStartInput.disabled = true;
 
     const endField = srcRangeFields.createDiv({ cls: "idl-end-field" });
     endField.createEl("label", { text: "Text End" });
     this.textEndInput = endField.createEl("input", {
       type: "text",
+      value: this.currentNote.nextWords,
     });
+    // this.textEndInput.disabled = true;
 
-    // Text Display (full row)
+    // Text Display
     const textDisplayField = formContainer.createDiv({ cls: "idl-form-field" });
     textDisplayField.createEl("label", { text: "Text Display" });
+    const lastWord = this.currentNote.previousWords.split(/\s+/).pop() || "";
     this.textDisplayInput = textDisplayField.createEl("input", {
       type: "text",
+      value: lastWord,
     });
+    this.textDisplayInput.disabled = true;
 
-    // Target Article (full row, always disabled)
+    // Target Article
     const targetArticleField = formContainer.createDiv({
       cls: "idl-form-field",
     });
     targetArticleField.createEl("label", { text: "Target Article" });
-
-    // Clean up old if exists
-    if (this.articleAutocomplete) {
-      this.articleAutocomplete.unload();
-      this.articleAutocomplete = null;
-    }
-
-    this.articleAutocomplete = new ArticleAutocompleteField({
-      container: targetArticleField,
-      placeholder: "Search for an article...",
-      onChange: (article) => {
-        this.selectedArticle = article;
-
-        if (this.articleSplitHandler) {
-          this.articleSplitHandler.openArticle(article);
-        }
-
-        this.validateForm();
-      },
+    this.targetArticleInput = targetArticleField.createEl("input", {
+      type: "text",
+      value: this.currentNote.target,
     });
+    this.targetArticleInput.disabled = true;
 
-    this.articleAutocomplete.load();
-
-    // Set the target from note and disable
-    if (this.currentNote) {
-      this.articleAutocomplete.setValue(this.currentNote.target);
-      this.articleAutocomplete.setDisabled(true);
-    }
-
-    // Target Text Display (full row)
+    // Target Text Display
     const targetDisplayField = formContainer.createDiv({
       cls: "idl-form-field",
     });
@@ -138,7 +118,7 @@ export class NoteForm extends Component {
       type: "text",
     });
 
-    // Target Text Start and Target Text End (same row)
+    // Target Text Start and Target Text End
     const targetRangeFields = formContainer.createDiv({
       cls: "idl-form-field idl-range-field",
     });
@@ -159,7 +139,12 @@ export class NoteForm extends Component {
       type: "text",
     });
 
-    // Add input event listeners for validation
+    // Input event listeners for validation
+    // Source text fields
+    this.textStartInput.addEventListener("input", () => this.validateForm());
+    this.textEndInput.addEventListener("input", () => this.validateForm());
+
+    // Target text fields
     this.targetTextStartInput.addEventListener("input", () =>
       this.validateForm()
     );
@@ -173,39 +158,73 @@ export class NoteForm extends Component {
     // Save button
     const buttonContainer = formContainer.createDiv({ cls: "idl-btns" });
     this.saveButton = buttonContainer.createEl("button", { text: "Save" });
-    this.saveButton.disabled = true;
     this.saveButton.addEventListener("click", () => this.handleSave());
+
+    this.validateForm();
+  }
+
+  private validateSourceTextFields(): { valid: boolean; error?: string } {
+    if (!this.textStartInput || !this.textEndInput || !this.textDisplayInput) {
+      return { valid: false, error: "Form fields not initialized" };
+    }
+
+    const textStart = this.textStartInput.value.trim();
+    const textEnd = this.textEndInput.value.trim();
+    const textDisplay = this.textDisplayInput.value.trim();
+
+    if (!textStart || !textEnd || !textDisplay) {
+      return { valid: false, error: "All source text fields are required" };
+    }
+
+    const previousWords = this.currentNote.previousWords;
+    const nextWords = this.currentNote.nextWords;
+
+    if (!previousWords.endsWith(textDisplay)) {
+      return {
+        valid: false,
+        error: `Text Display "${textDisplay}" must appear immediately before the link`,
+      };
+    }
+
+    const beforeDisplay = previousWords
+      .slice(0, previousWords.length - textDisplay.length)
+      .trim();
+
+    if (beforeDisplay === "") {
+      if (textStart !== textDisplay) {
+        return {
+          valid: false,
+          error: `Text Start must be "${textDisplay}" since Text Display is the only word before the link`,
+        };
+      }
+    } else {
+      if (beforeDisplay !== textStart && !beforeDisplay.includes(textStart)) {
+        return {
+          valid: false,
+          error: `Text Start "${textStart}" must appear before Text Display in the source text`,
+        };
+      }
+    }
+
+    if (!nextWords.includes(textEnd)) {
+      return {
+        valid: false,
+        error: `Text End "${textEnd}" must appear after the link in the source text`,
+      };
+    }
+
+    return { valid: true };
   }
 
   private validateForm(): void {
-    if (!this.saveButton) return;
-
-    const hasArticle = this.selectedArticle !== null;
-    const hasStart =
-      this.targetTextStartInput &&
-      this.targetTextStartInput.value.trim() !== "";
-    const hasEnd =
-      this.targetTextEndInput && this.targetTextEndInput.value.trim() !== "";
-    const hasDisplay =
-      this.targetTextDisplayInput &&
-      this.targetTextDisplayInput.value.trim() !== "";
-
-    this.saveButton.disabled = !(
-      hasArticle &&
-      hasStart &&
-      hasEnd &&
-      hasDisplay
-    );
+    if (this.saveButton) {
+      this.saveButton.disabled = false;
+    }
   }
 
   private async handleSave(): Promise<void> {
     if (!this.currentNote) {
       new Notice("No note selected");
-      return;
-    }
-
-    if (!this.selectedArticle) {
-      new Notice("Please select a target article");
       return;
     }
 
@@ -220,9 +239,6 @@ export class NoteForm extends Component {
     }
 
     if (
-      !this.textStartInput ||
-      !this.textEndInput ||
-      !this.textDisplayInput ||
       !this.targetTextStartInput ||
       !this.targetTextEndInput ||
       !this.targetTextDisplayInput
@@ -230,76 +246,61 @@ export class NoteForm extends Component {
       return;
     }
 
-    // Get source field values
-    const textStart = this.textStartInput.value.trim();
-    const textEnd = this.textEndInput.value.trim();
-    const textDisplay = this.textDisplayInput.value.trim();
+    const textStart = this.textStartInput?.value.trim() || "";
+    const textEnd = this.textEndInput?.value.trim() || "";
+    const textDisplay = this.textDisplayInput?.value.trim() || "";
 
-    if (!textStart || !textEnd || !textDisplay) {
-      new Notice("Please fill all source text fields");
+    const sourceValidation = this.validateSourceTextFields();
+    if (!sourceValidation.valid) {
+      new Notice(
+        `Source validation failed: ${
+          sourceValidation.error || "Invalid source text"
+        }`
+      );
       return;
     }
 
-    // Validate source text display position
-    try {
-      const fileContent = await this.app.vault.adapter.read(
-        this.currentNote.filePath
-      );
-      const linkText = this.currentNote.linkText;
-
-      // Escape special regex characters in both textDisplay and linkText
-      const escapedDisplay = textDisplay.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const escapedLink = linkText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-      const correctSequencePattern = new RegExp(
-        `${escapedDisplay}\\s*${escapedLink}`
-      );
-
-      if (!correctSequencePattern.test(fileContent)) {
-        new Notice(
-          `Text display "${textDisplay}" must appear directly before the link`
-        );
-        return;
-      }
-    } catch (error) {
-      console.error("Error validating text display position:", error);
-      new Notice("Error reading source file");
-      return;
-    }
-
-    // Get target field values
     const targetTextStart = this.targetTextStartInput.value.trim();
     const targetTextEnd = this.targetTextEndInput.value.trim();
     const targetTextDisplay = this.targetTextDisplayInput.value.trim();
 
-    if (!targetTextStart || !targetTextEnd || !targetTextDisplay) {
-      new Notice("Please fill in all target text fields");
+    if (!targetTextStart) {
+      new Notice("Please fill in Target Text Start field");
+      return;
+    }
+    if (!targetTextEnd) {
+      new Notice("Please fill in Target Text End field");
+      return;
+    }
+    if (!targetTextDisplay) {
+      new Notice("Please fill in Target Text Display field");
       return;
     }
 
-    // Get article content for validation
     const articleContent = this.articleSplitHandler.getArticleContent();
     if (!articleContent) {
       new Notice(
-        "Article content not available. Please select an article first."
+        "Article content not available. Please wait for the article to load."
       );
       return;
     }
 
-    // Validate target text fields
-    const validation = validateTargetTextFields(
+    const targetValidation = validateTargetTextFields(
       articleContent,
       targetTextStart,
       targetTextEnd,
       targetTextDisplay
     );
 
-    if (!validation.valid) {
-      new Notice(validation.error || "Validation failed");
+    if (!targetValidation.valid) {
+      new Notice(
+        `Target validation failed: ${
+          targetValidation.error || "Invalid target text"
+        }`
+      );
       return;
     }
 
-    // Save the note
     try {
       const noteId = this.savedAnnotation?.id || uuidv4();
 
@@ -308,14 +309,15 @@ export class NoteForm extends Component {
         textStart,
         textEnd,
         textDisplay,
-        targetArticle: this.selectedArticle.id,
+        linkText: this.currentNote.linkText,
+        targetArticle: this.currentNote.target,
         targetTextStart,
         targetTextEnd,
         targetTextDisplay,
-        targetFullText: validation.rangeText || "",
-        targetStartOffset: validation.startOffset || 0,
-        targetEndOffset: validation.endOffset || 0,
-        targetDisplayOffset: validation.displayOffsetInRange || 0,
+        targetFullText: targetValidation.rangeText || "",
+        targetStartOffset: targetValidation.startOffset || 0,
+        targetEndOffset: targetValidation.endOffset || 0,
+        targetDisplayOffset: targetValidation.displayOffsetInRange || 0,
         sourceFilePath: this.currentNote.filePath,
       });
 
@@ -338,6 +340,7 @@ export class NoteForm extends Component {
     if (this.textDisplayInput) {
       this.textDisplayInput.value = this.savedAnnotation.src_txt_display;
     }
+
     if (this.targetTextStartInput) {
       this.targetTextStartInput.value = this.savedAnnotation.target_txt_start;
     }
@@ -349,35 +352,21 @@ export class NoteForm extends Component {
         this.savedAnnotation.target_txt_display;
     }
 
-    if (this.articleAutocomplete) {
-      this.articleAutocomplete.setValue(this.savedAnnotation.target);
-    }
+    this.validateForm();
   }
 
-  private async openTargetArticle(): Promise<void> {
-    if (!this.savedAnnotation) return;
-
+  private async openTargetArticleInSplit(): Promise<void> {
     try {
       const targetArticle = await this.apiService.fetchArticleById(
-        this.savedAnnotation.target
+        this.currentNote.target
       );
-
-      this.selectedArticle = targetArticle;
-
-      if (this.articleAutocomplete) {
-        this.articleAutocomplete.setValue(targetArticle.id);
-      }
 
       if (this.articleSplitHandler) {
         await this.articleSplitHandler.openArticle(targetArticle);
       }
-
-      this.validateForm();
     } catch (error) {
-      console.error("Error loading saved annotation:", error);
-      new Notice(
-        `Failed to load target article: ${this.savedAnnotation.target}`
-      );
+      console.error("Error opening target article:", error);
+      new Notice(`Failed to load target article: ${this.currentNote.target}`);
     }
   }
 
@@ -390,10 +379,6 @@ export class NoteForm extends Component {
   }
 
   onunload(): void {
-    if (this.articleAutocomplete) {
-      this.articleAutocomplete.unload();
-      this.articleAutocomplete = null;
-    }
     this.contentEl.remove();
   }
 }
