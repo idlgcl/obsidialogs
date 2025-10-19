@@ -1,15 +1,17 @@
 import { Component, Notice, App } from "obsidian";
-import { Note } from "../utils/parsers";
+import { NoteMeta } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
 import { ArticleSplitViewHandler } from "../utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
+import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
+import { v4 as uuidv4 } from "uuid";
 
 export interface NoteFormOptions {
   container: HTMLElement;
   app: App;
-  note: Note;
+  note: NoteMeta;
   savedAnnotation?: AnnotationData | null;
   openTargetArticle?: boolean;
   articleSplitHandler?: ArticleSplitViewHandler | null;
@@ -20,7 +22,7 @@ export class NoteForm extends Component {
   private container: HTMLElement;
   private contentEl: HTMLElement;
   private app: App;
-  private currentNote: Note;
+  private currentNote: NoteMeta;
   private savedAnnotation: AnnotationData | null = null;
   private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
@@ -218,6 +220,9 @@ export class NoteForm extends Component {
     }
 
     if (
+      !this.textStartInput ||
+      !this.textEndInput ||
+      !this.textDisplayInput ||
       !this.targetTextStartInput ||
       !this.targetTextEndInput ||
       !this.targetTextDisplayInput
@@ -225,6 +230,44 @@ export class NoteForm extends Component {
       return;
     }
 
+    // Get source field values
+    const textStart = this.textStartInput.value.trim();
+    const textEnd = this.textEndInput.value.trim();
+    const textDisplay = this.textDisplayInput.value.trim();
+
+    if (!textStart || !textEnd || !textDisplay) {
+      new Notice("Please fill all source text fields");
+      return;
+    }
+
+    // Validate source text display position
+    try {
+      const fileContent = await this.app.vault.adapter.read(
+        this.currentNote.filePath
+      );
+      const linkText = this.currentNote.linkText;
+
+      // Escape special regex characters in both textDisplay and linkText
+      const escapedDisplay = textDisplay.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const escapedLink = linkText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      const correctSequencePattern = new RegExp(
+        `${escapedDisplay}\\s*${escapedLink}`
+      );
+
+      if (!correctSequencePattern.test(fileContent)) {
+        new Notice(
+          `Text display "${textDisplay}" must appear directly before the link`
+        );
+        return;
+      }
+    } catch (error) {
+      console.error("Error validating text display position:", error);
+      new Notice("Error reading source file");
+      return;
+    }
+
+    // Get target field values
     const targetTextStart = this.targetTextStartInput.value.trim();
     const targetTextEnd = this.targetTextEndInput.value.trim();
     const targetTextDisplay = this.targetTextDisplayInput.value.trim();
@@ -234,8 +277,53 @@ export class NoteForm extends Component {
       return;
     }
 
-    // TODO: Add validation and save logic
-    new Notice("Save functionality to be implemented");
+    // Get article content for validation
+    const articleContent = this.articleSplitHandler.getArticleContent();
+    if (!articleContent) {
+      new Notice(
+        "Article content not available. Please select an article first."
+      );
+      return;
+    }
+
+    // Validate target text fields
+    const validation = validateTargetTextFields(
+      articleContent,
+      targetTextStart,
+      targetTextEnd,
+      targetTextDisplay
+    );
+
+    if (!validation.valid) {
+      new Notice(validation.error || "Validation failed");
+      return;
+    }
+
+    // Save the note
+    try {
+      const noteId = this.savedAnnotation?.id || uuidv4();
+
+      await this.annotationService.saveNote({
+        noteId,
+        textStart,
+        textEnd,
+        textDisplay,
+        targetArticle: this.selectedArticle.id,
+        targetTextStart,
+        targetTextEnd,
+        targetTextDisplay,
+        targetFullText: validation.rangeText || "",
+        targetStartOffset: validation.startOffset || 0,
+        targetEndOffset: validation.endOffset || 0,
+        targetDisplayOffset: validation.displayOffsetInRange || 0,
+        sourceFilePath: this.currentNote.filePath,
+      });
+
+      new Notice("Note saved successfully");
+    } catch (error) {
+      new Notice(`Error saving note: ${error.message}`);
+      console.error("Error saving note:", error);
+    }
   }
 
   private async loadSavedAnnotation(): Promise<void> {

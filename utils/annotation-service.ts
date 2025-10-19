@@ -152,6 +152,88 @@ export class AnnotationService {
     return commentData.commentId;
   }
 
+  async saveNote(noteData: {
+    noteId: string;
+    textStart: string;
+    textEnd: string;
+    textDisplay: string;
+    targetArticle: string;
+    targetTextStart: string;
+    targetTextEnd: string;
+    targetTextDisplay: string;
+    targetFullText: string;
+    targetStartOffset: number;
+    targetEndOffset: number;
+    targetDisplayOffset: number;
+    sourceFilePath: string;
+  }): Promise<string> {
+    await this.ensureAnnotationsDirectory();
+
+    if (!noteData.targetArticle || !noteData.sourceFilePath) {
+      throw new Error("Target article and source path are required");
+    }
+
+    const timestamp = Date.now();
+
+    const srcTxtDisplay = noteData.textDisplay;
+    const srcTxtStart = noteData.textStart;
+    const srcTxtEnd = noteData.textEnd;
+    const srcTxt = `${srcTxtStart} ${srcTxtDisplay} ${srcTxtEnd}`;
+
+    const targetTxtDisplay = noteData.targetTextDisplay;
+    const targetTxtStart = noteData.targetTextStart;
+    const targetTxtEnd = noteData.targetTextEnd;
+    const targetTxt = noteData.targetFullText;
+
+    const sourceFilename =
+      noteData.sourceFilePath.split("/").pop() || noteData.sourceFilePath;
+
+    const annotationData: AnnotationData = {
+      id: noteData.noteId,
+      kind: "NOTE",
+      timestamp,
+      src: sourceFilename,
+      src_txt_display: srcTxtDisplay,
+      src_txt_start: srcTxtStart,
+      src_txt_end: srcTxtEnd,
+      src_txt: srcTxt,
+      target: noteData.targetArticle,
+      target_txt_display: targetTxtDisplay,
+      target_txt_start: targetTxtStart,
+      target_txt_end: targetTxtEnd,
+      target_txt: targetTxt,
+      target_start_offset: noteData.targetStartOffset,
+      target_end_offset: noteData.targetEndOffset,
+      target_display_offset: noteData.targetDisplayOffset,
+    };
+
+    const annotations = await this.loadAnnotations(noteData.targetArticle);
+
+    annotations.notes[noteData.noteId] = annotationData;
+
+    const annotationsPath = this.getAnnotationsFilePath(
+      noteData.targetArticle
+    );
+    await this.app.vault.adapter.write(
+      annotationsPath,
+      JSON.stringify(annotations, null, 2)
+    );
+
+    const sourceAnnotations = await this.loadAnnotations(
+      noteData.sourceFilePath
+    );
+    sourceAnnotations.notes[noteData.noteId] = annotationData;
+    const sourceAnnotationsPath = this.getAnnotationsFilePath(
+      noteData.sourceFilePath
+    );
+    await this.app.vault.adapter.write(
+      sourceAnnotationsPath,
+      JSON.stringify(sourceAnnotations, null, 2)
+    );
+
+    return noteData.noteId;
+  }
+
   async findCommentBySource(
     sourceFilePath: string,
     textDisplay: string,
