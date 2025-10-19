@@ -1,5 +1,9 @@
-import { ItemView, WorkspaceLeaf, Component as ObsidianComponent } from "obsidian";
-import { Comment, Note } from "../utils/parsers";
+import {
+  ItemView,
+  WorkspaceLeaf,
+  Component as ObsidianComponent,
+} from "obsidian";
+import { Comment, NoteMeta } from "../utils/parsers";
 import { ArticleSplitViewHandler } from "../utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { CommentFormComponent } from "./CommentFormComponent";
@@ -85,7 +89,7 @@ export class AnnotationFormView extends ItemView {
   }
 
   updateNote(
-    note: Note,
+    note: NoteMeta,
     savedAnnotation: AnnotationData | null = null,
     openTargetArticle = false
   ): void {

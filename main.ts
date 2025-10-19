@@ -8,7 +8,7 @@ import {
   patchLinkOpening,
 } from "./utils/link-handlers";
 import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
-import { CommentParser, Comment, NoteParser, Note } from "./utils/parsers";
+import { CommentParser, Comment, NoteParser, NoteMeta } from "./utils/parsers";
 import {
   ANNOTATION_FORM_VIEW,
   AnnotationFormView,
@@ -236,7 +236,7 @@ export default class IdealogsPlugin extends Plugin {
     }
   }
 
-  private handleNoteLinkClick(note: Note): void {
+  private handleNoteLinkClick(note: NoteMeta): void {
     this.showAnnotationFormPanel(note, "note");
   }
 
@@ -288,7 +288,7 @@ export default class IdealogsPlugin extends Plugin {
   }
 
   private showAnnotationFormPanel(
-    data: Comment | Note,
+    data: Comment | NoteMeta,
     type: "comment" | "note",
     savedAnnotation: AnnotationData | null = null,
     openTargetArticle = false
@@ -304,7 +304,7 @@ export default class IdealogsPlugin extends Plugin {
       if (rightLeaf) {
         rightLeaf.setViewState({
           type: ANNOTATION_FORM_VIEW,
-          active: false,
+          active: type === "note" ? true : false,
         });
 
         this.app.workspace.rightSplit.expand();
@@ -315,9 +315,14 @@ export default class IdealogsPlugin extends Plugin {
       const view = rightLeaf.view as AnnotationFormView;
       if (view) {
         if (type === "comment") {
-          view.updateComment(data as Comment, savedAnnotation, openTargetArticle);
+          view.updateComment(
+            data as Comment,
+            savedAnnotation,
+            openTargetArticle
+          );
         } else {
-          view.updateNote(data as Note, savedAnnotation, openTargetArticle);
+          view.updateNote(data as NoteMeta, savedAnnotation, openTargetArticle);
+          // view.setState({ active: true });
         }
       }
     }
