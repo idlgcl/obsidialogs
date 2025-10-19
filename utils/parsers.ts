@@ -5,7 +5,7 @@ export interface Comment {
   filePath: string;
 }
 
-export interface Note {
+export interface NoteMeta {
   linkText: string;
   target: string;
   previousWords: string;
@@ -55,7 +55,7 @@ export class NoteParser {
     line: string,
     filename: string,
     fullPath: string
-  ): Note | null {
+  ): NoteMeta | null {
     if (line.trim().startsWith("#")) {
       return null;
     }
