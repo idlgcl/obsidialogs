@@ -46,7 +46,9 @@ export default class IdealogsPlugin extends Plugin {
     this.writingLinkHandler = new WritingLinkHandler(
       this.app,
       this.apiService,
-      this.fileTracker
+      this.fileTracker,
+      this.annotationService,
+      this.annotationHighlighter
     );
     this.commonLinkHandler = new CommonLinkHandler(
       this.app,
