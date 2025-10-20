@@ -10,6 +10,12 @@ export interface ArticleResponse {
     items: Article[];
 }
 
+export interface Parent {
+    id: string;
+    title: string;
+    parent?: Parent | null;
+}
+
 export interface Article {
     id: string;
     title: string;
@@ -21,6 +27,7 @@ export interface Article {
     isWorkspace?: boolean;
     createdAt?: string;
     updatedAt?: string;
+    parents?: Parent[];
 }
 
 export interface WordProcessorOptions {
