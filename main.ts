@@ -16,6 +16,7 @@ import {
 } from "components/AnnotationFormView";
 import { ArticleSplitViewHandler } from "./utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "./utils/annotation-service";
+import { AnnotationHighlighter } from "./utils/annotation-highlighter";
 import { EditorView } from "@codemirror/view";
 
 export default class IdealogsPlugin extends Plugin {
@@ -26,6 +27,7 @@ export default class IdealogsPlugin extends Plugin {
   private commonLinkHandler: CommonLinkHandler;
   private articleSplitHandler: ArticleSplitViewHandler;
   private annotationService: AnnotationService;
+  private annotationHighlighter: AnnotationHighlighter;
   private restoreLinkOpening: (() => void) | null = null;
   private previousFile: TFile | null = null;
   private commentParser: CommentParser;
@@ -40,6 +42,7 @@ export default class IdealogsPlugin extends Plugin {
     this.commentParser = new CommentParser();
     this.noteParser = new NoteParser();
     this.annotationService = new AnnotationService(this.app);
+    this.annotationHighlighter = new AnnotationHighlighter(this.app);
     this.writingLinkHandler = new WritingLinkHandler(
       this.app,
       this.apiService,
@@ -97,6 +100,41 @@ export default class IdealogsPlugin extends Plugin {
     this.cursorCheckInterval = window.setInterval(() => {
       this.checkCursorInComment();
     }, 200);
+
+    // markdown processor for annotation in preview/read mode only
+    this.registerMarkdownPostProcessor(async (el, ctx) => {
+      await this.renderAnnotations(el, ctx.sourcePath);
+    });
+  }
+
+  private async renderAnnotations(
+    container: HTMLElement,
+    sourcePath: string
+  ): Promise<void> {
+    try {
+      const annotations = await this.annotationService.loadAnnotations(
+        sourcePath
+      );
+
+      const allAnnotations: AnnotationData[] = [];
+
+      for (const commentId in annotations.comments) {
+        allAnnotations.push(annotations.comments[commentId]);
+      }
+
+      for (const noteId in annotations.notes) {
+        allAnnotations.push(annotations.notes[noteId]);
+      }
+
+      if (allAnnotations.length > 0) {
+        this.annotationHighlighter.highlightAnnotations(
+          container,
+          allAnnotations
+        );
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error rendering annotations:", error);
+    }
   }
 
   private createCommentClickExtension() {
