@@ -1,5 +1,5 @@
 import { App, Modal, setIcon, Editor } from "obsidian";
-import { Article } from "../types";
+import { Article, ArticleResponse } from "../types";
 import { ApiService } from "../utils/api";
 
 export class ArticleSearchModal extends Modal {
@@ -11,11 +11,20 @@ export class ArticleSearchModal extends Modal {
   private previewContainer: HTMLElement;
   private loadingEl: HTMLElement;
   private filterSelect: HTMLSelectElement;
+  private paginationContainer: HTMLElement;
+  private prevButton: HTMLButtonElement;
+  private nextButton: HTMLButtonElement;
+  private pageInfo: HTMLElement;
   private articles: Article[] = [];
   private selectedIndex = 0;
   private debounceTimer: number | null = null;
   private abortController: AbortController | null = null;
   private readonly DEBOUNCE_DELAY = 300;
+  private readonly RESULTS_PER_PAGE = 5;
+  private currentPage = 1;
+  private totalPages = 1;
+  private currentQuery = "";
+  private paginationData: ArticleResponse | null = null;
 
   constructor(
     app: App,
@@ -55,12 +64,11 @@ export class ArticleSearchModal extends Modal {
     setIcon(this.loadingEl, "loader");
     this.loadingEl.hide();
 
-    // Filter container (same row as search)
     const filterContainer = searchRow.createDiv({
       cls: "article-filter-container",
     });
 
-    const filterLabel = filterContainer.createEl("label", {
+    filterContainer.createEl("label", {
       text: "Type:",
       cls: "article-filter-label",
     });
@@ -76,12 +84,10 @@ export class ArticleSearchModal extends Modal {
       value: "question",
     });
 
-    // Content container (results + preview side by side)
     const contentContainer = contentEl.createDiv({
       cls: "article-modal-content",
     });
 
-    // Results list
     this.resultsContainer = contentContainer.createDiv({
       cls: "article-results-container",
     });
@@ -99,6 +105,29 @@ export class ArticleSearchModal extends Modal {
       text: "Select an article to preview",
     });
 
+    // Pagination container
+    this.paginationContainer = contentEl.createDiv({
+      cls: "article-pagination-container",
+    });
+    this.paginationContainer.hide();
+
+    this.prevButton = this.paginationContainer.createEl("button", {
+      text: "Previous",
+      cls: "article-pagination-button",
+    });
+    this.prevButton.addEventListener("click", () => this.goToPreviousPage());
+
+    this.pageInfo = this.paginationContainer.createDiv({
+      cls: "article-page-info",
+      text: "Page 1 of 1",
+    });
+
+    this.nextButton = this.paginationContainer.createEl("button", {
+      text: "Next",
+      cls: "article-pagination-button",
+    });
+    this.nextButton.addEventListener("click", () => this.goToNextPage());
+
     // Event listeners
     this.searchInput.addEventListener("input", this.onSearchInput.bind(this));
     this.filterSelect.addEventListener(
@@ -107,7 +136,6 @@ export class ArticleSearchModal extends Modal {
     );
     this.searchInput.addEventListener("keydown", this.onKeyDown.bind(this));
 
-    // Focus search input
     this.searchInput.focus();
   }
 
@@ -121,39 +149,49 @@ export class ArticleSearchModal extends Modal {
     if (!query) {
       this.hideLoading();
       this.renderEmpty();
+      this.paginationContainer.hide();
       return;
     }
 
     this.showLoading();
+    this.currentPage = 1;
 
     this.debounceTimer = window.setTimeout(() => {
       this.performSearch(query);
     }, this.DEBOUNCE_DELAY);
   }
 
-  private async performSearch(query: string): Promise<void> {
+  private async performSearch(query: string, page = 1): Promise<void> {
     if (this.abortController) {
       this.abortController.abort();
     }
 
     this.abortController = new AbortController();
+    this.currentQuery = query;
 
     try {
       const response = await this.apiService.fetchArticleSuggestions(
         query,
-        this.abortController.signal
+        this.abortController.signal,
+        page,
+        this.RESULTS_PER_PAGE
       );
 
       this.hideLoading();
 
       if (!response.items || response.items.length === 0) {
         this.renderNoResults();
+        this.paginationContainer.hide();
         return;
       }
 
+      this.paginationData = response;
+      this.currentPage = response.page;
+      this.totalPages = response.totalPages;
       this.articles = this.filterArticles(response.items);
       this.selectedIndex = 0;
       this.renderResults();
+      this.updatePagination();
     } catch (error) {
       if (error instanceof Error && error.name !== "AbortError") {
         console.error("Error fetching article suggestions:", error);
@@ -353,16 +391,45 @@ export class ArticleSearchModal extends Modal {
   private selectArticle(article: Article): void {
     const articleLink = `[[@${article.id}]]`;
 
-    // Insert the article link at the saved cursor position
     this.editor.replaceRange(articleLink, this.cursorPos, this.cursorPos);
 
-    // Move cursor to end of inserted link
     this.editor.setCursor({
       line: this.cursorPos.line,
       ch: this.cursorPos.ch + articleLink.length,
     });
 
     this.close();
+  }
+
+  private updatePagination(): void {
+    if (!this.paginationData) {
+      this.paginationContainer.hide();
+      return;
+    }
+
+    if (this.totalPages > 1) {
+      this.paginationContainer.show();
+      this.pageInfo.setText(`Page ${this.currentPage} of ${this.totalPages}`);
+
+      this.prevButton.disabled = this.currentPage === 1;
+      this.nextButton.disabled = this.currentPage === this.totalPages;
+    } else {
+      this.paginationContainer.hide();
+    }
+  }
+
+  private async goToNextPage(): Promise<void> {
+    if (this.currentPage >= this.totalPages) return;
+
+    this.showLoading();
+    await this.performSearch(this.currentQuery, this.currentPage + 1);
+  }
+
+  private async goToPreviousPage(): Promise<void> {
+    if (this.currentPage <= 1) return;
+
+    this.showLoading();
+    await this.performSearch(this.currentQuery, this.currentPage - 1);
   }
 
   onClose() {
