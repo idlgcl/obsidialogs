@@ -1,26 +1,38 @@
-import { App, TFile, WorkspaceLeaf } from "obsidian";
+import { App, TFile, WorkspaceLeaf, MarkdownView } from "obsidian";
 import { WRITING_LINK_PREFIX, COMMON_LINK_PREFIXES } from "../constants";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
+import { AnnotationService, AnnotationData } from "./annotation-service";
+import { AnnotationHighlighter } from "./annotation-highlighter";
 
 export class WritingLinkHandler {
   private app: App;
   private apiService: ApiService;
   private fileTracker: IdealogsFileTracker;
+  private annotationService: AnnotationService;
+  private annotationHighlighter: AnnotationHighlighter;
   private writingSplitLeaf: WorkspaceLeaf | null = null;
   private previousWritingFile: TFile | null = null;
 
   constructor(
     app: App,
     apiService: ApiService,
-    fileTracker: IdealogsFileTracker
+    fileTracker: IdealogsFileTracker,
+    annotationService: AnnotationService,
+    annotationHighlighter: AnnotationHighlighter
   ) {
     this.app = app;
     this.apiService = apiService;
     this.fileTracker = fileTracker;
+    this.annotationService = annotationService;
+    this.annotationHighlighter = annotationHighlighter;
   }
 
-  async handleLink(linkText: string, sourcePath: string): Promise<void> {
+  async handleLink(
+    linkText: string,
+    sourcePath: string,
+    isFromPreviewMode = false
+  ): Promise<void> {
     try {
       const atIndex = linkText.indexOf("@");
       if (atIndex === -1) {
@@ -46,6 +58,24 @@ export class WritingLinkHandler {
       }
 
       this.fileTracker.track(fileName, articleId);
+
+      const annotations = await this.annotationService.loadAnnotations(
+        sourcePath
+      );
+      let noteToHighlight: AnnotationData | null = null;
+
+      for (const noteId in annotations.notes) {
+        const note = annotations.notes[noteId];
+        if (
+          note.target === articleId ||
+          note.target.includes(articleId) ||
+          articleId.includes(note.target)
+        ) {
+          noteToHighlight = note;
+          console.log("[WritingLinkHandler] Found note to highlight!", note);
+          break;
+        }
+      }
 
       let isLeafValid = false;
       if (this.writingSplitLeaf && this.writingSplitLeaf.view) {
@@ -89,8 +119,84 @@ export class WritingLinkHandler {
         this.writingSplitLeaf = leaf;
         await leaf.openFile(file as TFile, { state: { mode: "preview" } });
       }
+
+      // apply highlight after the file opens
+      if (noteToHighlight && noteToHighlight.target_txt) {
+        const targetText = noteToHighlight.target_txt;
+
+        setTimeout(() => {
+          this.highlightTargetText(targetText);
+        }, 1000);
+      }
     } catch (error) {
       console.error("[WritingLinkHandler] Error handling writing link:", error);
+    }
+  }
+
+  private highlightTargetText(targetText: string): void {
+    if (!this.writingSplitLeaf || !this.writingSplitLeaf.view) {
+      console.warn("[WritingLinkHandler] No split leaf or view");
+      return;
+    }
+
+    const view = this.writingSplitLeaf.view;
+    // @ts-ignore - accessing containerEl
+    const container = view.containerEl?.querySelector(".markdown-preview-view");
+
+    if (!container) {
+      console.warn("[WritingLinkHandler] Could not find preview container");
+      return;
+    }
+
+    // Find the target text in the DOM
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    let currentNode: Node | null;
+    let nodesChecked = 0;
+    while ((currentNode = walker.nextNode())) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      nodesChecked++;
+      const textNode = currentNode as Text;
+      const text = textNode.textContent || "";
+      const index = text.indexOf(targetText);
+
+      if (index !== -1) {
+        const beforeText = text.substring(0, index);
+        const matchText = text.substring(index, index + targetText.length);
+        const afterText = text.substring(index + targetText.length);
+
+        const span = document.createElement("span");
+        span.className = "idl-target-flash";
+        span.textContent = matchText;
+
+        const fragment = document.createDocumentFragment();
+        if (beforeText) {
+          fragment.appendChild(document.createTextNode(beforeText));
+        }
+        fragment.appendChild(span);
+        if (afterText) {
+          fragment.appendChild(document.createTextNode(afterText));
+        }
+
+        textNode.parentNode?.replaceChild(fragment, textNode);
+
+        console.log(
+          "[WritingLinkHandler] Wrapped text, scrolling into view..."
+        );
+        span.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        setTimeout(() => {
+          console.log("[WritingLinkHandler] Removing highlight");
+          const textNode = document.createTextNode(matchText);
+          span.parentNode?.replaceChild(textNode, span);
+        }, 2000);
+
+        break;
+      }
     }
   }
 }
@@ -160,8 +266,16 @@ export function patchLinkOpening(
     newLeaf?: boolean,
     openViewState?: unknown
   ) {
+    // Detect if preview mode
+    let isFromPreviewMode = false;
+    const activeView = app.workspace.getActiveViewOfType(MarkdownView);
+    if (activeView) {
+      const mode = activeView.getMode();
+      isFromPreviewMode = mode === "preview";
+    }
+
     if (linktext.startsWith(WRITING_LINK_PREFIX)) {
-      writingLinkHandler.handleLink(linktext, sourcePath);
+      writingLinkHandler.handleLink(linktext, sourcePath, isFromPreviewMode);
       return;
     }
 
