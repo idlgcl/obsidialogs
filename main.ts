@@ -43,6 +43,8 @@ export default class IdealogsPlugin extends Plugin {
     this.noteParser = new NoteParser();
     this.annotationService = new AnnotationService(this.app);
     this.annotationHighlighter = new AnnotationHighlighter(this.app);
+    // Set dependencies for annotation highlighter to enable split+flash functionality
+    this.annotationHighlighter.setDependencies(this.apiService, this.fileTracker);
     this.writingLinkHandler = new WritingLinkHandler(
       this.app,
       this.apiService,

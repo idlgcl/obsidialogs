@@ -1,12 +1,25 @@
-import { App } from "obsidian";
+import { App, WorkspaceLeaf, TFile } from "obsidian";
 import { AnnotationData } from "./annotation-service";
+import { ApiService } from "./api";
+import { IdealogsFileTracker } from "./idealogs-file-tracker";
 
 export class AnnotationHighlighter {
   private app: App;
   private annotationsByElement: Map<HTMLElement, AnnotationData[]> = new Map();
+  private apiService: ApiService | null = null;
+  private fileTracker: IdealogsFileTracker | null = null;
+  private targetSplitLeaf: WorkspaceLeaf | null = null;
 
   constructor(app: App) {
     this.app = app;
+  }
+
+  setDependencies(
+    apiService: ApiService,
+    fileTracker: IdealogsFileTracker
+  ): void {
+    this.apiService = apiService;
+    this.fileTracker = fileTracker;
   }
 
   highlightAnnotations(
@@ -69,9 +82,12 @@ export class AnnotationHighlighter {
         this.annotationsByElement.get(highlightedSpan)?.push(annotation);
 
         // click handler
-        highlightedSpan.addEventListener("click", (e) => {
+        highlightedSpan.addEventListener("click", async (e) => {
           e.stopPropagation();
+          // Show the popup below (existing behavior)
           this.toggleAnnotationContainer(highlightedSpan, annotation);
+          // Also open target in split and flash (new behavior)
+          await this.openTargetAndFlash(annotation);
         });
       }
     }
@@ -453,6 +469,138 @@ export class AnnotationHighlighter {
     container.appendChild(annotationEl);
 
     return container;
+  }
+
+  private async openTargetAndFlash(annotation: AnnotationData): Promise<void> {
+    console.log(
+      "[AnnotationHighlighter] Opening target and flashing:",
+      annotation
+    );
+
+    if (!this.apiService || !this.fileTracker) {
+      console.warn(
+        "[AnnotationHighlighter] Dependencies not set, falling back to default"
+      );
+      this.app.workspace.openLinkText(annotation.target, "", "tab");
+      return;
+    }
+
+    try {
+      const targetId = annotation.target;
+
+      const articleData = await this.apiService.fetchArticleById(targetId);
+      const content = await this.apiService.fetchFileContent(targetId);
+
+      const sanitizedTitle = articleData.title.replace(/[/\\:*?"<>|]/g, "");
+      const fileName = `${sanitizedTitle}.md`;
+
+      let file = this.app.vault.getAbstractFileByPath(fileName);
+
+      if (file instanceof TFile) {
+        await this.app.vault.modify(file, content);
+      } else {
+        file = await this.app.vault.create(fileName, content);
+      }
+
+      this.fileTracker.track(fileName, targetId);
+
+      let isLeafValid = false;
+      if (this.targetSplitLeaf && this.targetSplitLeaf.view) {
+        try {
+          isLeafValid = this.targetSplitLeaf.view.containerEl.isConnected;
+        } catch (error) {
+          isLeafValid = false;
+        }
+      }
+
+      if (isLeafValid) {
+        await this.targetSplitLeaf?.openFile(file as TFile, {
+          state: { mode: "preview" },
+        });
+      } else {
+        const leaf = this.app.workspace.getLeaf("split");
+        this.targetSplitLeaf = leaf;
+        await leaf.openFile(file as TFile, { state: { mode: "preview" } });
+      }
+
+      if (annotation.target_txt) {
+        setTimeout(() => {
+          this.flashTargetText(annotation.target_txt);
+        }, 500);
+      }
+    } catch (error) {
+      console.error("[AnnotationHighlighter] Error opening target:", error);
+    }
+  }
+
+  private flashTargetText(targetText: string): void {
+    console.log("[AnnotationHighlighter] Flashing target text:", targetText);
+
+    if (!this.targetSplitLeaf || !this.targetSplitLeaf.view) {
+      console.warn("[AnnotationHighlighter] No target leaf available");
+      return;
+    }
+
+    const view = this.targetSplitLeaf.view;
+    // @ts-ignore - accessing containerEl
+    const container = view.containerEl?.querySelector(".markdown-preview-view");
+
+    if (!container) {
+      console.warn("[AnnotationHighlighter] Could not find preview container");
+      return;
+    }
+
+    console.log("[AnnotationHighlighter] Searching for text in container...");
+
+    // Find the target text in the DOM
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    let currentNode: Node | null;
+    let nodesChecked = 0;
+    while ((currentNode = walker.nextNode())) {
+      nodesChecked++;
+      const textNode = currentNode as Text;
+      const text = textNode.textContent || "";
+      const index = text.indexOf(targetText);
+
+      if (index !== -1) {
+        console.log("[AnnotationHighlighter] Found text at node", nodesChecked);
+
+        const beforeText = text.substring(0, index);
+        const matchText = text.substring(index, index + targetText.length);
+        const afterText = text.substring(index + targetText.length);
+
+        const span = document.createElement("span");
+        span.className = "idl-target-flash";
+        span.textContent = matchText;
+
+        const fragment = document.createDocumentFragment();
+        if (beforeText) {
+          fragment.appendChild(document.createTextNode(beforeText));
+        }
+        fragment.appendChild(span);
+        if (afterText) {
+          fragment.appendChild(document.createTextNode(afterText));
+        }
+
+        textNode.parentNode?.replaceChild(fragment, textNode);
+
+        span.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        setTimeout(() => {
+          const textNode = document.createTextNode(matchText);
+          span.parentNode?.replaceChild(textNode, span);
+        }, 3000);
+
+        break;
+      }
+    }
+
+    console.log("[AnnotationHighlighter] Checked", nodesChecked, "nodes");
   }
 
   private clearHighlights(container: HTMLElement): void {
