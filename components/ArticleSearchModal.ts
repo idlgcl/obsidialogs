@@ -305,7 +305,7 @@ export class ArticleSearchModal extends Modal {
     }
   }
 
-  private renderPreview(article: Article): void {
+  private async renderPreview(article: Article): Promise<void> {
     this.previewContainer.empty();
 
     const previewContent = this.previewContainer.createDiv({
@@ -331,16 +331,33 @@ export class ArticleSearchModal extends Modal {
       cls: "article-preview-id",
     });
 
-    // Article lede (preview)
-    if (article.ledeHtml) {
-      const ledeContainer = previewContent.createDiv({
-        cls: "article-preview-lede",
+    // Article content
+    const contentContainer = previewContent.createDiv({
+      cls: "article-preview-content-container",
+    });
+
+    // loading indicator
+    const loadingEl = contentContainer.createDiv({
+      cls: "article-content-loading",
+      text: "Loading content...",
+    });
+
+    try {
+      const content = await this.apiService.fetchFileContent(article.id);
+
+      loadingEl.remove();
+
+      const contentDiv = contentContainer.createDiv({
+        cls: "article-preview-content-text",
       });
-      ledeContainer.createEl("h4", { text: "Preview:" });
-      const ledeContent = ledeContainer.createDiv({
-        cls: "article-preview-lede-content",
+      contentDiv.innerHTML = content;
+    } catch (error) {
+      loadingEl.remove();
+      contentContainer.createDiv({
+        cls: "article-content-error",
+        text: "Failed to load article content",
       });
-      ledeContent.innerHTML = article.ledeHtml;
+      console.error("Error fetching article content:", error);
     }
 
     // Select button
