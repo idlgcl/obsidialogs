@@ -389,10 +389,14 @@
   width: 80vw;
   max-width: 900px;
   height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .article-search-modal h2 {
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .article-search-row {
@@ -400,6 +404,7 @@
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .article-search-input-wrapper {
@@ -474,7 +479,8 @@
 .article-modal-content {
   display: flex;
   gap: 16px;
-  height: calc(100% - 120px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -484,6 +490,7 @@
   border-radius: 6px;
   overflow-y: auto;
   background-color: var(--background-secondary);
+  height: 100%;
 }
 
 .article-result-item {
@@ -525,6 +532,8 @@
   padding: 16px;
   overflow-y: auto;
   background-color: var(--background-primary);
+  min-height: 400px;
+  max-height: 400px;
 }
 
 .article-preview-empty {
@@ -587,4 +596,43 @@
 
 .article-preview-actions button {
   padding: 8px 24px;
+}
+
+/* Pagination Controls */
+.article-pagination-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.article-pagination-button {
+  padding: 8px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.article-pagination-button:hover:not(:disabled) {
+  background-color: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.article-pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.article-page-info {
+  font-size: 14px;
+  color: var(--text-muted);
+  min-width: 100px;
+  text-align: center;
 }
