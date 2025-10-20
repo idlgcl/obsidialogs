@@ -679,3 +679,8 @@
   min-width: 100px;
   text-align: center;
 }
+.article-parent-hierarchy {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}

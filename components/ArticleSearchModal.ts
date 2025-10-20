@@ -1,5 +1,5 @@
 import { App, Modal, setIcon, Editor } from "obsidian";
-import { Article, ArticleResponse } from "../types";
+import { Article, ArticleResponse, Parent } from "../types";
 import { ApiService } from "../utils/api";
 
 export class ArticleSearchModal extends Modal {
@@ -259,6 +259,18 @@ export class ArticleSearchModal extends Modal {
     });
   }
 
+  private buildParentHierarchy(parent: Parent): string {
+    const titles: string[] = [];
+    let current: Parent | null | undefined = parent;
+
+    while (current) {
+      titles.unshift(current.title);
+      current = current.parent;
+    }
+
+    return titles.join(" \\ ");
+  }
+
   private renderResults(): void {
     this.resultsContainer.empty();
 
@@ -287,6 +299,16 @@ export class ArticleSearchModal extends Modal {
         cls: "article-kind",
         text: article.kind,
       });
+
+      if (article.parents && article.parents.length > 0) {
+        const firstParent = article.parents[0];
+        const parentHierarchy = this.buildParentHierarchy(firstParent);
+
+        itemEl.createDiv({
+          cls: "article-parent-hierarchy",
+          text: parentHierarchy,
+        });
+      }
 
       itemEl.addEventListener("click", () => {
         this.selectedIndex = index;
@@ -318,16 +340,15 @@ export class ArticleSearchModal extends Modal {
       cls: "article-preview-title",
     });
 
-    // Article metadata
     const metadata = previewContent.createDiv({
       cls: "article-preview-metadata",
     });
     metadata.createEl("span", {
-      text: `Type: ${article.kind}`,
+      text: `${article.kind}`,
       cls: "article-preview-kind",
     });
     metadata.createEl("span", {
-      text: `ID: ${article.id}`,
+      text: `${article.id}`,
       cls: "article-preview-id",
     });
 
