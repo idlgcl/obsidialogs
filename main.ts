@@ -236,8 +236,19 @@ export default class IdealogsPlugin extends Plugin {
     }
   }
 
-  private handleNoteLinkClick(note: NoteMeta): void {
-    this.showAnnotationFormPanel(note, "note");
+  private async handleNoteLinkClick(note: NoteMeta): Promise<void> {
+    const savedAnnotation = await this.annotationService.findNoteBySource(
+      note.filePath,
+      note.linkText,
+      note.previousWords
+    );
+
+    this.showAnnotationFormPanel(
+      note,
+      "note",
+      savedAnnotation,
+      !!savedAnnotation
+    );
   }
 
   private async checkCursorInComment(force = false): Promise<void> {
