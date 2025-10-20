@@ -25,7 +25,7 @@ export class ApiService {
     limit = 50
   ): Promise<ArticleResponse> {
     const kinds = ["Writing", "Question", "Insight"].join("&kind=");
-    const url = `${API_ENDPOINT}/articles?kind=${kinds}&include_parent=True&query=${encodeURIComponent(
+    const url = `${API_ENDPOINT}/articles?kind=${kinds}&include_parents=true&query=${encodeURIComponent(
       searchTerm
     )}&page=${page}&limit=${limit}`;
 
