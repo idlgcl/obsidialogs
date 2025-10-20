@@ -2,6 +2,7 @@ import { Plugin, TFile, MarkdownView } from "obsidian";
 import { ArticleSuggest } from "./utils/suggester";
 import { patchDefaultSuggester } from "./utils/suggest-patcher";
 import { ApiService } from "./utils/api";
+import { ArticleSearchModal } from "./components/ArticleSearchModal";
 import {
   WritingLinkHandler,
   CommonLinkHandler,
@@ -55,9 +56,11 @@ export default class IdealogsPlugin extends Plugin {
       this.fileTracker
     );
 
-    this.articleSuggest = new ArticleSuggest(this, this.apiService);
-    this.registerEditorSuggest(this.articleSuggest);
+    // just in case we bring it back
+    // this.articleSuggest = new ArticleSuggest(this, this.apiService);
+    // this.registerEditorSuggest(this.articleSuggest);
 
+    this.registerEditorExtension(this.createArticleTriggerExtension());
     this.registerEditorExtension(this.createCommentClickExtension());
     this.registerEditorExtension(this.createNoteClickExtension());
 
@@ -207,6 +210,66 @@ export default class IdealogsPlugin extends Plugin {
         }
 
         return false;
+      },
+    });
+  }
+
+  private createArticleTriggerExtension() {
+    const app = this.app;
+    const apiService = this.apiService;
+
+    return EditorView.domEventHandlers({
+      keydown: (event: KeyboardEvent, view: EditorView) => {
+        // Only trigger on '@' key
+        if (event.key !== "@") {
+          return false;
+        }
+
+        try {
+          const pos = view.state.selection.main.head;
+          const line = view.state.doc.lineAt(pos);
+          const lineText = line.text;
+          const charOffset = pos - line.from;
+
+          const textBeforeCursor = lineText.substring(0, charOffset);
+          if (!textBeforeCursor.endsWith("[[")) {
+            return false;
+          }
+
+          const activeView = app.workspace.getActiveViewOfType(MarkdownView);
+          if (!activeView?.editor) {
+            return false;
+          }
+
+          const editor = activeView.editor;
+          const cursor = editor.getCursor();
+
+          // Type '@' then open modal
+          setTimeout(() => {
+            const currentLine = editor.getLine(cursor.line);
+            const beforeCursor = currentLine.substring(0, cursor.ch + 1);
+
+            if (beforeCursor.endsWith("[[@")) {
+              // Remove  '[[@]]'
+              editor.replaceRange(
+                "",
+                { line: cursor.line, ch: cursor.ch - 2 },
+                { line: cursor.line, ch: cursor.ch + 3 }
+              );
+
+              const modal = new ArticleSearchModal(app, apiService, editor, {
+                line: cursor.line,
+                ch: cursor.ch - 2,
+              });
+              modal.open();
+            }
+          }, 0);
+
+          return false;
+        } catch (error) {
+          console.error("[Idealogs] Error handling article trigger:", error);
+          return false;
+        }
       },
     });
   }
