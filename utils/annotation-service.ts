@@ -157,6 +157,7 @@ export class AnnotationService {
     textStart: string;
     textEnd: string;
     textDisplay: string;
+    linkText: string;
     targetArticle: string;
     targetTextStart: string;
     targetTextEnd: string;
@@ -178,7 +179,70 @@ export class AnnotationService {
     const srcTxtDisplay = noteData.textDisplay;
     const srcTxtStart = noteData.textStart;
     const srcTxtEnd = noteData.textEnd;
-    const srcTxt = `${srcTxtStart} ${srcTxtDisplay} ${srcTxtEnd}`;
+
+    // Read the source file to get the full text range
+    let srcTxt = "";
+    try {
+      const fileContent = await this.app.vault.adapter.read(
+        noteData.sourceFilePath
+      );
+
+      const linkText = noteData.linkText;
+
+      // IMPORTANT: Find the link first, then work within the SAME LINE only
+      const linkIndex = fileContent.indexOf(linkText);
+      if (linkIndex === -1) {
+        throw new Error("Could not locate link in source file");
+      }
+
+      // Find the start and end of the line containing the link
+      const lineStart = fileContent.lastIndexOf("\n", linkIndex - 1) + 1;
+      const lineEnd = fileContent.indexOf("\n", linkIndex);
+      const lineEndPos = lineEnd === -1 ? fileContent.length : lineEnd;
+
+      // Extract the full line
+      const line = fileContent.substring(lineStart, lineEndPos);
+
+      // Now find positions within this line
+      const linkPosInLine = linkIndex - lineStart;
+
+      // Search backwards within the line to find textDisplay (immediately before link)
+      const beforeLinkInLine = line.substring(0, linkPosInLine);
+      const displayIndexInLine = beforeLinkInLine.lastIndexOf(srcTxtDisplay);
+      if (displayIndexInLine === -1) {
+        throw new Error(
+          "Could not locate text display before the link on the same line"
+        );
+      }
+
+      // Search backwards within the line to find textStart (before textDisplay)
+      const beforeDisplayInLine = line.substring(0, displayIndexInLine);
+      const startIndexInLine = beforeDisplayInLine.lastIndexOf(srcTxtStart);
+      if (startIndexInLine === -1) {
+        throw new Error("Could not locate text start on the same line");
+      }
+
+      // Search forwards within the line to find textEnd (after the link)
+      const afterLinkInLine = linkPosInLine + linkText.length;
+      const endIndexInLine = line.indexOf(srcTxtEnd, afterLinkInLine);
+      if (endIndexInLine === -1) {
+        throw new Error(
+          "Could not locate text end after the link on the same line"
+        );
+      }
+
+      // Extract the text range from the line (from textStart to end of textEnd)
+      const endPosInLine = endIndexInLine + srcTxtEnd.length;
+      srcTxt = line.substring(startIndexInLine, endPosInLine);
+    } catch (error) {
+      console.error("Error extracting source text range:", error);
+      // Fallback to simple concatenation if file reading fails
+      if (srcTxtStart === srcTxtDisplay) {
+        srcTxt = `${srcTxtDisplay} ${noteData.linkText} ${srcTxtEnd}`;
+      } else {
+        srcTxt = `${srcTxtStart} ... ${srcTxtDisplay} ${noteData.linkText} ${srcTxtEnd}`;
+      }
+    }
 
     const targetTxtDisplay = noteData.targetTextDisplay;
     const targetTxtStart = noteData.targetTextStart;
@@ -211,9 +275,7 @@ export class AnnotationService {
 
     annotations.notes[noteData.noteId] = annotationData;
 
-    const annotationsPath = this.getAnnotationsFilePath(
-      noteData.targetArticle
-    );
+    const annotationsPath = this.getAnnotationsFilePath(noteData.targetArticle);
     await this.app.vault.adapter.write(
       annotationsPath,
       JSON.stringify(annotations, null, 2)
@@ -250,6 +312,30 @@ export class AnnotationService {
         comment.src_txt_end === textEnd
       ) {
         return comment;
+      }
+    }
+
+    return null;
+  }
+
+  async findNoteBySource(
+    sourceFilePath: string,
+    linkText: string,
+    previousWords: string
+  ): Promise<AnnotationData | null> {
+    const annotations = await this.loadAnnotations(sourceFilePath);
+
+    for (const noteId in annotations.notes) {
+      const note = annotations.notes[noteId];
+
+      const linkIndex = note.src_txt.indexOf(linkText);
+      if (linkIndex === -1) {
+        continue;
+      }
+
+      const beforeLink = note.src_txt.substring(0, linkIndex).trim();
+      if (beforeLink.endsWith(previousWords.trim())) {
+        return note;
       }
     }
 
