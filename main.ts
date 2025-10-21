@@ -465,6 +465,9 @@ export default class IdealogsPlugin extends Plugin {
       }
     }
 
+    // Clear processed containers when switching files to allow re-highlighting
+    this.annotationHighlighter.clearProcessedContainers();
+
     this.previousFile = currentFile;
   }
 

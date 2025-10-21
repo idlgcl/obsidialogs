@@ -6,6 +6,7 @@ import { IdealogsFileTracker } from "./idealogs-file-tracker";
 export class AnnotationHighlighter {
   private app: App;
   private annotationsByElement: Map<HTMLElement, AnnotationData[]> = new Map();
+  private processedContainers: Set<HTMLElement> = new Set();
   private apiService: ApiService | null = null;
   private fileTracker: IdealogsFileTracker | null = null;
   private targetSplitLeaf: WorkspaceLeaf | null = null;
@@ -26,11 +27,28 @@ export class AnnotationHighlighter {
     container: HTMLElement,
     annotations: AnnotationData[]
   ): void {
+    // container has already been processed
+    if (this.processedContainers.has(container)) {
+      return;
+    }
+
+    // Check if this container already has highlighted annotations
+    const existingHighlights = container.querySelectorAll(
+      "span.idl-annotated-word"
+    );
+    if (existingHighlights.length > 0) {
+      this.processedContainers.add(container);
+      return;
+    }
+
     this.clearHighlights(container);
 
     for (const annotation of annotations) {
       this.highlightAnnotation(container, annotation);
     }
+
+    // Mark processed
+    this.processedContainers.add(container);
   }
 
   private highlightAnnotation(
@@ -51,19 +69,21 @@ export class AnnotationHighlighter {
       annotation.src_txt_end
     );
 
-    if (matches.length === 0 && annotation.kind === "COMMENT") {
-      matches = this.findCommentInDOM(container, annotation);
-    } else if (matches.length === 0 && annotation.kind === "NOTE") {
-      matches = this.findNoteInDOM(container, annotation);
-    }
-
+    // primary search failed
     if (matches.length === 0) {
-      console.warn(
-        "Could not find text for annotation:",
-        annotation.id,
-        searchText
-      );
-      return;
+      if (annotation.kind === "COMMENT") {
+        matches = this.findCommentInDOM(container, annotation);
+      }
+
+      if (matches.length === 0 && annotation.kind === "NOTE") {
+        matches = this.findNoteInDOM(container, annotation);
+      }
+
+      // both primary and fallback methods failed
+      // containers without annotations will fail silently
+      if (matches.length === 0) {
+        return;
+      }
     }
 
     for (const match of matches) {
@@ -616,5 +636,9 @@ export class AnnotationHighlighter {
     containers.forEach((el) => el.remove());
 
     this.annotationsByElement.clear();
+  }
+
+  clearProcessedContainers(): void {
+    this.processedContainers.clear();
   }
 }
