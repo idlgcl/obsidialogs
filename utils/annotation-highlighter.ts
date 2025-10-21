@@ -2,6 +2,7 @@ import { App, WorkspaceLeaf, TFile } from "obsidian";
 import { AnnotationData } from "./annotation-service";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
+import { Article } from "../types";
 
 export class AnnotationHighlighter {
   private app: App;
@@ -104,7 +105,7 @@ export class AnnotationHighlighter {
         // click handler
         highlightedSpan.addEventListener("click", async (e) => {
           e.stopPropagation();
-          this.toggleAnnotationContainer(highlightedSpan, annotation);
+          await this.toggleAnnotationContainer(highlightedSpan, annotation);
           if (annotation.kind === "COMMENT") {
             await this.openTargetAndFlash(annotation);
           }
@@ -436,10 +437,10 @@ export class AnnotationHighlighter {
     }
   }
 
-  private toggleAnnotationContainer(
+  private async toggleAnnotationContainer(
     element: HTMLElement,
     annotation: AnnotationData
-  ): void {
+  ): Promise<void> {
     const existingContainer = document.querySelector(
       `.idl-annotations-container[data-annotation-id="${annotation.id}"]`
     );
@@ -449,12 +450,57 @@ export class AnnotationHighlighter {
       return;
     }
 
-    const container = this.createAnnotationContainer(annotation);
+    const container = await this.createAnnotationContainer(annotation);
 
     element.after(container);
   }
 
-  private createAnnotationContainer(annotation: AnnotationData): HTMLElement {
+  private getArticleLinkFromId(articleId: string): string {
+    return `@${articleId}`;
+  }
+
+  private buildParentHierarchyLinks(
+    article: Article,
+    containerEl: HTMLElement,
+    sourcePath: string
+  ): void {
+    const parents: { id: string; title: string }[] = [];
+
+    if (article.parents && article.parents.length > 0) {
+      let current: (typeof article.parents)[0] | null | undefined =
+        article.parents[0];
+      while (current) {
+        parents.unshift({ id: current.id, title: current.title });
+        current = current.parent;
+      }
+    }
+
+    parents.push({ id: article.id, title: article.title });
+
+    parents.forEach((parent, index) => {
+      if (index > 0) {
+        containerEl.appendText(" \\ ");
+      }
+
+      const link = document.createElement("a");
+      link.className = "internal-link";
+      link.setAttribute("href", parent.id);
+      link.textContent = parent.title;
+
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const linkText = this.getArticleLinkFromId(parent.id);
+        this.app.workspace.openLinkText(linkText, sourcePath, false);
+      });
+
+      containerEl.appendChild(link);
+    });
+  }
+
+  private async createAnnotationContainer(
+    annotation: AnnotationData
+  ): Promise<HTMLElement> {
     const container = document.createElement("div");
     container.className = "idl-annotations-container";
     container.setAttribute("data-annotation-id", annotation.id);
@@ -466,22 +512,35 @@ export class AnnotationHighlighter {
     textEl.textContent = annotation.target_txt;
     annotationEl.appendChild(textEl);
 
-    if (annotation.target) {
+    if (annotation.target && this.apiService) {
       const linkEl = document.createElement("div");
       linkEl.style.marginTop = "4px";
       linkEl.style.fontSize = "0.85em";
 
-      const link = document.createElement("a");
-      link.className = "internal-link";
-      link.setAttribute("href", annotation.target);
-      link.textContent = annotation.target;
+      try {
+        const article = await this.apiService.fetchArticleById(
+          annotation.target
+        );
 
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.app.workspace.openLinkText(annotation.target, "", "tab");
-      });
+        this.buildParentHierarchyLinks(article, linkEl, annotation.src);
+      } catch (error) {
+        console.error("[AnnotationHighlighter] Error fetching article:", error);
 
-      linkEl.appendChild(link);
+        const link = document.createElement("a");
+        link.className = "internal-link";
+        link.setAttribute("href", annotation.target);
+        link.textContent = annotation.target;
+
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const linkText = this.getArticleLinkFromId(annotation.target);
+          this.app.workspace.openLinkText(linkText, annotation.src, false);
+        });
+
+        linkEl.appendChild(link);
+      }
+
       annotationEl.appendChild(linkEl);
     }
 
