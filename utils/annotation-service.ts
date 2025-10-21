@@ -334,7 +334,10 @@ export class AnnotationService {
       }
 
       const beforeLink = note.src_txt.substring(0, linkIndex).trim();
-      if (beforeLink.endsWith(previousWords.trim())) {
+      const previousWordsTrimmed = previousWords.trim();
+      const matches = previousWordsTrimmed.endsWith(beforeLink);
+
+      if (matches) {
         return note;
       }
     }
