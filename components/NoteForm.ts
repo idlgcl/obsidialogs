@@ -322,10 +322,33 @@ export class NoteForm extends Component {
       });
 
       new Notice("Note saved successfully");
+      this.clearForm();
     } catch (error) {
       new Notice(`Error saving note: ${error.message}`);
       console.error("Error saving note:", error);
     }
+  }
+
+  private clearForm(): void {
+    if (this.textStartInput) {
+      this.textStartInput.value = "";
+    }
+    if (this.textEndInput) {
+      this.textEndInput.value = "";
+    }
+    if (this.textDisplayInput) {
+      this.textDisplayInput.value = "";
+    }
+    if (this.targetTextStartInput) {
+      this.targetTextStartInput.value = "";
+    }
+    if (this.targetTextEndInput) {
+      this.targetTextEndInput.value = "";
+    }
+    if (this.targetTextDisplayInput) {
+      this.targetTextDisplayInput.value = "";
+    }
+    this.validateForm();
   }
 
   private async loadSavedAnnotation(): Promise<void> {
