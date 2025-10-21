@@ -119,6 +119,15 @@ export default class IdealogsPlugin extends Plugin {
       })
     );
 
+    // Validate annotations when file is modified
+    this.registerEvent(
+      this.app.vault.on("modify", async (file) => {
+        if (file instanceof TFile && file.extension === "md") {
+          await this.annotationService.validateAllAnnotations(file.path);
+        }
+      })
+    );
+
     // Check cursor position every 200ms
     this.cursorCheckInterval = window.setInterval(() => {
       this.checkCursorInComment();

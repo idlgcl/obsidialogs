@@ -411,7 +411,19 @@ export class AnnotationHighlighter {
       // highlighting span
       const span = document.createElement("span");
       span.className = "idl-annotated-word";
+
+      // invalid class if annotation is not valid
+      if (annotation.isValid === false) {
+        span.classList.add("idl-annotation-invalid");
+      }
+
       span.setAttribute("data-annotation-id", annotation.id);
+
+      // validation message as title for tooltip
+      if (annotation.validationMessage) {
+        span.setAttribute("title", `Invalid: ${annotation.validationMessage}`);
+      }
+
       span.textContent = matchText;
 
       // fragment to replace the text node
