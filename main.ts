@@ -1,4 +1,12 @@
-import { Plugin, TFile, MarkdownView } from "obsidian";
+import {
+  Plugin,
+  TFile,
+  MarkdownView,
+  PluginSettingTab,
+  App,
+  Setting,
+  Notice,
+} from "obsidian";
 import { ArticleSuggest } from "./utils/suggester";
 import { patchDefaultSuggester } from "./utils/suggest-patcher";
 import { ApiService } from "./utils/api";
@@ -19,9 +27,16 @@ import { AnnotationService, AnnotationData } from "./utils/annotation-service";
 import { AnnotationHighlighter } from "./utils/annotation-highlighter";
 import { EditorView } from "@codemirror/view";
 
+interface IdealogsSettings {
+  enableLogs: boolean;
+}
+
+const DEFAULT_SETTINGS: IdealogsSettings = { enableLogs: false };
+
 export default class IdealogsPlugin extends Plugin {
+  settings: IdealogsSettings;
+  apiService: ApiService; // Public for settings tab access
   private articleSuggest: ArticleSuggest;
-  private apiService: ApiService;
   private fileTracker: IdealogsFileTracker;
   private writingLinkHandler: WritingLinkHandler;
   private commonLinkHandler: CommonLinkHandler;
@@ -37,6 +52,8 @@ export default class IdealogsPlugin extends Plugin {
   private editorChangeDebounceTimer: number | null = null;
 
   async onload() {
+    await this.loadSettings();
+
     this.apiService = new ApiService();
     this.fileTracker = new IdealogsFileTracker();
     this.commentParser = new CommentParser();
@@ -111,6 +128,17 @@ export default class IdealogsPlugin extends Plugin {
     this.registerMarkdownPostProcessor(async (el, ctx) => {
       await this.renderAnnotations(el, ctx.sourcePath);
     });
+
+    // Settings tab
+    this.addSettingTab(new IdealogsSettingTab(this.app, this));
+  }
+
+  async loadSettings() {
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+  }
+
+  async saveSettings() {
+    await this.saveData(this.settings);
   }
 
   private async renderAnnotations(
@@ -487,5 +515,40 @@ export default class IdealogsPlugin extends Plugin {
     if (this.cursorCheckInterval !== null) {
       window.clearInterval(this.cursorCheckInterval);
     }
+  }
+}
+
+class IdealogsSettingTab extends PluginSettingTab {
+  plugin: IdealogsPlugin;
+
+  constructor(app: App, plugin: IdealogsPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+
+    containerEl.empty();
+
+    containerEl.createEl("h2", { text: "Idealogs Settings" });
+
+    // Cache section
+    containerEl.createEl("h3", { text: "Cache" });
+
+    new Setting(containerEl)
+      .setName("Clear API cache")
+      .setDesc(
+        "Clear all cached API responses. Use this if you're seeing stale data or want to force fresh data from the server."
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Clear cache")
+          .setCta()
+          .onClick(() => {
+            this.plugin.apiService.clearCache();
+            new Notice("API cache cleared successfully");
+          })
+      );
   }
 }
