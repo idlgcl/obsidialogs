@@ -36,6 +36,7 @@ export class CommentForm extends Component {
   private targetTextEndInput: HTMLInputElement | null = null;
   private targetTextDisplayInput: HTMLInputElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
+  private showTargetArticleButton: HTMLButtonElement | null = null;
 
   constructor(options: CommentFormOptions) {
     super();
@@ -75,22 +76,20 @@ export class CommentForm extends Component {
     // Text Display field
     const textDisplayField = formContainer.createDiv({ cls: "idl-form-field" });
     textDisplayField.createEl("label", { text: "Text Display" });
-    const textDisplayInput = textDisplayField.createEl("input", {
+    this.commentTitleInput = textDisplayField.createEl("input", {
       type: "text",
       value: this.currentComment.title,
     });
-    textDisplayInput.disabled = true;
-    this.commentTitleInput = textDisplayInput;
+    this.commentTitleInput.disabled = true;
 
     // Comment field
     const commentField = formContainer.createDiv({ cls: "idl-form-field" });
     commentField.createEl("label", { text: "Comment" });
-    const commentTextarea = commentField.createEl("textarea", {
+    this.commentBodyInput = commentField.createEl("textarea", {
       attr: { rows: "4" },
     });
-    commentTextarea.value = this.currentComment.body;
-    commentTextarea.disabled = true;
-    this.commentBodyInput = commentTextarea;
+    this.commentBodyInput.value = this.currentComment.body;
+    this.commentBodyInput.disabled = true;
 
     // Target Article field
     const targetArticleField = formContainer.createDiv({
@@ -138,6 +137,13 @@ export class CommentForm extends Component {
     });
 
     const buttonContainer = formContainer.createDiv({ cls: "idl-btns" });
+    this.showTargetArticleButton = buttonContainer.createEl("button", {
+      text: "Show Target",
+    });
+    this.showTargetArticleButton.addEventListener("click", () =>
+      this.openTargetArticle(true)
+    );
+
     this.saveButton = buttonContainer.createEl("button", { text: "Save" });
     this.saveButton.addEventListener("click", () => this.handleSave());
   }
@@ -183,7 +189,7 @@ export class CommentForm extends Component {
     const articleContent = this.articleSplitHandler.getArticleContent();
     if (!articleContent) {
       new Notice(
-        "Article content not available. Please select an article first."
+        "Article content not available. Please select an article first or click 'Show Target' if already selected."
       );
       return;
     }
@@ -227,6 +233,12 @@ export class CommentForm extends Component {
   }
 
   private clearForm(): void {
+    if (this.commentTitleInput) {
+      this.commentTitleInput.value = "";
+    }
+    if (this.commentBodyInput) {
+      this.commentBodyInput.value = "";
+    }
     if (this.targetTextStartInput) {
       this.targetTextStartInput.value = "";
     }
@@ -282,8 +294,14 @@ export class CommentForm extends Component {
     }
   }
 
-  private async openTargetArticle(): Promise<void> {
-    if (!this.savedAnnotation) return;
+  private async openTargetArticle(showError = false): Promise<void> {
+    if (!this.savedAnnotation) {
+      if (showError) {
+        new Notice("Please select target article.");
+        return;
+      }
+      return;
+    }
 
     try {
       const targetArticle = await this.apiService.fetchArticleById(
