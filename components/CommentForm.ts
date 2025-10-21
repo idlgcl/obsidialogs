@@ -18,7 +18,7 @@ export interface CommentFormOptions {
   annotationService?: AnnotationService | null;
 }
 
-export class CommentFormComponent extends Component {
+export class CommentForm extends Component {
   private container: HTMLElement;
   private contentEl: HTMLElement;
   private app: App;
