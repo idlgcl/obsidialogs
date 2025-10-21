@@ -30,6 +30,8 @@ export class CommentForm extends Component {
   private articleSplitHandler: ArticleSplitViewHandler | null = null;
   private annotationService: AnnotationService | null = null;
   private apiService: ApiService;
+  private commentTitleInput: HTMLInputElement | null = null;
+  private commentBodyInput: HTMLTextAreaElement | null = null;
   private targetTextStartInput: HTMLInputElement | null = null;
   private targetTextEndInput: HTMLInputElement | null = null;
   private targetTextDisplayInput: HTMLInputElement | null = null;
@@ -54,6 +56,10 @@ export class CommentForm extends Component {
         this.openTargetArticle();
       }
     }
+
+    if (options.savedAnnotation?.target) {
+      this.loadTargetArticle();
+    }
   }
 
   private createForm(): void {
@@ -74,6 +80,7 @@ export class CommentForm extends Component {
       value: this.currentComment.title,
     });
     textDisplayInput.disabled = true;
+    this.commentTitleInput = textDisplayInput;
 
     // Comment field
     const commentField = formContainer.createDiv({ cls: "idl-form-field" });
@@ -83,6 +90,7 @@ export class CommentForm extends Component {
     });
     commentTextarea.value = this.currentComment.body;
     commentTextarea.disabled = true;
+    this.commentBodyInput = commentTextarea;
 
     // Target Article field
     const targetArticleField = formContainer.createDiv({
@@ -99,8 +107,6 @@ export class CommentForm extends Component {
         if (this.articleSplitHandler) {
           this.articleSplitHandler.openArticle(article);
         }
-
-        this.validateForm();
       },
     });
 
@@ -131,41 +137,9 @@ export class CommentForm extends Component {
       type: "text",
     });
 
-    this.targetTextStartInput.addEventListener("input", () =>
-      this.validateForm()
-    );
-    this.targetTextEndInput.addEventListener("input", () =>
-      this.validateForm()
-    );
-    this.targetTextDisplayInput.addEventListener("input", () =>
-      this.validateForm()
-    );
-
     const buttonContainer = formContainer.createDiv({ cls: "idl-btns" });
     this.saveButton = buttonContainer.createEl("button", { text: "Save" });
-    this.saveButton.disabled = true;
     this.saveButton.addEventListener("click", () => this.handleSave());
-  }
-
-  private validateForm(): void {
-    if (!this.saveButton) return;
-
-    const hasArticle = this.selectedArticle !== null;
-    const hasStart =
-      this.targetTextStartInput &&
-      this.targetTextStartInput.value.trim() !== "";
-    const hasEnd =
-      this.targetTextEndInput && this.targetTextEndInput.value.trim() !== "";
-    const hasDisplay =
-      this.targetTextDisplayInput &&
-      this.targetTextDisplayInput.value.trim() !== "";
-
-    this.saveButton.disabled = !(
-      hasArticle &&
-      hasStart &&
-      hasEnd &&
-      hasDisplay
-    );
   }
 
   private async handleSave(): Promise<void> {
@@ -245,10 +219,27 @@ export class CommentForm extends Component {
       });
 
       new Notice("Comment saved successfully");
+      this.clearForm();
     } catch (error) {
       new Notice(`Error saving comment: ${error.message}`);
       console.error("Error saving comment:", error);
     }
+  }
+
+  private clearForm(): void {
+    if (this.targetTextStartInput) {
+      this.targetTextStartInput.value = "";
+    }
+    if (this.targetTextEndInput) {
+      this.targetTextEndInput.value = "";
+    }
+    if (this.targetTextDisplayInput) {
+      this.targetTextDisplayInput.value = "";
+    }
+    if (this.articleAutocomplete) {
+      this.articleAutocomplete.setValue("");
+    }
+    this.selectedArticle = null;
   }
 
   private async loadSavedAnnotation(): Promise<void> {
@@ -270,6 +261,27 @@ export class CommentForm extends Component {
     }
   }
 
+  private async loadTargetArticle(): Promise<void> {
+    if (!this.savedAnnotation) return;
+
+    try {
+      const targetArticle = await this.apiService.fetchArticleById(
+        this.savedAnnotation.target
+      );
+
+      this.selectedArticle = targetArticle;
+
+      if (this.articleAutocomplete) {
+        this.articleAutocomplete.setValue(targetArticle.id);
+      }
+    } catch (error) {
+      console.error("Error loading saved annotation:", error);
+      new Notice(
+        `Failed to load target article: ${this.savedAnnotation.target}`
+      );
+    }
+  }
+
   private async openTargetArticle(): Promise<void> {
     if (!this.savedAnnotation) return;
 
@@ -287,8 +299,6 @@ export class CommentForm extends Component {
       if (this.articleSplitHandler) {
         await this.articleSplitHandler.openArticle(targetArticle);
       }
-
-      this.validateForm();
     } catch (error) {
       console.error("Error loading saved annotation:", error);
       new Notice(
