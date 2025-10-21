@@ -341,11 +341,13 @@
   margin-bottom: 12px;
 }
 
-.idl-invalid-annotation {
+.idl-invalid-annotation,
+.idl-annotation-invalid {
   border-left: 2px solid #ff5555 !important;
 }
 
-.idl-annotated-word.idl-invalid-annotation {
+.idl-annotated-word.idl-invalid-annotation,
+.idl-annotated-word.idl-annotation-invalid {
   text-decoration: line-through;
   text-decoration-color: #ff5555;
   text-decoration-style: wavy;
