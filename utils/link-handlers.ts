@@ -72,7 +72,6 @@ export class WritingLinkHandler {
           articleId.includes(note.target)
         ) {
           noteToHighlight = note;
-          console.log("[WritingLinkHandler] Found note to highlight!", note);
           break;
         }
       }
@@ -93,7 +92,6 @@ export class WritingLinkHandler {
       this.previousWritingFile = file as TFile;
 
       if (isLeafValid) {
-        console.log("[WritingLinkHandler] Reusing existing split leaf");
         await this.writingSplitLeaf?.openFile(file as TFile, {
           state: { mode: "preview" },
         });
@@ -120,10 +118,9 @@ export class WritingLinkHandler {
         await leaf.openFile(file as TFile, { state: { mode: "preview" } });
       }
 
-      // apply highlight after the file opens
-      if (noteToHighlight && noteToHighlight.target_txt) {
+      // apply highlight after the file opens (only in preview mode)
+      if (noteToHighlight && noteToHighlight.target_txt && isFromPreviewMode) {
         const targetText = noteToHighlight.target_txt;
-
         setTimeout(() => {
           this.highlightTargetText(targetText);
         }, 1000);
@@ -184,13 +181,9 @@ export class WritingLinkHandler {
 
         textNode.parentNode?.replaceChild(fragment, textNode);
 
-        console.log(
-          "[WritingLinkHandler] Wrapped text, scrolling into view..."
-        );
         span.scrollIntoView({ behavior: "smooth", block: "center" });
 
         setTimeout(() => {
-          console.log("[WritingLinkHandler] Removing highlight");
           const textNode = document.createTextNode(matchText);
           span.parentNode?.replaceChild(textNode, span);
         }, 2000);
