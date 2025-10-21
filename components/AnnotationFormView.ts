@@ -6,13 +6,13 @@ import {
 import { Comment, NoteMeta } from "../utils/parsers";
 import { ArticleSplitViewHandler } from "../utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
-import { CommentFormComponent } from "./CommentFormComponent";
+import { CommentForm } from "./CommentForm";
 import { NoteForm } from "./NoteForm";
 
 export const ANNOTATION_FORM_VIEW = "annotation-form-view";
 
 export class AnnotationFormView extends ItemView {
-  private commentForm: CommentFormComponent | null = null;
+  private commentForm: CommentForm | null = null;
   private noteForm: NoteForm | null = null;
   private component: ObsidianComponent;
   private articleSplitHandler: ArticleSplitViewHandler | null = null;
@@ -74,7 +74,7 @@ export class AnnotationFormView extends ItemView {
     }
 
     // Create new comment form
-    this.commentForm = new CommentFormComponent({
+    this.commentForm = new CommentForm({
       container: this.contentEl,
       app: this.app,
       comment,
