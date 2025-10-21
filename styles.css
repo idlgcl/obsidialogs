@@ -55,7 +55,7 @@
 
 .idl-btns {
   display: flex;
-  justify-content: end;
+  justify-content: space-between;
 }
 
 .idl-highlighted-word {
