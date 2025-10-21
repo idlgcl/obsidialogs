@@ -104,10 +104,10 @@ export class AnnotationHighlighter {
         // click handler
         highlightedSpan.addEventListener("click", async (e) => {
           e.stopPropagation();
-          // Show the popup below (existing behavior)
           this.toggleAnnotationContainer(highlightedSpan, annotation);
-          // Also open target in split and flash (new behavior)
-          await this.openTargetAndFlash(annotation);
+          if (annotation.kind === "COMMENT") {
+            await this.openTargetAndFlash(annotation);
+          }
         });
       }
     }
@@ -134,7 +134,6 @@ export class AnnotationHighlighter {
       null
     );
 
-    // Try multiple search variations for comments (with/without trailing colon and body)
     const searchVariations = this.generateSearchVariations(searchText);
 
     let currentNode: Node | null;
@@ -492,11 +491,6 @@ export class AnnotationHighlighter {
   }
 
   private async openTargetAndFlash(annotation: AnnotationData): Promise<void> {
-    console.log(
-      "[AnnotationHighlighter] Opening target and flashing:",
-      annotation
-    );
-
     if (!this.apiService || !this.fileTracker) {
       console.warn(
         "[AnnotationHighlighter] Dependencies not set, falling back to default"
@@ -554,8 +548,6 @@ export class AnnotationHighlighter {
   }
 
   private flashTargetText(targetText: string): void {
-    console.log("[AnnotationHighlighter] Flashing target text:", targetText);
-
     if (!this.targetSplitLeaf || !this.targetSplitLeaf.view) {
       console.warn("[AnnotationHighlighter] No target leaf available");
       return;
@@ -570,8 +562,6 @@ export class AnnotationHighlighter {
       return;
     }
 
-    console.log("[AnnotationHighlighter] Searching for text in container...");
-
     // Find the target text in the DOM
     const walker = document.createTreeWalker(
       container,
@@ -580,16 +570,14 @@ export class AnnotationHighlighter {
     );
 
     let currentNode: Node | null;
-    let nodesChecked = 0;
+    // let nodesChecked = 0;
     while ((currentNode = walker.nextNode())) {
-      nodesChecked++;
+      // nodesChecked++;
       const textNode = currentNode as Text;
       const text = textNode.textContent || "";
       const index = text.indexOf(targetText);
 
       if (index !== -1) {
-        console.log("[AnnotationHighlighter] Found text at node", nodesChecked);
-
         const beforeText = text.substring(0, index);
         const matchText = text.substring(index, index + targetText.length);
         const afterText = text.substring(index + targetText.length);
@@ -619,8 +607,6 @@ export class AnnotationHighlighter {
         break;
       }
     }
-
-    console.log("[AnnotationHighlighter] Checked", nodesChecked, "nodes");
   }
 
   private clearHighlights(container: HTMLElement): void {
