@@ -1,9 +1,10 @@
-import { App, TFile, WorkspaceLeaf, MarkdownView } from "obsidian";
+import { App, TFile, MarkdownView } from "obsidian";
 import { WRITING_LINK_PREFIX, COMMON_LINK_PREFIXES } from "../constants";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
 import { AnnotationService, AnnotationData } from "./annotation-service";
 import { AnnotationHighlighter } from "./annotation-highlighter";
+import { SplitManager } from "./split-manager";
 
 export class WritingLinkHandler {
   private app: App;
@@ -11,21 +12,22 @@ export class WritingLinkHandler {
   private fileTracker: IdealogsFileTracker;
   private annotationService: AnnotationService;
   private annotationHighlighter: AnnotationHighlighter;
-  private writingSplitLeaf: WorkspaceLeaf | null = null;
-  private previousWritingFile: TFile | null = null;
+  private splitManager: SplitManager;
 
   constructor(
     app: App,
     apiService: ApiService,
     fileTracker: IdealogsFileTracker,
     annotationService: AnnotationService,
-    annotationHighlighter: AnnotationHighlighter
+    annotationHighlighter: AnnotationHighlighter,
+    splitManager: SplitManager
   ) {
     this.app = app;
     this.apiService = apiService;
     this.fileTracker = fileTracker;
     this.annotationService = annotationService;
     this.annotationHighlighter = annotationHighlighter;
+    this.splitManager = splitManager;
   }
 
   async handleLink(
@@ -59,6 +61,9 @@ export class WritingLinkHandler {
 
       this.fileTracker.track(fileName, articleId);
 
+      // Open in split using the shared SplitManager
+      await this.splitManager.openInSplit(file as TFile);
+
       const annotations = await this.annotationService.loadAnnotations(
         sourcePath
       );
@@ -76,49 +81,7 @@ export class WritingLinkHandler {
         }
       }
 
-      let isLeafValid = false;
-      if (this.writingSplitLeaf && this.writingSplitLeaf.view) {
-        try {
-          isLeafValid = this.writingSplitLeaf.view.containerEl.isConnected;
-        } catch (error) {
-          isLeafValid = false;
-        }
-      }
-
-      // Store the old file reference
-      const fileToDelete = this.previousWritingFile;
-
-      // Update the current file reference
-      this.previousWritingFile = file as TFile;
-
-      if (isLeafValid) {
-        await this.writingSplitLeaf?.openFile(file as TFile, {
-          state: { mode: "preview" },
-        });
-
-        // Delete the old file
-        if (
-          fileToDelete &&
-          this.fileTracker.isTracked(fileToDelete.name) &&
-          fileToDelete.name !== (file as TFile).name
-        ) {
-          try {
-            await this.app.vault.delete(fileToDelete);
-            this.fileTracker.untrack(fileToDelete.name);
-          } catch (error) {
-            console.error(
-              "[WritingLinkHandler] Error deleting previous writing file:",
-              error
-            );
-          }
-        }
-      } else {
-        const leaf = this.app.workspace.getLeaf("split");
-        this.writingSplitLeaf = leaf;
-        await leaf.openFile(file as TFile, { state: { mode: "preview" } });
-      }
-
-      // apply highlight after the file opens (only in preview mode)
+      // Apply highlight after the file opens (only in preview mode)
       if (noteToHighlight && noteToHighlight.target_txt && isFromPreviewMode) {
         const targetText = noteToHighlight.target_txt;
         setTimeout(() => {
@@ -131,12 +94,13 @@ export class WritingLinkHandler {
   }
 
   private highlightTargetText(targetText: string): void {
-    if (!this.writingSplitLeaf || !this.writingSplitLeaf.view) {
+    const splitLeaf = this.splitManager.getSplitLeaf();
+    if (!splitLeaf || !splitLeaf.view) {
       console.warn("[WritingLinkHandler] No split leaf or view");
       return;
     }
 
-    const view = this.writingSplitLeaf.view;
+    const view = splitLeaf.view;
     // @ts-ignore - accessing containerEl
     const container = view.containerEl?.querySelector(".markdown-preview-view");
 

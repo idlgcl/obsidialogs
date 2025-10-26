@@ -1,6 +1,6 @@
 import { Component, Notice, App } from "obsidian";
 import { NoteMeta } from "../utils/parsers";
-import { ArticleSplitViewHandler } from "../utils/article-split-handler";
+import { SplitManager } from "../utils/split-manager";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
@@ -12,7 +12,7 @@ export interface NoteFormOptions {
   note: NoteMeta;
   savedAnnotation?: AnnotationData | null;
   openTargetArticle?: boolean;
-  articleSplitHandler?: ArticleSplitViewHandler | null;
+  splitManager?: SplitManager | null;
   annotationService?: AnnotationService | null;
 }
 
@@ -22,7 +22,7 @@ export class NoteForm extends Component {
   private app: App;
   private currentNote: NoteMeta;
   private savedAnnotation: AnnotationData | null = null;
-  private articleSplitHandler: ArticleSplitViewHandler | null = null;
+  private splitManager: SplitManager | null = null;
   private annotationService: AnnotationService | null = null;
   private apiService: ApiService;
 
@@ -42,7 +42,7 @@ export class NoteForm extends Component {
     this.app = options.app;
     this.currentNote = options.note;
     this.savedAnnotation = options.savedAnnotation || null;
-    this.articleSplitHandler = options.articleSplitHandler || null;
+    this.splitManager = options.splitManager || null;
     this.annotationService = options.annotationService || null;
     this.apiService = new ApiService();
 
@@ -52,7 +52,7 @@ export class NoteForm extends Component {
       this.loadSavedAnnotation();
     }
 
-    if (this.articleSplitHandler) {
+    if (this.splitManager) {
       this.openTargetArticleInSplit();
     }
   }
@@ -228,7 +228,7 @@ export class NoteForm extends Component {
       return;
     }
 
-    if (!this.articleSplitHandler) {
+    if (!this.splitManager) {
       new Notice("Article handler not available");
       return;
     }
@@ -277,7 +277,7 @@ export class NoteForm extends Component {
       return;
     }
 
-    const articleContent = this.articleSplitHandler.getArticleContent();
+    const articleContent = this.splitManager.getArticleContent();
     if (!articleContent) {
       new Notice(
         "Article content not available. Please wait for the article to load."
@@ -384,8 +384,8 @@ export class NoteForm extends Component {
         this.currentNote.target
       );
 
-      if (this.articleSplitHandler) {
-        await this.articleSplitHandler.openArticle(targetArticle);
+      if (this.splitManager) {
+        await this.splitManager.openArticle(targetArticle);
       }
     } catch (error) {
       console.error("Error opening target article:", error);
