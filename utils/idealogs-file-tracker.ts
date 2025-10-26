@@ -20,4 +20,8 @@ export class IdealogsFileTracker {
   clear(): void {
     this.files.clear();
   }
+
+  getAllTrackedFiles(): string[] {
+    return Array.from(this.files.keys());
+  }
 }
