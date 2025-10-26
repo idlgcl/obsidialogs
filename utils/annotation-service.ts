@@ -565,6 +565,15 @@ export class AnnotationService {
     try {
       const annotations = await this.loadAnnotations(filePath);
 
+      // Only validate and save if there are annotations to validate
+      const hasAnnotations =
+        Object.keys(annotations.comments).length > 0 ||
+        Object.keys(annotations.notes).length > 0;
+
+      if (!hasAnnotations) {
+        return;
+      }
+
       for (const commentId in annotations.comments) {
         const comment = annotations.comments[commentId];
         const { isValid, message } = await this.validateComment(
