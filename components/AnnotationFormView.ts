@@ -4,7 +4,7 @@ import {
   Component as ObsidianComponent,
 } from "obsidian";
 import { Comment, NoteMeta } from "../utils/parsers";
-import { ArticleSplitViewHandler } from "../utils/article-split-handler";
+import { SplitManager } from "../utils/split-manager";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { CommentForm } from "./CommentForm";
 import { NoteForm } from "./NoteForm";
@@ -15,7 +15,7 @@ export class AnnotationFormView extends ItemView {
   private commentForm: CommentForm | null = null;
   private noteForm: NoteForm | null = null;
   private component: ObsidianComponent;
-  private articleSplitHandler: ArticleSplitViewHandler | null = null;
+  private splitManager: SplitManager | null = null;
   private annotationService: AnnotationService | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
@@ -27,8 +27,8 @@ export class AnnotationFormView extends ItemView {
     this.annotationService = service;
   }
 
-  setArticleSplitHandler(handler: ArticleSplitViewHandler): void {
-    this.articleSplitHandler = handler;
+  setSplitManager(manager: SplitManager): void {
+    this.splitManager = manager;
   }
 
   getViewType() {
@@ -80,7 +80,7 @@ export class AnnotationFormView extends ItemView {
       comment,
       savedAnnotation,
       openTargetArticle,
-      articleSplitHandler: this.articleSplitHandler,
+      splitManager: this.splitManager,
       annotationService: this.annotationService,
     });
 
@@ -117,7 +117,7 @@ export class AnnotationFormView extends ItemView {
       note,
       savedAnnotation,
       openTargetArticle,
-      articleSplitHandler: this.articleSplitHandler,
+      splitManager: this.splitManager,
       annotationService: this.annotationService,
     });
 

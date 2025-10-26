@@ -22,10 +22,10 @@ import {
   ANNOTATION_FORM_VIEW,
   AnnotationFormView,
 } from "components/AnnotationFormView";
-import { ArticleSplitViewHandler } from "./utils/article-split-handler";
 import { AnnotationService, AnnotationData } from "./utils/annotation-service";
 import { AnnotationHighlighter } from "./utils/annotation-highlighter";
 import { EditorView } from "@codemirror/view";
+import { SplitManager } from "./utils/split-manager";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -38,9 +38,9 @@ export default class IdealogsPlugin extends Plugin {
   apiService: ApiService; // Public for settings tab access
   private articleSuggest: ArticleSuggest;
   private fileTracker: IdealogsFileTracker;
+  private splitManager: SplitManager;
   private writingLinkHandler: WritingLinkHandler;
   private commonLinkHandler: CommonLinkHandler;
-  private articleSplitHandler: ArticleSplitViewHandler;
   private annotationService: AnnotationService;
   private annotationHighlighter: AnnotationHighlighter;
   private restoreLinkOpening: (() => void) | null = null;
@@ -56,6 +56,11 @@ export default class IdealogsPlugin extends Plugin {
 
     this.apiService = new ApiService();
     this.fileTracker = new IdealogsFileTracker();
+    this.splitManager = new SplitManager(
+      this.app,
+      this.fileTracker,
+      this.apiService
+    );
     this.commentParser = new CommentParser();
     this.noteParser = new NoteParser();
     this.annotationService = new AnnotationService(this.app);
@@ -64,19 +69,17 @@ export default class IdealogsPlugin extends Plugin {
       this.apiService,
       this.fileTracker
     );
+
     this.writingLinkHandler = new WritingLinkHandler(
       this.app,
       this.apiService,
       this.fileTracker,
       this.annotationService,
-      this.annotationHighlighter
+      this.annotationHighlighter,
+      this.splitManager
     );
+
     this.commonLinkHandler = new CommonLinkHandler(
-      this.app,
-      this.apiService,
-      this.fileTracker
-    );
-    this.articleSplitHandler = new ArticleSplitViewHandler(
       this.app,
       this.apiService,
       this.fileTracker
@@ -92,7 +95,7 @@ export default class IdealogsPlugin extends Plugin {
 
     this.registerView(ANNOTATION_FORM_VIEW, (leaf) => {
       const view = new AnnotationFormView(leaf);
-      view.setArticleSplitHandler(this.articleSplitHandler);
+      view.setSplitManager(this.splitManager);
       view.setAnnotationService(this.annotationService);
       return view;
     });
@@ -484,34 +487,11 @@ export default class IdealogsPlugin extends Plugin {
   }
 
   private async handleFileChange(): Promise<void> {
-    const currentFile = this.app.workspace.getActiveFile();
-
-    if (this.previousFile && this.previousFile !== currentFile) {
-      const isStillOpen = this.app.workspace
-        .getLeavesOfType("markdown")
-        .some((leaf) => {
-          const file = leaf.view.getState()?.file;
-          return file === this.previousFile?.path;
-        });
-
-      if (!isStillOpen && this.isIdealogsArticle(this.previousFile.name)) {
-        try {
-          await this.app.vault.delete(this.previousFile);
-          this.fileTracker.untrack(this.previousFile.name);
-        } catch (error) {
-          console.error("Error deleting Idealogs article:", error);
-        }
-      }
-    }
-
     // Clear processed containers when switching files to allow re-highlighting
     this.annotationHighlighter.clearProcessedContainers();
 
+    const currentFile = this.app.workspace.getActiveFile();
     this.previousFile = currentFile;
-  }
-
-  private isIdealogsArticle(fileName: string): boolean {
-    return this.fileTracker.isTracked(fileName);
   }
 
   onunload() {

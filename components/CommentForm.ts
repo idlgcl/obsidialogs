@@ -2,7 +2,7 @@ import { Component, Notice, App } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
-import { ArticleSplitViewHandler } from "../utils/article-split-handler";
+import { SplitManager } from "../utils/split-manager";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
@@ -14,7 +14,7 @@ export interface CommentFormOptions {
   comment: Comment;
   savedAnnotation?: AnnotationData | null;
   openTargetArticle?: boolean;
-  articleSplitHandler?: ArticleSplitViewHandler | null;
+  splitManager?: SplitManager | null;
   annotationService?: AnnotationService | null;
 }
 
@@ -27,7 +27,7 @@ export class CommentForm extends Component {
   private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
-  private articleSplitHandler: ArticleSplitViewHandler | null = null;
+  private splitManager: SplitManager | null = null;
   private annotationService: AnnotationService | null = null;
   private apiService: ApiService;
   private commentTitleInput: HTMLInputElement | null = null;
@@ -45,7 +45,7 @@ export class CommentForm extends Component {
     this.currentComment = options.comment;
     this.savedAnnotation = options.savedAnnotation || null;
     this.shouldOpenArticle = options.openTargetArticle || false;
-    this.articleSplitHandler = options.articleSplitHandler || null;
+    this.splitManager = options.splitManager || null;
     this.annotationService = options.annotationService || null;
     this.apiService = new ApiService();
 
@@ -103,8 +103,8 @@ export class CommentForm extends Component {
       onChange: (article) => {
         this.selectedArticle = article;
 
-        if (this.articleSplitHandler) {
-          this.articleSplitHandler.openArticle(article);
+        if (this.splitManager) {
+          this.splitManager.openArticle(article);
         }
       },
     });
@@ -159,7 +159,7 @@ export class CommentForm extends Component {
       return;
     }
 
-    if (!this.articleSplitHandler) {
+    if (!this.splitManager) {
       new Notice("Article handler not available");
       return;
     }
@@ -186,7 +186,7 @@ export class CommentForm extends Component {
       return;
     }
 
-    const articleContent = this.articleSplitHandler.getArticleContent();
+    const articleContent = this.splitManager.getArticleContent();
     if (!articleContent) {
       new Notice(
         "Article content not available. Please select an article first or click 'Show Target' if already selected."
@@ -314,8 +314,8 @@ export class CommentForm extends Component {
         this.articleAutocomplete.setValue(targetArticle.id);
       }
 
-      if (this.articleSplitHandler) {
-        await this.articleSplitHandler.openArticle(targetArticle);
+      if (this.splitManager) {
+        await this.splitManager.openArticle(targetArticle);
       }
     } catch (error) {
       console.error("Error loading saved annotation:", error);
