@@ -134,7 +134,7 @@ export class ApiService {
       throw new Error(`No content received for ${fileName}`);
     }
 
-    const content = data.content;
+    const content = this.removeYamlFrontmatter(data.content);
 
     this.setCache(
       this.fileContentCache,
@@ -144,6 +144,19 @@ export class ApiService {
     );
 
     return content;
+  }
+
+  private removeYamlFrontmatter(content: string): string {
+    if (!content.startsWith("---\n")) {
+      return content;
+    }
+
+    const endIndex = content.indexOf("\n---\n", 4);
+    if (endIndex === -1) {
+      return content;
+    }
+
+    return content.substring(endIndex + 5).trimStart();
   }
 
   async fetchArticleById(articleId: string): Promise<Article> {
