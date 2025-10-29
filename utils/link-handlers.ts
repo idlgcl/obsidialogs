@@ -64,30 +64,32 @@ export class WritingLinkHandler {
       // Open in split using the shared SplitManager
       await this.splitManager.openInSplit(file as TFile);
 
-      const annotations = await this.annotationService.loadAnnotations(
-        sourcePath
-      );
-      let noteToHighlight: AnnotationData | null = null;
+      // Commenting this out for now
 
-      for (const noteId in annotations.notes) {
-        const note = annotations.notes[noteId];
-        if (
-          note.target === articleId ||
-          note.target.includes(articleId) ||
-          articleId.includes(note.target)
-        ) {
-          noteToHighlight = note;
-          break;
-        }
-      }
+      // const annotations = await this.annotationService.loadAnnotations(
+      //   sourcePath
+      // );
+      // let noteToHighlight: AnnotationData | null = null;
 
-      // Apply highlight after the file opens (only in preview mode)
-      if (noteToHighlight && noteToHighlight.target_txt && isFromPreviewMode) {
-        const targetText = noteToHighlight.target_txt;
-        setTimeout(() => {
-          this.highlightTargetText(targetText);
-        }, 1000);
-      }
+      // for (const noteId in annotations.notes) {
+      //   const note = annotations.notes[noteId];
+      //   if (
+      //     note.target === articleId ||
+      //     note.target.includes(articleId) ||
+      //     articleId.includes(note.target)
+      //   ) {
+      //     noteToHighlight = note;
+      //     break;
+      //   }
+      // }
+
+      // // Apply highlight after the file opens (only in preview mode)
+      // if (noteToHighlight && noteToHighlight.target_txt && isFromPreviewMode) {
+      //   const targetText = noteToHighlight.target_txt;
+      //   setTimeout(() => {
+      //     this.highlightTargetText(targetText);
+      //   }, 1000);
+      // }
     } catch (error) {
       console.error("[WritingLinkHandler] Error handling writing link:", error);
     }
