@@ -51,6 +51,22 @@ export class AnnotationFormView extends ItemView {
     this.component.unload();
   }
 
+  clear(): void {
+    this.contentEl.empty();
+
+    if (this.commentForm) {
+      this.component.removeChild(this.commentForm);
+      this.commentForm.onunload();
+      this.commentForm = null;
+    }
+
+    if (this.noteForm) {
+      this.component.removeChild(this.noteForm);
+      this.noteForm.onunload();
+      this.noteForm = null;
+    }
+  }
+
   updateComment(
     comment: Comment,
     savedAnnotation: AnnotationData | null = null,
