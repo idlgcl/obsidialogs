@@ -49,6 +49,7 @@ export default class IdealogsPlugin extends Plugin {
   private noteParser: NoteParser;
   private cursorCheckInterval: number | null = null;
   private lastCursorLine = -1;
+  private lastCursorCh = -1;
   private editorChangeDebounceTimer: number | null = null;
 
   async onload() {
@@ -206,25 +207,34 @@ export default class IdealogsPlugin extends Plugin {
 
           const line = view.state.doc.lineAt(pos);
           const lineText = line.text;
+          const charOffset = pos - line.from;
 
           const activeView = app.workspace.getActiveViewOfType(MarkdownView);
           if (!activeView?.file) {
             return false;
           }
 
-          const comment = commentParser.parseLineAsComment(
+          const commentWithPos = commentParser.findCommentAtPosition(
             lineText,
+            charOffset,
             activeView.file.name,
             activeView.file.path
           );
 
-          if (comment) {
-            const charOffset = pos - line.from;
-            const titleEndPos = lineText.indexOf(".");
+          if (commentWithPos) {
+            const commentText = lineText.substring(
+              commentWithPos.startPos,
+              commentWithPos.endPos
+            );
+            const titleEndPosInComment = commentText.indexOf(".");
 
-            if (titleEndPos !== -1 && charOffset <= titleEndPos) {
-              handleCommentTitleClick(comment);
-              return true;
+            if (titleEndPosInComment !== -1) {
+              const titleEndPos =
+                commentWithPos.startPos + titleEndPosInComment;
+              if (charOffset <= titleEndPos) {
+                handleCommentTitleClick(commentWithPos);
+                return true;
+              }
             }
           }
         } catch (error) {
@@ -413,12 +423,19 @@ export default class IdealogsPlugin extends Plugin {
     const editor = activeView.editor;
     const cursor = editor.getCursor();
     const cursorLine = cursor.line;
+    const cursorCh = cursor.ch;
 
-    if (!force && cursorLine === this.lastCursorLine) {
+    // Check if cursor position changed (line OR character position)
+    if (
+      !force &&
+      cursorLine === this.lastCursorLine &&
+      cursorCh === this.lastCursorCh
+    ) {
       return;
     }
 
     this.lastCursorLine = cursorLine;
+    this.lastCursorCh = cursorCh;
 
     const file = activeView.file;
     if (!file) {
@@ -427,8 +444,10 @@ export default class IdealogsPlugin extends Plugin {
 
     const lineText = editor.getLine(cursorLine);
 
-    const comment = this.commentParser.parseLineAsComment(
+    // Find comment at cursor position (supports multiple comments per line)
+    const comment = this.commentParser.findCommentAtPosition(
       lineText,
+      cursorCh,
       file.name,
       file.path
     );
@@ -442,6 +461,16 @@ export default class IdealogsPlugin extends Plugin {
         words[words.length - 1]
       );
       this.showAnnotationFormPanel(comment, "comment", savedAnnotation);
+    } else {
+      // Clear the form if no comment is detected
+      const existingPanels =
+        this.app.workspace.getLeavesOfType(ANNOTATION_FORM_VIEW);
+      if (existingPanels.length > 0) {
+        const view = existingPanels[0].view as AnnotationFormView;
+        if (view) {
+          view.clear();
+        }
+      }
     }
   }
 
