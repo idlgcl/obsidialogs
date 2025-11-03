@@ -6,7 +6,7 @@ import { AnnotationService, AnnotationData } from "./annotation-service";
 import { AnnotationHighlighter } from "./annotation-highlighter";
 import { SplitManager } from "./split-manager";
 
-export class WritingLinkHandler {
+export class NoteLinkHandler {
   private app: App;
   private apiService: ApiService;
   private fileTracker: IdealogsFileTracker;
@@ -64,32 +64,37 @@ export class WritingLinkHandler {
       // Open in split using the shared SplitManager
       await this.splitManager.openInSplit(file as TFile);
 
-      // Commenting this out for now
+      const annotations = await this.annotationService.loadAnnotations(
+        sourcePath
+      );
+      let noteToHighlight: AnnotationData | null = null;
 
-      // const annotations = await this.annotationService.loadAnnotations(
-      //   sourcePath
-      // );
-      // let noteToHighlight: AnnotationData | null = null;
+      for (const noteId in annotations.notes) {
+        const note = annotations.notes[noteId];
+        if (
+          note.target === articleId ||
+          note.target.includes(articleId) ||
+          articleId.includes(note.target)
+        ) {
+          noteToHighlight = note;
+          break;
+        }
+      }
 
-      // for (const noteId in annotations.notes) {
-      //   const note = annotations.notes[noteId];
-      //   if (
-      //     note.target === articleId ||
-      //     note.target.includes(articleId) ||
-      //     articleId.includes(note.target)
-      //   ) {
-      //     noteToHighlight = note;
-      //     break;
-      //   }
-      // }
-
-      // // Apply highlight after the file opens (only in preview mode)
-      // if (noteToHighlight && noteToHighlight.target_txt && isFromPreviewMode) {
-      //   const targetText = noteToHighlight.target_txt;
-      //   setTimeout(() => {
-      //     this.highlightTargetText(targetText);
-      //   }, 1000);
-      // }
+      if (
+        noteToHighlight &&
+        noteToHighlight.target_txt &&
+        noteToHighlight.isValid !== false &&
+        isFromPreviewMode
+      ) {
+        const targetText = noteToHighlight.target_txt;
+        setTimeout(() => {
+          const splitLeaf = this.splitManager.getSplitLeaf();
+          if (splitLeaf) {
+            this.annotationHighlighter.flashTargetText(targetText, splitLeaf);
+          }
+        }, 500);
+      }
     } catch (error) {
       console.error("[WritingLinkHandler] Error handling writing link:", error);
     }
@@ -212,7 +217,7 @@ export class CommonLinkHandler {
 
 export function patchLinkOpening(
   app: App,
-  writingLinkHandler: WritingLinkHandler,
+  noteLinkHandler: NoteLinkHandler,
   commonLinkHandler: CommonLinkHandler // Questions & Insights
 ): () => void {
   const workspace = app.workspace;
@@ -234,7 +239,7 @@ export function patchLinkOpening(
     }
 
     if (linktext.startsWith(WRITING_LINK_PREFIX)) {
-      writingLinkHandler.handleLink(linktext, sourcePath, isFromPreviewMode);
+      noteLinkHandler.handleLink(linktext, sourcePath, isFromPreviewMode);
       return;
     }
 

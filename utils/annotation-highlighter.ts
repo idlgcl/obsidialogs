@@ -106,7 +106,7 @@ export class AnnotationHighlighter {
         highlightedSpan.addEventListener("click", async (e) => {
           e.stopPropagation();
           await this.toggleAnnotationContainer(highlightedSpan, annotation);
-          if (annotation.kind === "COMMENT") {
+          if (annotation.kind === "COMMENT" || annotation.kind === "NOTE") {
             await this.openTargetAndFlash(annotation);
           }
         });
@@ -561,7 +561,7 @@ export class AnnotationHighlighter {
     return container;
   }
 
-  private async openTargetAndFlash(annotation: AnnotationData): Promise<void> {
+  async openTargetAndFlash(annotation: AnnotationData): Promise<void> {
     if (!this.apiService || !this.fileTracker) {
       console.warn(
         "[AnnotationHighlighter] Dependencies not set, falling back to default"
@@ -618,13 +618,15 @@ export class AnnotationHighlighter {
     }
   }
 
-  private flashTargetText(targetText: string): void {
-    if (!this.targetSplitLeaf || !this.targetSplitLeaf.view) {
+  flashTargetText(targetText: string, leaf?: WorkspaceLeaf): void {
+    const targetLeaf = leaf || this.targetSplitLeaf;
+
+    if (!targetLeaf || !targetLeaf.view) {
       console.warn("[AnnotationHighlighter] No target leaf available");
       return;
     }
 
-    const view = this.targetSplitLeaf.view;
+    const view = targetLeaf.view;
     // @ts-ignore - accessing containerEl
     const container = view.containerEl?.querySelector(".markdown-preview-view");
 

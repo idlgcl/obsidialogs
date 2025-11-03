@@ -10,13 +10,12 @@ export interface CommentWithPosition extends Comment {
   endPos: number;
 }
 
-export interface NoteMeta {
+export interface NoteLinkInfo {
   linkText: string;
   target: string;
-  previousWords: string;
-  nextWords: string;
-  source: string;
+  hasTextAround: boolean;
   filePath: string;
+  source: string;
 }
 
 export class CommentParser {
@@ -126,59 +125,30 @@ export class CommentParser {
   }
 }
 
-export class NoteParser {
-  parseLineAsNote(
-    line: string,
-    filename: string,
-    fullPath: string
-  ): NoteMeta | null {
-    if (line.trim().startsWith("#")) {
-      return null;
-    }
+export function detectNoteLink(
+  line: string,
+  filename: string,
+  fullPath: string
+): NoteLinkInfo | null {
+  const linkPattern = /\[\[@(Tx[^\]]+)\]\]/;
+  const match = line.match(linkPattern);
 
-    // note link pattern [[@TxXXX]]
-    const linkPattern = /\[\[@(Tx[^\]]+)\]\]/;
-    const linkMatch = line.match(linkPattern);
-
-    if (!linkMatch) {
-      return null;
-    }
-
-    const linkText = linkMatch[0];
-    const target = linkMatch[1];
-
-    const words = line.split(/\s+/).filter((word) => word.length > 0);
-
-    let linkIndex = -1;
-    for (let i = 0; i < words.length; i++) {
-      if (words[i].includes(linkText)) {
-        linkIndex = i;
-        break;
-      }
-    }
-
-    if (linkIndex === -1) {
-      return null;
-    }
-
-    if (linkIndex === 0) {
-      return null;
-    }
-
-    if (linkIndex === words.length - 1) {
-      return null;
-    }
-
-    const previousWords = words.slice(0, linkIndex).join(" ");
-    const nextWords = words.slice(linkIndex + 1).join(" ");
-
-    return {
-      linkText,
-      target,
-      previousWords,
-      nextWords,
-      source: filename,
-      filePath: fullPath,
-    };
+  if (!match) {
+    return null;
   }
+
+  const linkText = match[0];
+  const target = match[1];
+
+  // Check if link is alone
+  const trimmedLine = line.trim();
+  const hasTextAround = trimmedLine !== linkText;
+
+  return {
+    linkText,
+    target,
+    hasTextAround,
+    filePath: fullPath,
+    source: filename,
+  };
 }
