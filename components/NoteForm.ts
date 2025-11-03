@@ -1,7 +1,8 @@
 import { Component, Notice, App } from "obsidian";
-import { NoteMeta } from "../utils/parsers";
+import { NoteLinkInfo } from "../utils/parsers";
 import { SplitManager } from "../utils/split-manager";
 import { AnnotationService, AnnotationData } from "../utils/annotation-service";
+import { AnnotationHighlighter } from "../utils/annotation-highlighter";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
@@ -9,24 +10,29 @@ import { v4 as uuidv4 } from "uuid";
 export interface NoteFormOptions {
   container: HTMLElement;
   app: App;
-  note: NoteMeta;
+  noteLinkInfo: NoteLinkInfo;
   savedAnnotation?: AnnotationData | null;
+  hideSourceFields?: boolean;
   openTargetArticle?: boolean;
   splitManager?: SplitManager | null;
   annotationService?: AnnotationService | null;
+  annotationHighlighter?: AnnotationHighlighter | null;
 }
 
 export class NoteForm extends Component {
   private container: HTMLElement;
   private contentEl: HTMLElement;
   private app: App;
-  private currentNote: NoteMeta;
+  private noteLinkInfo: NoteLinkInfo;
+  private hideSourceFields: boolean;
   private savedAnnotation: AnnotationData | null = null;
   private splitManager: SplitManager | null = null;
   private annotationService: AnnotationService | null = null;
+  private annotationHighlighter: AnnotationHighlighter | null = null;
   private apiService: ApiService;
 
   // Form fields
+  private sourceFieldsContainer: HTMLElement | null = null;
   private textStartInput: HTMLInputElement | null = null;
   private textEndInput: HTMLInputElement | null = null;
   private textDisplayInput: HTMLInputElement | null = null;
@@ -40,10 +46,12 @@ export class NoteForm extends Component {
     super();
     this.container = options.container;
     this.app = options.app;
-    this.currentNote = options.note;
+    this.noteLinkInfo = options.noteLinkInfo;
+    this.hideSourceFields = options.hideSourceFields || false;
     this.savedAnnotation = options.savedAnnotation || null;
     this.splitManager = options.splitManager || null;
     this.annotationService = options.annotationService || null;
+    this.annotationHighlighter = options.annotationHighlighter || null;
     this.apiService = new ApiService();
 
     this.createForm();
@@ -67,8 +75,17 @@ export class NoteForm extends Component {
     // Form container
     const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
 
+    // Source fields container
+    this.sourceFieldsContainer = formContainer.createDiv({
+      cls: "idl-source-fields-container",
+    });
+
+    if (this.hideSourceFields) {
+      this.sourceFieldsContainer.style.display = "none";
+    }
+
     // Text Start and Text End
-    const srcRangeFields = formContainer.createDiv({
+    const srcRangeFields = this.sourceFieldsContainer.createDiv({
       cls: "idl-form-field idl-range-field",
     });
 
@@ -76,27 +93,26 @@ export class NoteForm extends Component {
     startField.createEl("label", { text: "Text Start" });
     this.textStartInput = startField.createEl("input", {
       type: "text",
-      value: this.currentNote.previousWords,
+      value: "",
     });
-    // this.textStartInput.disabled = true;
 
     const endField = srcRangeFields.createDiv({ cls: "idl-end-field" });
     endField.createEl("label", { text: "Text End" });
     this.textEndInput = endField.createEl("input", {
       type: "text",
-      value: this.currentNote.nextWords,
+      value: "",
     });
-    // this.textEndInput.disabled = true;
 
     // Text Display
-    const textDisplayField = formContainer.createDiv({ cls: "idl-form-field" });
+    const textDisplayField = this.sourceFieldsContainer.createDiv({
+      cls: "idl-form-field",
+    });
     textDisplayField.createEl("label", { text: "Text Display" });
-    const lastWord = this.currentNote.previousWords.split(/\s+/).pop() || "";
     this.textDisplayInput = textDisplayField.createEl("input", {
       type: "text",
-      value: lastWord,
+      value: "",
     });
-    this.textDisplayInput.disabled = true;
+    // this.textDisplayInput.disabled = true;
 
     // Target Article
     const targetArticleField = formContainer.createDiv({
@@ -105,7 +121,7 @@ export class NoteForm extends Component {
     targetArticleField.createEl("label", { text: "Target Article" });
     this.targetArticleInput = targetArticleField.createEl("input", {
       type: "text",
-      value: this.currentNote.target,
+      value: this.noteLinkInfo.target,
     });
     this.targetArticleInput.disabled = true;
 
@@ -140,9 +156,10 @@ export class NoteForm extends Component {
     });
 
     // Input event listeners for validation
-    // Source text fields
-    this.textStartInput.addEventListener("input", () => this.validateForm());
-    this.textEndInput.addEventListener("input", () => this.validateForm());
+    if (!this.hideSourceFields) {
+      this.textStartInput.addEventListener("input", () => this.validateForm());
+      this.textEndInput.addEventListener("input", () => this.validateForm());
+    }
 
     // Target text fields
     this.targetTextStartInput.addEventListener("input", () =>
@@ -164,6 +181,10 @@ export class NoteForm extends Component {
   }
 
   private validateSourceTextFields(): { valid: boolean; error?: string } {
+    if (this.hideSourceFields) {
+      return { valid: true };
+    }
+
     if (!this.textStartInput || !this.textEndInput || !this.textDisplayInput) {
       return { valid: false, error: "Form fields not initialized" };
     }
@@ -176,43 +197,6 @@ export class NoteForm extends Component {
       return { valid: false, error: "All source text fields are required" };
     }
 
-    const previousWords = this.currentNote.previousWords;
-    const nextWords = this.currentNote.nextWords;
-
-    if (!previousWords.endsWith(textDisplay)) {
-      return {
-        valid: false,
-        error: `Text Display "${textDisplay}" must appear immediately before the link`,
-      };
-    }
-
-    const beforeDisplay = previousWords
-      .slice(0, previousWords.length - textDisplay.length)
-      .trim();
-
-    if (beforeDisplay === "") {
-      if (textStart !== textDisplay) {
-        return {
-          valid: false,
-          error: `Text Start must be "${textDisplay}" since Text Display is the only word before the link`,
-        };
-      }
-    } else {
-      if (beforeDisplay !== textStart && !beforeDisplay.includes(textStart)) {
-        return {
-          valid: false,
-          error: `Text Start "${textStart}" must appear before Text Display in the source text`,
-        };
-      }
-    }
-
-    if (!nextWords.includes(textEnd)) {
-      return {
-        valid: false,
-        error: `Text End "${textEnd}" must appear after the link in the source text`,
-      };
-    }
-
     return { valid: true };
   }
 
@@ -223,7 +207,7 @@ export class NoteForm extends Component {
   }
 
   private async handleSave(): Promise<void> {
-    if (!this.currentNote) {
+    if (!this.noteLinkInfo) {
       new Notice("No note selected");
       return;
     }
@@ -250,14 +234,16 @@ export class NoteForm extends Component {
     const textEnd = this.textEndInput?.value.trim() || "";
     const textDisplay = this.textDisplayInput?.value.trim() || "";
 
-    const sourceValidation = this.validateSourceTextFields();
-    if (!sourceValidation.valid) {
-      new Notice(
-        `Source validation failed: ${
-          sourceValidation.error || "Invalid source text"
-        }`
-      );
-      return;
+    if (!this.hideSourceFields) {
+      const sourceValidation = this.validateSourceTextFields();
+      if (!sourceValidation.valid) {
+        new Notice(
+          `Source validation failed: ${
+            sourceValidation.error || "Invalid source text"
+          }`
+        );
+        return;
+      }
     }
 
     const targetTextStart = this.targetTextStartInput.value.trim();
@@ -309,8 +295,8 @@ export class NoteForm extends Component {
         textStart,
         textEnd,
         textDisplay,
-        linkText: this.currentNote.linkText,
-        targetArticle: this.currentNote.target,
+        linkText: this.noteLinkInfo.linkText,
+        targetArticle: this.noteLinkInfo.target,
         targetTextStart,
         targetTextEnd,
         targetTextDisplay,
@@ -318,7 +304,7 @@ export class NoteForm extends Component {
         targetStartOffset: targetValidation.startOffset || 0,
         targetEndOffset: targetValidation.endOffset || 0,
         targetDisplayOffset: targetValidation.displayOffsetInRange || 0,
-        sourceFilePath: this.currentNote.filePath,
+        sourceFilePath: this.noteLinkInfo.filePath,
       });
 
       new Notice("Note saved successfully");
@@ -381,15 +367,38 @@ export class NoteForm extends Component {
   private async openTargetArticleInSplit(): Promise<void> {
     try {
       const targetArticle = await this.apiService.fetchArticleById(
-        this.currentNote.target
+        this.noteLinkInfo.target
       );
 
       if (this.splitManager) {
         await this.splitManager.openArticle(targetArticle);
       }
+
+      if (
+        this.savedAnnotation &&
+        this.savedAnnotation.isValid !== false &&
+        this.annotationHighlighter &&
+        this.splitManager
+      ) {
+        setTimeout(() => {
+          if (
+            this.annotationHighlighter &&
+            this.savedAnnotation &&
+            this.splitManager
+          ) {
+            const splitLeaf = this.splitManager.getSplitLeaf();
+            if (splitLeaf) {
+              this.annotationHighlighter.flashTargetText(
+                this.savedAnnotation.target_txt,
+                splitLeaf
+              );
+            }
+          }
+        }, 500);
+      }
     } catch (error) {
       console.error("Error opening target article:", error);
-      new Notice(`Failed to load target article: ${this.currentNote.target}`);
+      new Notice(`Failed to load target article: ${this.noteLinkInfo.target}`);
     }
   }
 

@@ -12,12 +12,17 @@ import { patchDefaultSuggester } from "./utils/suggest-patcher";
 import { ApiService } from "./utils/api";
 import { ArticleSearchModal } from "./components/ArticleSearchModal";
 import {
-  WritingLinkHandler,
+  NoteLinkHandler,
   CommonLinkHandler,
   patchLinkOpening,
 } from "./utils/link-handlers";
 import { IdealogsFileTracker } from "./utils/idealogs-file-tracker";
-import { CommentParser, Comment, NoteParser, NoteMeta } from "./utils/parsers";
+import {
+  CommentParser,
+  Comment,
+  NoteLinkInfo,
+  detectNoteLink,
+} from "./utils/parsers";
 import {
   ANNOTATION_FORM_VIEW,
   AnnotationFormView,
@@ -39,14 +44,13 @@ export default class IdealogsPlugin extends Plugin {
   private articleSuggest: ArticleSuggest;
   private fileTracker: IdealogsFileTracker;
   private splitManager: SplitManager;
-  private writingLinkHandler: WritingLinkHandler;
+  private noteLinkHandler: NoteLinkHandler;
   private commonLinkHandler: CommonLinkHandler;
   private annotationService: AnnotationService;
   private annotationHighlighter: AnnotationHighlighter;
   private restoreLinkOpening: (() => void) | null = null;
   private previousFile: TFile | null = null;
   private commentParser: CommentParser;
-  private noteParser: NoteParser;
   private cursorCheckInterval: number | null = null;
   private lastCursorLine = -1;
   private lastCursorCh = -1;
@@ -63,7 +67,6 @@ export default class IdealogsPlugin extends Plugin {
       this.apiService
     );
     this.commentParser = new CommentParser();
-    this.noteParser = new NoteParser();
     this.annotationService = new AnnotationService(this.app);
     this.annotationHighlighter = new AnnotationHighlighter(this.app);
     this.annotationHighlighter.setDependencies(
@@ -71,7 +74,7 @@ export default class IdealogsPlugin extends Plugin {
       this.fileTracker
     );
 
-    this.writingLinkHandler = new WritingLinkHandler(
+    this.noteLinkHandler = new NoteLinkHandler(
       this.app,
       this.apiService,
       this.fileTracker,
@@ -98,6 +101,7 @@ export default class IdealogsPlugin extends Plugin {
       const view = new AnnotationFormView(leaf);
       view.setSplitManager(this.splitManager);
       view.setAnnotationService(this.annotationService);
+      view.setAnnotationHighlighter(this.annotationHighlighter);
       return view;
     });
 
@@ -106,7 +110,7 @@ export default class IdealogsPlugin extends Plugin {
 
     this.restoreLinkOpening = patchLinkOpening(
       this.app,
-      this.writingLinkHandler,
+      this.noteLinkHandler,
       this.commonLinkHandler
     );
 
@@ -249,7 +253,6 @@ export default class IdealogsPlugin extends Plugin {
   private createNoteClickExtension() {
     const handleNoteLinkClick = this.handleNoteLinkClick.bind(this);
     const app = this.app;
-    const noteParser = this.noteParser;
 
     return EditorView.domEventHandlers({
       mousedown: (event: MouseEvent, view: EditorView) => {
@@ -266,7 +269,7 @@ export default class IdealogsPlugin extends Plugin {
           const line = view.state.doc.lineAt(pos);
           const lineText = line.text;
 
-          // Check if line contains a note link pattern
+          // Simple regex check for note link
           if (!lineText.match(/\[\[@Tx[^\]]+\]\]/)) {
             return false;
           }
@@ -276,27 +279,21 @@ export default class IdealogsPlugin extends Plugin {
             return false;
           }
 
-          const note = noteParser.parseLineAsNote(
+          const noteLinkInfo = detectNoteLink(
             lineText,
             activeView.file.name,
             activeView.file.path
           );
 
-          if (note) {
-            // Check if click is within the note link
-            const linkPattern = /\[\[@(Tx[^\]]+)\]\]/g;
-            let match;
+          if (noteLinkInfo) {
             const charOffset = pos - line.from;
+            const linkStart = lineText.indexOf(noteLinkInfo.linkText);
+            const linkEnd = linkStart + noteLinkInfo.linkText.length;
 
-            while ((match = linkPattern.exec(lineText)) !== null) {
-              const linkStart = match.index;
-              const linkEnd = match.index + match[0].length;
-
-              if (charOffset >= linkStart && charOffset <= linkEnd) {
-                handleNoteLinkClick(note);
-                event.preventDefault();
-                return true;
-              }
+            if (charOffset >= linkStart && charOffset <= linkEnd) {
+              handleNoteLinkClick(noteLinkInfo);
+              // NoteLinkHandler also trigger
+              return false;
             }
           }
         } catch (error) {
@@ -393,18 +390,17 @@ export default class IdealogsPlugin extends Plugin {
     }
   }
 
-  private async handleNoteLinkClick(note: NoteMeta): Promise<void> {
-    const savedAnnotation = await this.annotationService.findNoteBySource(
-      note.filePath,
-      note.linkText,
-      note.previousWords
+  private async handleNoteLinkClick(noteLinkInfo: NoteLinkInfo): Promise<void> {
+    // Search for existing annotation by link text
+    const savedAnnotation = await this.annotationService.findNoteByLinkText(
+      noteLinkInfo.filePath,
+      noteLinkInfo.linkText
     );
 
-    this.showAnnotationFormPanel(
-      note,
-      "note",
+    this.showNoteFormPanel(
+      noteLinkInfo,
       savedAnnotation,
-      !!savedAnnotation
+      !noteLinkInfo.hasTextAround
     );
   }
 
@@ -462,7 +458,16 @@ export default class IdealogsPlugin extends Plugin {
       );
       this.showAnnotationFormPanel(comment, "comment", savedAnnotation);
     } else {
-      // Clear the form if no comment is detected
+      const noteLinkInfo = detectNoteLink(lineText, file.name, file.path);
+      if (noteLinkInfo) {
+        const linkStart = lineText.indexOf(noteLinkInfo.linkText);
+        const linkEnd = linkStart + noteLinkInfo.linkText.length;
+
+        if (cursorCh >= linkStart && cursorCh <= linkEnd) {
+          return;
+        }
+      }
+
       const existingPanels =
         this.app.workspace.getLeavesOfType(ANNOTATION_FORM_VIEW);
       if (existingPanels.length > 0) {
@@ -475,8 +480,8 @@ export default class IdealogsPlugin extends Plugin {
   }
 
   private showAnnotationFormPanel(
-    data: Comment | NoteMeta,
-    type: "comment" | "note",
+    data: Comment,
+    type: "comment",
     savedAnnotation: AnnotationData | null = null,
     openTargetArticle = false
   ): void {
@@ -491,7 +496,7 @@ export default class IdealogsPlugin extends Plugin {
       if (rightLeaf) {
         rightLeaf.setViewState({
           type: ANNOTATION_FORM_VIEW,
-          active: type === "note" ? true : false,
+          active: false,
         });
 
         this.app.workspace.rightSplit.expand();
@@ -501,16 +506,42 @@ export default class IdealogsPlugin extends Plugin {
     if (rightLeaf) {
       const view = rightLeaf.view as AnnotationFormView;
       if (view) {
-        if (type === "comment") {
-          view.updateComment(
-            data as Comment,
-            savedAnnotation,
-            openTargetArticle
-          );
-        } else {
-          view.updateNote(data as NoteMeta, savedAnnotation, openTargetArticle);
-          // view.setState({ active: true });
-        }
+        view.updateComment(data as Comment, savedAnnotation, openTargetArticle);
+      }
+    }
+  }
+
+  private showNoteFormPanel(
+    noteLinkInfo: NoteLinkInfo,
+    savedAnnotation: AnnotationData | null,
+    hideSourceFields: boolean
+  ): void {
+    const existingRightPanelLeaves =
+      this.app.workspace.getLeavesOfType(ANNOTATION_FORM_VIEW);
+
+    let rightLeaf;
+    if (existingRightPanelLeaves.length > 0) {
+      rightLeaf = existingRightPanelLeaves[0];
+    } else {
+      rightLeaf = this.app.workspace.getRightLeaf(false);
+      if (rightLeaf) {
+        rightLeaf.setViewState({
+          type: ANNOTATION_FORM_VIEW,
+          active: true,
+        });
+
+        this.app.workspace.rightSplit.expand();
+      }
+    }
+
+    if (rightLeaf) {
+      const view = rightLeaf.view as AnnotationFormView;
+      if (view) {
+        view.updateNoteWithLinkInfo(
+          noteLinkInfo,
+          savedAnnotation,
+          hideSourceFields
+        );
       }
     }
   }

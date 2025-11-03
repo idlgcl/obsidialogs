@@ -347,6 +347,24 @@ export class AnnotationService {
     return null;
   }
 
+  async findNoteByLinkText(
+    sourceFilePath: string,
+    linkText: string
+  ): Promise<AnnotationData | null> {
+    const annotations = await this.loadAnnotations(sourceFilePath);
+
+    for (const noteId in annotations.notes) {
+      const note = annotations.notes[noteId];
+
+      // Check if this note contains the link text in its source text
+      if (note.src_txt.indexOf(linkText) !== -1) {
+        return note;
+      }
+    }
+
+    return null;
+  }
+
   async deleteAnnotation(
     filePath: string,
     annotationId: string,
