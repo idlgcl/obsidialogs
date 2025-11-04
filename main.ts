@@ -163,6 +163,11 @@ export default class IdealogsPlugin extends Plugin {
     sourcePath: string
   ): Promise<void> {
     try {
+      this.annotationHighlighter.transformAllIdealogsLinks(
+        container,
+        sourcePath
+      );
+
       const annotations = await this.annotationService.loadAnnotations(
         sourcePath
       );
@@ -269,8 +274,8 @@ export default class IdealogsPlugin extends Plugin {
           const line = view.state.doc.lineAt(pos);
           const lineText = line.text;
 
-          // Simple regex check for note link
-          if (!lineText.match(/\[\[@Tx[^\]]+\]\]/)) {
+          // check for note link
+          if (!lineText.match(/\[\[@[TFI]x[^\]]+\]\]/)) {
             return false;
           }
 

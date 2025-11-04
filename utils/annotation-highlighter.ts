@@ -2,7 +2,6 @@ import { App, WorkspaceLeaf, TFile } from "obsidian";
 import { AnnotationData } from "./annotation-service";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
-import { Article } from "../types";
 
 export class AnnotationHighlighter {
   private app: App;
@@ -11,6 +10,7 @@ export class AnnotationHighlighter {
   private apiService: ApiService | null = null;
   private fileTracker: IdealogsFileTracker | null = null;
   private targetSplitLeaf: WorkspaceLeaf | null = null;
+  private writingLinkCounters: Map<string, Map<string, number>> = new Map();
 
   constructor(app: App) {
     this.app = app;
@@ -71,13 +71,14 @@ export class AnnotationHighlighter {
     );
 
     // primary search failed
+    let noteLinkElement: Element | null = null;
     if (matches.length === 0) {
       if (annotation.kind === "COMMENT") {
         matches = this.findCommentInDOM(container, annotation);
-      }
-
-      if (matches.length === 0 && annotation.kind === "NOTE") {
-        matches = this.findNoteInDOM(container, annotation);
+      } else if (annotation.kind === "NOTE") {
+        const result = this.findNoteInDOM(container, annotation);
+        matches = result.matches;
+        noteLinkElement = result.linkElement;
       }
 
       // both primary and fallback methods failed
@@ -105,12 +106,18 @@ export class AnnotationHighlighter {
         // click handler
         highlightedSpan.addEventListener("click", async (e) => {
           e.stopPropagation();
-          await this.toggleAnnotationContainer(highlightedSpan, annotation);
+          // Removed popup behavior
+          // await this.toggleAnnotationContainer(highlightedSpan, annotation);
           if (annotation.kind === "COMMENT" || annotation.kind === "NOTE") {
             await this.openTargetAndFlash(annotation);
           }
         });
       }
+    }
+
+    // Store annotation on the link element for NOTE annotations
+    if (annotation.kind === "NOTE" && noteLinkElement) {
+      (noteLinkElement as any).__annotation = annotation;
     }
   }
 
@@ -222,12 +229,16 @@ export class AnnotationHighlighter {
   private findNoteInDOM(
     container: HTMLElement,
     annotation: AnnotationData
-  ): Array<{ node: Text; startOffset: number; endOffset: number }> {
+  ): {
+    matches: Array<{ node: Text; startOffset: number; endOffset: number }>;
+    linkElement: Element | null;
+  } {
     const matches: Array<{
       node: Text;
       startOffset: number;
       endOffset: number;
     }> = [];
+    let linkElement: Element | null = null;
 
     // Find all internal links (rendered [[@TxXXX]] links)
     const links = container.querySelectorAll("a.internal-link");
@@ -241,6 +252,7 @@ export class AnnotationHighlighter {
 
       if (linkHref.includes(targetId) || linkText.includes(targetId)) {
         // Found the link
+        linkElement = link;
         const textBefore = this.getTextBeforeElement(link);
         const displayText = annotation.src_txt_display;
 
@@ -260,7 +272,91 @@ export class AnnotationHighlighter {
       }
     }
 
-    return matches;
+    return { matches, linkElement };
+  }
+
+  /**
+   * Transform ALL Idealogs links
+   * @Fx -> [?], @Ix -> [!], @Tx -> [1], [2], [3]...
+   */
+  transformAllIdealogsLinks(container: HTMLElement, sourcePath: string): void {
+    const links = container.querySelectorAll("a.internal-link");
+
+    for (const link of Array.from(links)) {
+      const linkHref =
+        link.getAttribute("href") || link.getAttribute("data-href") || "";
+      const linkText = link.textContent || "";
+
+      // Skip already transformed
+      if (
+        linkText.match(/^\[\d+\]$/) ||
+        linkText === "[?]" ||
+        linkText === "[!]"
+      ) {
+        continue;
+      }
+
+      // Extract article ID from href or text (look for @Tx, @Fx, @Ix pattern)
+      let articleId = "";
+      const hrefMatch = linkHref.match(/@([TFI]x[^/\s]+)/);
+      const textMatch = linkText.match(/@([TFI]x[^\]]+)/);
+
+      if (hrefMatch) {
+        articleId = hrefMatch[1];
+      } else if (textMatch) {
+        articleId = textMatch[1];
+      }
+
+      if (!articleId) {
+        continue;
+      }
+
+      let newLinkText = "";
+
+      if (articleId.startsWith("Fx")) {
+        newLinkText = "[?]";
+      } else if (articleId.startsWith("Ix")) {
+        newLinkText = "[!]";
+      } else if (articleId.startsWith("Tx")) {
+        // Get or create counter for this file
+        if (!this.writingLinkCounters.has(sourcePath)) {
+          this.writingLinkCounters.set(sourcePath, new Map());
+        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const fileCounters = this.writingLinkCounters.get(sourcePath)!;
+
+        if (!fileCounters.has(articleId)) {
+          // next counter number
+          fileCounters.set(articleId, fileCounters.size + 1);
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const counter = fileCounters.get(articleId)!;
+        newLinkText = `[${counter}]`;
+      }
+
+      // Update the link text
+      if (newLinkText) {
+        link.textContent = newLinkText;
+
+        // Add click handler to open the article
+        link.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Check if this link has a saved annotation (set in highlightAnnotation)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const annotation = (link as any).__annotation;
+          if (annotation) {
+            // Use the flash-enabled handler for saved annotations
+            await this.openTargetAndFlash(annotation);
+          } else {
+            // Use generic handler for links without saved annotations
+            this.app.workspace.openLinkText(`@${articleId}`, sourcePath, false);
+          }
+        });
+      }
+    }
   }
 
   private getTextBeforeElement(
@@ -417,6 +513,11 @@ export class AnnotationHighlighter {
         span.classList.add("idl-annotation-invalid");
       }
 
+      // bold class for comments
+      if (annotation.kind === "COMMENT") {
+        span.classList.add("idl-comment-bold");
+      }
+
       span.setAttribute("data-annotation-id", annotation.id);
 
       // validation message as title for tooltip
@@ -449,117 +550,118 @@ export class AnnotationHighlighter {
     }
   }
 
-  private async toggleAnnotationContainer(
-    element: HTMLElement,
-    annotation: AnnotationData
-  ): Promise<void> {
-    const existingContainer = document.querySelector(
-      `.idl-annotations-container[data-annotation-id="${annotation.id}"]`
-    );
+  // popup annotation logic - No longer used - I'm keeping it here because I have a feeling we might need it again.
+  // private async toggleAnnotationContainer(
+  //   element: HTMLElement,
+  //   annotation: AnnotationData
+  // ): Promise<void> {
+  //   const existingContainer = document.querySelector(
+  //     `.idl-annotations-container[data-annotation-id="${annotation.id}"]`
+  //   );
 
-    if (existingContainer) {
-      existingContainer.remove();
-      return;
-    }
+  //   if (existingContainer) {
+  //     existingContainer.remove();
+  //     return;
+  //   }
 
-    const container = await this.createAnnotationContainer(annotation);
+  //   const container = await this.createAnnotationContainer(annotation);
 
-    element.after(container);
-  }
+  //   element.after(container);
+  // }
 
-  private getArticleLinkFromId(articleId: string): string {
-    return `@${articleId}`;
-  }
+  // private getArticleLinkFromId(articleId: string): string {
+  //   return `@${articleId}`;
+  // }
 
-  private buildParentHierarchyLinks(
-    article: Article,
-    containerEl: HTMLElement,
-    sourcePath: string
-  ): void {
-    const parents: { id: string; title: string }[] = [];
+  // private buildParentHierarchyLinks(
+  //   article: Article,
+  //   containerEl: HTMLElement,
+  //   sourcePath: string
+  // ): void {
+  //   const parents: { id: string; title: string }[] = [];
 
-    if (article.parents && article.parents.length > 0) {
-      let current: (typeof article.parents)[0] | null | undefined =
-        article.parents[0];
-      while (current) {
-        parents.unshift({ id: current.id, title: current.title });
-        current = current.parent;
-      }
-    }
+  //   if (article.parents && article.parents.length > 0) {
+  //     let current: (typeof article.parents)[0] | null | undefined =
+  //       article.parents[0];
+  //     while (current) {
+  //       parents.unshift({ id: current.id, title: current.title });
+  //       current = current.parent;
+  //     }
+  //   }
 
-    parents.push({ id: article.id, title: article.title });
+  //   parents.push({ id: article.id, title: article.title });
 
-    parents.forEach((parent, index) => {
-      if (index > 0) {
-        containerEl.appendText(" \\ ");
-      }
+  //   parents.forEach((parent, index) => {
+  //     if (index > 0) {
+  //       containerEl.appendText(" \\ ");
+  //     }
 
-      const link = document.createElement("a");
-      link.className = "internal-link";
-      link.setAttribute("href", parent.id);
-      link.textContent = parent.title;
+  //     const link = document.createElement("a");
+  //     link.className = "internal-link";
+  //     link.setAttribute("href", parent.id);
+  //     link.textContent = parent.title;
 
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const linkText = this.getArticleLinkFromId(parent.id);
-        this.app.workspace.openLinkText(linkText, sourcePath, false);
-      });
+  //     link.addEventListener("click", (e) => {
+  //       e.preventDefault();
+  //       e.stopPropagation();
+  //       const linkText = this.getArticleLinkFromId(parent.id);
+  //       this.app.workspace.openLinkText(linkText, sourcePath, false);
+  //     });
 
-      containerEl.appendChild(link);
-    });
-  }
+  //     containerEl.appendChild(link);
+  //   });
+  // }
 
-  private async createAnnotationContainer(
-    annotation: AnnotationData
-  ): Promise<HTMLElement> {
-    const container = document.createElement("div");
-    container.className = "idl-annotations-container";
-    container.setAttribute("data-annotation-id", annotation.id);
+  // private async createAnnotationContainer(
+  //   annotation: AnnotationData
+  // ): Promise<HTMLElement> {
+  //   const container = document.createElement("div");
+  //   container.className = "idl-annotations-container";
+  //   container.setAttribute("data-annotation-id", annotation.id);
 
-    const annotationEl = document.createElement("div");
-    annotationEl.className = "idl-annotation-item";
+  //   const annotationEl = document.createElement("div");
+  //   annotationEl.className = "idl-annotation-item";
 
-    const textEl = document.createElement("div");
-    textEl.textContent = annotation.target_txt;
-    annotationEl.appendChild(textEl);
+  //   const textEl = document.createElement("div");
+  //   textEl.textContent = annotation.target_txt;
+  //   annotationEl.appendChild(textEl);
 
-    if (annotation.target && this.apiService) {
-      const linkEl = document.createElement("div");
-      linkEl.style.marginTop = "4px";
-      linkEl.style.fontSize = "0.85em";
+  //   if (annotation.target && this.apiService) {
+  //     const linkEl = document.createElement("div");
+  //     linkEl.style.marginTop = "4px";
+  //     linkEl.style.fontSize = "0.85em";
 
-      try {
-        const article = await this.apiService.fetchArticleById(
-          annotation.target
-        );
+  //     try {
+  //       const article = await this.apiService.fetchArticleById(
+  //         annotation.target
+  //       );
 
-        this.buildParentHierarchyLinks(article, linkEl, annotation.src);
-      } catch (error) {
-        console.error("[AnnotationHighlighter] Error fetching article:", error);
+  //       this.buildParentHierarchyLinks(article, linkEl, annotation.src);
+  //     } catch (error) {
+  //       console.error("[AnnotationHighlighter] Error fetching article:", error);
 
-        const link = document.createElement("a");
-        link.className = "internal-link";
-        link.setAttribute("href", annotation.target);
-        link.textContent = annotation.target;
+  //       const link = document.createElement("a");
+  //       link.className = "internal-link";
+  //       link.setAttribute("href", annotation.target);
+  //       link.textContent = annotation.target;
 
-        link.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const linkText = this.getArticleLinkFromId(annotation.target);
-          this.app.workspace.openLinkText(linkText, annotation.src, false);
-        });
+  //       link.addEventListener("click", (e) => {
+  //         e.preventDefault();
+  //         e.stopPropagation();
+  //         const linkText = this.getArticleLinkFromId(annotation.target);
+  //         this.app.workspace.openLinkText(linkText, annotation.src, false);
+  //       });
 
-        linkEl.appendChild(link);
-      }
+  //       linkEl.appendChild(link);
+  //     }
 
-      annotationEl.appendChild(linkEl);
-    }
+  //     annotationEl.appendChild(linkEl);
+  //   }
 
-    container.appendChild(annotationEl);
+  //   container.appendChild(annotationEl);
 
-    return container;
-  }
+  //   return container;
+  // }
 
   async openTargetAndFlash(annotation: AnnotationData): Promise<void> {
     if (!this.apiService || !this.fileTracker) {
@@ -699,5 +801,6 @@ export class AnnotationHighlighter {
 
   clearProcessedContainers(): void {
     this.processedContainers.clear();
+    this.writingLinkCounters.clear();
   }
 }

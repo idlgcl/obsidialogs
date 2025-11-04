@@ -130,7 +130,7 @@ export function detectNoteLink(
   filename: string,
   fullPath: string
 ): NoteLinkInfo | null {
-  const linkPattern = /\[\[@(Tx[^\]]+)\]\]/;
+  const linkPattern = /\[\[@([TFI]x[^\]]+)\]\]/;
   const match = line.match(linkPattern);
 
   if (!match) {
