@@ -98,6 +98,7 @@ export class AnnotationFormView extends ItemView {
       openTargetArticle,
       splitManager: this.splitManager,
       annotationService: this.annotationService,
+      annotationHighlighter: this.annotationHighlighter,
     });
 
     this.component.addChild(this.commentForm);

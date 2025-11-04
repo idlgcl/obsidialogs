@@ -7,6 +7,7 @@ import { AnnotationService, AnnotationData } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
+import { AnnotationHighlighter } from "../utils/annotation-highlighter";
 
 export interface CommentFormOptions {
   container: HTMLElement;
@@ -16,6 +17,7 @@ export interface CommentFormOptions {
   openTargetArticle?: boolean;
   splitManager?: SplitManager | null;
   annotationService?: AnnotationService | null;
+  annotationHighlighter?: AnnotationHighlighter | null;
 }
 
 export class CommentForm extends Component {
@@ -29,6 +31,7 @@ export class CommentForm extends Component {
   private selectedArticle: Article | null = null;
   private splitManager: SplitManager | null = null;
   private annotationService: AnnotationService | null = null;
+  private annotationHighlighter: AnnotationHighlighter | null = null;
   private apiService: ApiService;
   private commentTitleInput: HTMLInputElement | null = null;
   private commentBodyInput: HTMLTextAreaElement | null = null;
@@ -47,6 +50,7 @@ export class CommentForm extends Component {
     this.shouldOpenArticle = options.openTargetArticle || false;
     this.splitManager = options.splitManager || null;
     this.annotationService = options.annotationService || null;
+    this.annotationHighlighter = options.annotationHighlighter || null;
     this.apiService = new ApiService();
 
     this.createForm();
@@ -316,6 +320,23 @@ export class CommentForm extends Component {
 
       if (this.splitManager) {
         await this.splitManager.openArticle(targetArticle);
+
+        // Flash the target text after opening
+        if (
+          this.savedAnnotation.target_txt &&
+          this.annotationHighlighter &&
+          this.splitManager
+        ) {
+          setTimeout(() => {
+            const splitLeaf = this.splitManager?.getSplitLeaf();
+            if (splitLeaf && this.annotationHighlighter) {
+              this.annotationHighlighter.flashTargetText(
+                this.savedAnnotation!.target_txt,
+                splitLeaf
+              );
+            }
+          }, 500);
+        }
       }
     } catch (error) {
       console.error("Error loading saved annotation:", error);
