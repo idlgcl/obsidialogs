@@ -1,11 +1,11 @@
 {
-	"id": "idealogs-annotator",
-	"name": "Idealogs Annotator",
-	"version": "1.0.1",
-	"minAppVersion": "1.8.7",
-	"description": "For viewing, linking and annotating Idealogs articles.",
-	"author": "Idealogical Foundation",
-	"authorUrl": "https://idealogs.org",
-	"fundingUrl": "https://idealogs.org/donate",
-	"isDesktopOnly": false
+  "id": "idealogs-annotator",
+  "name": "Idealogs Annotator",
+  "version": "1.1.0",
+  "minAppVersion": "1.8.7",
+  "description": "For viewing, linking and annotating Idealogs articles.",
+  "author": "Idealogical Foundation",
+  "authorUrl": "https://idealogs.org",
+  "fundingUrl": "https://idealogs.org/donate",
+  "isDesktopOnly": false
 }
