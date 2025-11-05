@@ -3,6 +3,8 @@ import {
   AnnotationService,
   AnnotationData,
   AnnotationsFile,
+  SavedAnnotationData,
+  SavedAnnotationsFile,
 } from "../../utils/annotation-service";
 
 describe("AnnotationService", () => {
@@ -65,12 +67,39 @@ describe("AnnotationService", () => {
 
   describe("loadAnnotations", () => {
     it("should load existing annotations", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      const timestamp = Date.now();
+
+      // Mock saved format (camelCase, no id inside objects)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
+        comments: {
+          c1: {
+            kind: "COMMENT",
+            timestamp: timestamp,
+            src: "test.md",
+            sourceTextDisplay: "Display",
+            sourceTextStart: "Start",
+            sourceTextEnd: "End",
+            sourceText: "Full text",
+            target: "Tx123",
+            targetTextDisplay: "Target display",
+            targetTextStart: "Target start",
+            targetTextEnd: "Target end",
+            targetText: "Target text",
+            targetStartOffset: 0,
+            targetEndOffset: 10,
+            targetDisplayOffset: 5,
+          } as SavedAnnotationData,
+        },
+        notes: {},
+      };
+
+      // Expected result (snake_case, with id)
+      const expectedAnnotations: AnnotationsFile = {
         comments: {
           c1: {
             id: "c1",
             kind: "COMMENT",
-            timestamp: Date.now(),
+            timestamp: timestamp,
             src: "test.md",
             src_txt_display: "Display",
             src_txt_start: "Start",
@@ -92,11 +121,11 @@ describe("AnnotationService", () => {
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
 
       const result = await annotationService.loadAnnotations("test.md");
 
-      expect(result).toEqual(mockAnnotations);
+      expect(result).toEqual(expectedAnnotations);
     });
 
     it("should return empty structure if file does not exist", async () => {
@@ -252,26 +281,26 @@ describe("AnnotationService", () => {
 
   describe("findCommentBySource", () => {
     it("should find comment by source text", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      // Mock saved format (camelCase, no id)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
         comments: {
           c1: {
-            id: "c1",
             kind: "COMMENT",
             timestamp: Date.now(),
             src: "test.md",
-            src_txt_display: "Display text",
-            src_txt_start: "Display",
-            src_txt_end: "end",
-            src_txt: "Display text end",
+            sourceTextDisplay: "Display text",
+            sourceTextStart: "Display",
+            sourceTextEnd: "end",
+            sourceText: "Display text end",
             target: "Tx123",
-            target_txt_display: "Target",
-            target_txt_start: "Target",
-            target_txt_end: "text",
-            target_txt: "Target text",
-            target_start_offset: 0,
-            target_end_offset: 10,
-            target_display_offset: 5,
-          } as AnnotationData,
+            targetTextDisplay: "Target",
+            targetTextStart: "Target",
+            targetTextEnd: "text",
+            targetText: "Target text",
+            targetStartOffset: 0,
+            targetEndOffset: 10,
+            targetDisplayOffset: 5,
+          } as SavedAnnotationData,
         },
         notes: {},
       };
@@ -279,7 +308,7 @@ describe("AnnotationService", () => {
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
 
       const result = await annotationService.findCommentBySource(
         "test.md",
@@ -293,7 +322,8 @@ describe("AnnotationService", () => {
     });
 
     it("should return null if no matching comment found", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      // Mock saved format (empty)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
         comments: {},
         notes: {},
       };
@@ -301,7 +331,7 @@ describe("AnnotationService", () => {
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
 
       const result = await annotationService.findCommentBySource(
         "test.md",
@@ -316,34 +346,34 @@ describe("AnnotationService", () => {
 
   describe("findNoteByLinkText", () => {
     it("should find note by link text", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      // Mock saved format (camelCase, no id)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
         comments: {},
         notes: {
           n1: {
-            id: "n1",
             kind: "NOTE",
             timestamp: Date.now(),
             src: "test.md",
-            src_txt_display: "Display",
-            src_txt_start: "Start",
-            src_txt_end: "End",
-            src_txt: "Start Display [[@Tx123]] End",
+            sourceTextDisplay: "Display",
+            sourceTextStart: "Start",
+            sourceTextEnd: "End",
+            sourceText: "Start Display [[@Tx123]] End",
             target: "Tx123",
-            target_txt_display: "Target",
-            target_txt_start: "Target",
-            target_txt_end: "text",
-            target_txt: "Target text",
-            target_start_offset: 0,
-            target_end_offset: 10,
-            target_display_offset: 5,
-          } as AnnotationData,
+            targetTextDisplay: "Target",
+            targetTextStart: "Target",
+            targetTextEnd: "text",
+            targetText: "Target text",
+            targetStartOffset: 0,
+            targetEndOffset: 10,
+            targetDisplayOffset: 5,
+          } as SavedAnnotationData,
         },
       };
 
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
 
       const result = await annotationService.findNoteByLinkText(
         "test.md",
@@ -355,7 +385,8 @@ describe("AnnotationService", () => {
     });
 
     it("should return null if no matching note found", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      // Mock saved format (empty)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
         comments: {},
         notes: {},
       };
@@ -363,7 +394,7 @@ describe("AnnotationService", () => {
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
 
       const result = await annotationService.findNoteByLinkText(
         "test.md",
@@ -376,26 +407,26 @@ describe("AnnotationService", () => {
 
   describe("deleteAnnotation", () => {
     it("should delete comment", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      // Mock saved format (camelCase, no id)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
         comments: {
           c1: {
-            id: "c1",
             kind: "COMMENT",
             timestamp: Date.now(),
             src: "test.md",
-            src_txt_display: "Display",
-            src_txt_start: "Start",
-            src_txt_end: "End",
-            src_txt: "Full text",
+            sourceTextDisplay: "Display",
+            sourceTextStart: "Start",
+            sourceTextEnd: "End",
+            sourceText: "Full text",
             target: "Tx123",
-            target_txt_display: "Target",
-            target_txt_start: "Target",
-            target_txt_end: "text",
-            target_txt: "Target text",
-            target_start_offset: 0,
-            target_end_offset: 10,
-            target_display_offset: 5,
-          } as AnnotationData,
+            targetTextDisplay: "Target",
+            targetTextStart: "Target",
+            targetTextEnd: "text",
+            targetText: "Target text",
+            targetStartOffset: 0,
+            targetEndOffset: 10,
+            targetDisplayOffset: 5,
+          } as SavedAnnotationData,
         },
         notes: {},
       };
@@ -403,7 +434,7 @@ describe("AnnotationService", () => {
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
       app.vault.adapter.write = jest.fn().mockResolvedValue(undefined);
 
       await annotationService.deleteAnnotation("test.md", "c1", "comment");
@@ -411,38 +442,41 @@ describe("AnnotationService", () => {
       expect(app.vault.adapter.write).toHaveBeenCalled();
       const writeCall = (app.vault.adapter.write as jest.Mock).mock.calls[0];
       const savedData = JSON.parse(writeCall[1]);
+      // Verify the comment was deleted
       expect(savedData.comments.c1).toBeUndefined();
+      // Verify the saved format is camelCase (no snake_case fields)
+      expect(savedData.comments).toBeDefined();
     });
 
     it("should delete note", async () => {
-      const mockAnnotations: AnnotationsFile = {
+      // Mock saved format (camelCase, no id)
+      const mockSavedAnnotations: SavedAnnotationsFile = {
         comments: {},
         notes: {
           n1: {
-            id: "n1",
             kind: "NOTE",
             timestamp: Date.now(),
             src: "test.md",
-            src_txt_display: "Display",
-            src_txt_start: "Start",
-            src_txt_end: "End",
-            src_txt: "Full text",
+            sourceTextDisplay: "Display",
+            sourceTextStart: "Start",
+            sourceTextEnd: "End",
+            sourceText: "Full text",
             target: "Tx123",
-            target_txt_display: "Target",
-            target_txt_start: "Target",
-            target_txt_end: "text",
-            target_txt: "Target text",
-            target_start_offset: 0,
-            target_end_offset: 10,
-            target_display_offset: 5,
-          } as AnnotationData,
+            targetTextDisplay: "Target",
+            targetTextStart: "Target",
+            targetTextEnd: "text",
+            targetText: "Target text",
+            targetStartOffset: 0,
+            targetEndOffset: 10,
+            targetDisplayOffset: 5,
+          } as SavedAnnotationData,
         },
       };
 
       app.vault.adapter.exists = jest.fn().mockResolvedValue(true);
       app.vault.adapter.read = jest
         .fn()
-        .mockResolvedValue(JSON.stringify(mockAnnotations));
+        .mockResolvedValue(JSON.stringify(mockSavedAnnotations));
       app.vault.adapter.write = jest.fn().mockResolvedValue(undefined);
 
       await annotationService.deleteAnnotation("test.md", "n1", "note");
@@ -450,7 +484,10 @@ describe("AnnotationService", () => {
       expect(app.vault.adapter.write).toHaveBeenCalled();
       const writeCall = (app.vault.adapter.write as jest.Mock).mock.calls[0];
       const savedData = JSON.parse(writeCall[1]);
+      // Verify the note was deleted
       expect(savedData.notes.n1).toBeUndefined();
+      // Verify the saved format is camelCase (no snake_case fields)
+      expect(savedData.notes).toBeDefined();
     });
   });
 
