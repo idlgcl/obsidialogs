@@ -21,9 +21,34 @@ export interface AnnotationData {
   validationMessage?: string;
 }
 
+export interface SavedAnnotationData {
+  timestamp: number;
+  kind: "COMMENT" | "NOTE" | "TRANSLATION";
+  src: string;
+  sourceTextDisplay: string;
+  sourceTextStart: string;
+  sourceTextEnd: string;
+  sourceText: string;
+  target: string;
+  targetTextDisplay: string;
+  targetTextStart: string;
+  targetTextEnd: string;
+  targetText: string;
+  targetStartOffset: number;
+  targetEndOffset: number;
+  targetDisplayOffset: number;
+  isValid?: boolean;
+  validationMessage?: string;
+}
+
 export interface AnnotationsFile {
   comments: Record<string, AnnotationData>;
   notes: Record<string, AnnotationData>;
+}
+
+export interface SavedAnnotationsFile {
+  comments: Record<string, SavedAnnotationData>;
+  notes: Record<string, SavedAnnotationData>;
 }
 
 export class AnnotationService {
@@ -63,7 +88,22 @@ export class AnnotationService {
     if (await this.app.vault.adapter.exists(annotationsPath)) {
       try {
         const fileContent = await this.app.vault.adapter.read(annotationsPath);
-        return JSON.parse(fileContent);
+        const parsed = JSON.parse(fileContent) as SavedAnnotationsFile;
+
+        return {
+          comments: Object.fromEntries(
+            Object.entries(parsed.comments || {}).map(([id, comment]) => [
+              id,
+              this.fromSavedFormat(id, comment),
+            ])
+          ),
+          notes: Object.fromEntries(
+            Object.entries(parsed.notes || {}).map(([id, note]) => [
+              id,
+              this.fromSavedFormat(id, note),
+            ])
+          ),
+        };
       } catch (error) {
         console.error(`Error reading annotations file: ${error}`);
         return { comments: {}, notes: {} };
@@ -389,6 +429,54 @@ export class AnnotationService {
     return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
+  private toSavedFormat(annotation: AnnotationData): SavedAnnotationData {
+    return {
+      timestamp: annotation.timestamp,
+      kind: annotation.kind,
+      src: annotation.src,
+      sourceTextDisplay: annotation.src_txt_display,
+      sourceTextStart: annotation.src_txt_start,
+      sourceTextEnd: annotation.src_txt_end,
+      sourceText: annotation.src_txt,
+      target: annotation.target,
+      targetTextDisplay: annotation.target_txt_display,
+      targetTextStart: annotation.target_txt_start,
+      targetTextEnd: annotation.target_txt_end,
+      targetText: annotation.target_txt,
+      targetStartOffset: annotation.target_start_offset,
+      targetEndOffset: annotation.target_end_offset,
+      targetDisplayOffset: annotation.target_display_offset,
+      isValid: annotation.isValid,
+      validationMessage: annotation.validationMessage,
+    };
+  }
+
+  private fromSavedFormat(
+    id: string,
+    saved: SavedAnnotationData
+  ): AnnotationData {
+    return {
+      id,
+      timestamp: saved.timestamp,
+      kind: saved.kind,
+      src: saved.src,
+      src_txt_display: saved.sourceTextDisplay,
+      src_txt_start: saved.sourceTextStart,
+      src_txt_end: saved.sourceTextEnd,
+      src_txt: saved.sourceText,
+      target: saved.target,
+      target_txt_display: saved.targetTextDisplay,
+      target_txt_start: saved.targetTextStart,
+      target_txt_end: saved.targetTextEnd,
+      target_txt: saved.targetText,
+      target_start_offset: saved.targetStartOffset,
+      target_end_offset: saved.targetEndOffset,
+      target_display_offset: saved.targetDisplayOffset,
+      isValid: saved.isValid,
+      validationMessage: saved.validationMessage,
+    };
+  }
+
   async validateComment(
     annotation: AnnotationData,
     sourceFilePath: string
@@ -530,7 +618,9 @@ export class AnnotationService {
         displayTextFound = singleWordRegex.test(boundedText);
       } else {
         const flexibleSpacingRegex = new RegExp(
-          displayWords.map((word) => `\\b${this.escapeRegExp(word)}\\b`).join("\\s+")
+          displayWords
+            .map((word) => `\\b${this.escapeRegExp(word)}\\b`)
+            .join("\\s+")
         );
         displayTextFound = flexibleSpacingRegex.test(boundedText);
       }
@@ -546,12 +636,15 @@ export class AnnotationService {
         const expectedLinkText = `[[@${annotation.target}]]`;
 
         const displayTextRegex = new RegExp(
-          displayWords.map((word) => `\\b${this.escapeRegExp(word)}\\b`).join("\\s+")
+          displayWords
+            .map((word) => `\\b${this.escapeRegExp(word)}\\b`)
+            .join("\\s+")
         );
         const displayMatch = displayTextRegex.exec(sourceContent);
 
         if (displayMatch) {
-          const afterDisplayTextPos = displayMatch.index + displayMatch[0].length;
+          const afterDisplayTextPos =
+            displayMatch.index + displayMatch[0].length;
           const textAfterDisplay = sourceContent
             .substring(afterDisplayTextPos, afterDisplayTextPos + 100)
             .trim();
@@ -656,10 +749,26 @@ export class AnnotationService {
     targetPath: string,
     annotations: AnnotationsFile
   ): Promise<void> {
+    // Transform to saved format (camelCase, no redundant id)
+    const savedAnnotations: SavedAnnotationsFile = {
+      comments: Object.fromEntries(
+        Object.entries(annotations.comments).map(([id, comment]) => [
+          id,
+          this.toSavedFormat(comment),
+        ])
+      ),
+      notes: Object.fromEntries(
+        Object.entries(annotations.notes).map(([id, note]) => [
+          id,
+          this.toSavedFormat(note),
+        ])
+      ),
+    };
+
     const annotationsPath = this.getAnnotationsFilePath(targetPath);
     await this.app.vault.adapter.write(
       annotationsPath,
-      JSON.stringify(annotations, null, 2)
+      JSON.stringify(savedAnnotations, null, 2)
     );
   }
 }
