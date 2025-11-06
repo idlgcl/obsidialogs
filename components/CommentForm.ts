@@ -211,7 +211,7 @@ export class CommentForm extends Component {
     }
 
     try {
-      const commentId = uuidv4();
+      const commentId = this.savedAnnotation?.id || uuidv4();
 
       await this.annotationService.saveComment({
         commentId,
