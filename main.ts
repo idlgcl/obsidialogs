@@ -27,7 +27,11 @@ import {
   ANNOTATION_FORM_VIEW,
   AnnotationFormView,
 } from "components/AnnotationFormView";
-import { AnnotationService, WebAnnotation } from "./utils/annotation-service";
+import {
+  Annotation,
+  AnnotationService,
+  WebAnnotation,
+} from "./utils/annotation-service";
 import { AnnotationHighlighter } from "./utils/annotation-highlighter";
 import { EditorView } from "@codemirror/view";
 import { SplitManager } from "./utils/split-manager";
@@ -485,7 +489,7 @@ export default class IdealogsPlugin extends Plugin {
   private showAnnotationFormPanel(
     data: Comment,
     type: "comment",
-    savedAnnotation: WebAnnotation | null = null,
+    savedAnnotation: Annotation | null = null,
     openTargetArticle = false
   ): void {
     const existingRightPanelLeaves =
