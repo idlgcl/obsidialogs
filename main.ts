@@ -123,6 +123,7 @@ export default class IdealogsPlugin extends Plugin {
       })
     );
 
+    // TODO : add it back
     // Validate annotations when file is modified
     // this.registerEvent(
     //   this.app.vault.on("modify", async (file) => {
@@ -137,6 +138,7 @@ export default class IdealogsPlugin extends Plugin {
       this.checkCursorInComment();
     }, 200);
 
+    // TODO : add it back
     // markdown processor for annotation in preview/read mode only
     // this.registerMarkdownPostProcessor(async (el, ctx) => {
     //   await this.renderAnnotations(el, ctx.sourcePath);

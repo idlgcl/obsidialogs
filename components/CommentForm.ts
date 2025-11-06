@@ -3,7 +3,7 @@ import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
 import { SplitManager } from "../utils/split-manager";
-import { AnnotationService, WebAnnotation } from "../utils/annotation-service";
+import { AnnotationService, Annotation } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
@@ -13,7 +13,7 @@ export interface CommentFormOptions {
   container: HTMLElement;
   app: App;
   comment: Comment;
-  savedAnnotation?: WebAnnotation | null;
+  savedAnnotation?: Annotation | null;
   openTargetArticle?: boolean;
   splitManager?: SplitManager | null;
   annotationService?: AnnotationService | null;
@@ -25,7 +25,7 @@ export class CommentForm extends Component {
   private contentEl: HTMLElement;
   private app: App;
   private currentComment: Comment;
-  private savedAnnotation: WebAnnotation | null = null;
+  private savedAnnotation: Annotation | null = null;
   private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;
@@ -211,7 +211,7 @@ export class CommentForm extends Component {
     }
 
     try {
-      const commentId = uuidv4();
+      const commentId = this.savedAnnotation?.id || uuidv4();
 
       await this.annotationService.saveComment({
         commentId,
@@ -262,14 +262,14 @@ export class CommentForm extends Component {
     if (!this.savedAnnotation) return;
 
     if (this.targetTextStartInput) {
-      this.targetTextStartInput.value = this.savedAnnotation.target_txt_start;
+      this.targetTextStartInput.value = this.savedAnnotation.targetTextStart;
     }
     if (this.targetTextEndInput) {
-      this.targetTextEndInput.value = this.savedAnnotation.target_txt_end;
+      this.targetTextEndInput.value = this.savedAnnotation.targetTextEnd;
     }
     if (this.targetTextDisplayInput) {
       this.targetTextDisplayInput.value =
-        this.savedAnnotation.target_txt_display;
+        this.savedAnnotation.targetTextDisplay;
     }
 
     if (this.articleAutocomplete) {
@@ -323,7 +323,7 @@ export class CommentForm extends Component {
 
         // Flash the target text after opening
         if (
-          this.savedAnnotation.target_txt &&
+          this.savedAnnotation.targetText &&
           this.annotationHighlighter &&
           this.splitManager
         ) {
@@ -331,7 +331,7 @@ export class CommentForm extends Component {
             const splitLeaf = this.splitManager?.getSplitLeaf();
             if (splitLeaf && this.annotationHighlighter) {
               this.annotationHighlighter.flashTargetText(
-                this.savedAnnotation!.target_txt,
+                this.savedAnnotation!.targetText,
                 splitLeaf
               );
             }
