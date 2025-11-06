@@ -75,9 +75,7 @@ export class AnnotationService {
   getAnnotationsFilePath(targetPath: string): string {
     const baseFilename =
       targetPath.split("/").pop()?.split(".")[0] || "unknown";
-    return normalizePath(
-      `${this.ANNOTATIONS_FOLDER}/${baseFilename}.annotations`
-    );
+    return normalizePath(`${this.ANNOTATIONS_FOLDER}/${baseFilename}.json`);
   }
 
   async loadAnnotations(targetPath: string): Promise<WebAnnotationsFile> {
