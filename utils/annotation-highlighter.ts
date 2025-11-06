@@ -1,11 +1,11 @@
 import { App, WorkspaceLeaf, TFile } from "obsidian";
-import { WebAnnotation } from "./annotation-service";
+import { Annotation } from "./annotation-service";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
 
 export class AnnotationHighlighter {
   private app: App;
-  private annotationsByElement: Map<HTMLElement, WebAnnotation[]> = new Map();
+  private annotationsByElement: Map<HTMLElement, Annotation[]> = new Map();
   private processedContainers: Set<HTMLElement> = new Set();
   private apiService: ApiService | null = null;
   private fileTracker: IdealogsFileTracker | null = null;
@@ -26,7 +26,7 @@ export class AnnotationHighlighter {
 
   highlightAnnotations(
     container: HTMLElement,
-    annotations: WebAnnotation[]
+    annotations: Annotation[]
   ): void {
     // container has already been processed
     if (this.processedContainers.has(container)) {
@@ -54,9 +54,9 @@ export class AnnotationHighlighter {
 
   private highlightAnnotation(
     container: HTMLElement,
-    annotation: WebAnnotation
+    annotation: Annotation
   ): void {
-    const searchText = annotation.src_txt_display;
+    const searchText = annotation.sourceTextDisplay;
 
     if (!searchText) {
       console.warn("Annotation has no src_txt_display:", annotation);
@@ -66,8 +66,8 @@ export class AnnotationHighlighter {
     let matches = this.findTextInDOM(
       container,
       searchText,
-      annotation.src_txt_start,
-      annotation.src_txt_end
+      annotation.sourceTextStart,
+      annotation.sourceTextEnd
     );
 
     // primary search failed
@@ -180,7 +180,7 @@ export class AnnotationHighlighter {
 
   private findCommentInDOM(
     container: HTMLElement,
-    annotation: WebAnnotation
+    annotation: Annotation
   ): Array<{ node: Text; startOffset: number; endOffset: number }> {
     const matches: Array<{
       node: Text;
@@ -188,8 +188,8 @@ export class AnnotationHighlighter {
       endOffset: number;
     }> = [];
 
-    const fullCommentText = annotation.src_txt;
-    const titleText = annotation.src_txt_display;
+    const fullCommentText = annotation.sourceText;
+    const titleText = annotation.sourceTextDisplay;
 
     const walker = document.createTreeWalker(
       container,
@@ -228,7 +228,7 @@ export class AnnotationHighlighter {
 
   private findNoteInDOM(
     container: HTMLElement,
-    annotation: WebAnnotation
+    annotation: Annotation
   ): {
     matches: Array<{ node: Text; startOffset: number; endOffset: number }>;
     linkElement: Element | null;
@@ -254,7 +254,7 @@ export class AnnotationHighlighter {
         // Found the link
         linkElement = link;
         const textBefore = this.getTextBeforeElement(link);
-        const displayText = annotation.src_txt_display;
+        const displayText = annotation.sourceTextDisplay;
 
         // Check if the text before the link contains our display text
         if (textBefore && textBefore.text.includes(displayText)) {
@@ -494,7 +494,7 @@ export class AnnotationHighlighter {
     textNode: Text,
     startOffset: number,
     endOffset: number,
-    annotation: WebAnnotation
+    annotation: Annotation
   ): HTMLElement | null {
     try {
       const text = textNode.textContent || "";
@@ -518,7 +518,7 @@ export class AnnotationHighlighter {
         span.classList.add("idl-comment-bold");
       }
 
-      span.setAttribute("data-annotation-id", annotation.id);
+      span.setAttribute("data-annotation-id", annotation.id as string);
 
       // validation message as title for tooltip
       if (annotation.validationMessage) {
@@ -663,7 +663,7 @@ export class AnnotationHighlighter {
   //   return container;
   // }
 
-  async openTargetAndFlash(annotation: WebAnnotation): Promise<void> {
+  async openTargetAndFlash(annotation: Annotation): Promise<void> {
     if (!this.apiService || !this.fileTracker) {
       console.warn(
         "[AnnotationHighlighter] Dependencies not set, falling back to default"
@@ -710,9 +710,9 @@ export class AnnotationHighlighter {
         await leaf.openFile(file as TFile, { state: { mode: "preview" } });
       }
 
-      if (annotation.target_txt) {
+      if (annotation.targetText) {
         setTimeout(() => {
-          this.flashTargetText(annotation.target_txt);
+          this.flashTargetText(annotation.targetText);
         }, 500);
       }
     } catch (error) {
