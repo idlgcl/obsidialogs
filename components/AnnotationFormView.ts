@@ -5,7 +5,11 @@ import {
 } from "obsidian";
 import { Comment, NoteLinkInfo } from "../utils/parsers";
 import { SplitManager } from "../utils/split-manager";
-import { AnnotationService, WebAnnotation } from "../utils/annotation-service";
+import {
+  Annotation,
+  AnnotationService,
+  WebAnnotation,
+} from "../utils/annotation-service";
 import { AnnotationHighlighter } from "../utils/annotation-highlighter";
 import { CommentForm } from "./CommentForm";
 import { NoteForm } from "./NoteForm";
@@ -73,7 +77,7 @@ export class AnnotationFormView extends ItemView {
 
   updateComment(
     comment: Comment,
-    savedAnnotation: WebAnnotation | null = null,
+    savedAnnotation: Annotation | null = null,
     openTargetArticle = false
   ): void {
     this.contentEl.empty();
