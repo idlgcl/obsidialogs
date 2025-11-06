@@ -3,7 +3,7 @@ import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
 import { SplitManager } from "../utils/split-manager";
-import { AnnotationService, AnnotationData } from "../utils/annotation-service";
+import { AnnotationService, WebAnnotation } from "../utils/annotation-service";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
@@ -13,7 +13,7 @@ export interface CommentFormOptions {
   container: HTMLElement;
   app: App;
   comment: Comment;
-  savedAnnotation?: AnnotationData | null;
+  savedAnnotation?: WebAnnotation | null;
   openTargetArticle?: boolean;
   splitManager?: SplitManager | null;
   annotationService?: AnnotationService | null;
@@ -25,7 +25,7 @@ export class CommentForm extends Component {
   private contentEl: HTMLElement;
   private app: App;
   private currentComment: Comment;
-  private savedAnnotation: AnnotationData | null = null;
+  private savedAnnotation: WebAnnotation | null = null;
   private shouldOpenArticle = false;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
   private selectedArticle: Article | null = null;

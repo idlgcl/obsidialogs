@@ -1,7 +1,7 @@
 import { Component, Notice, App } from "obsidian";
 import { NoteLinkInfo } from "../utils/parsers";
 import { SplitManager } from "../utils/split-manager";
-import { AnnotationService, AnnotationData } from "../utils/annotation-service";
+import { AnnotationService, WebAnnotation } from "../utils/annotation-service";
 import { AnnotationHighlighter } from "../utils/annotation-highlighter";
 import { validateTargetTextFields } from "../utils/text-validator";
 import { ApiService } from "../utils/api";
@@ -11,7 +11,7 @@ export interface NoteFormOptions {
   container: HTMLElement;
   app: App;
   noteLinkInfo: NoteLinkInfo;
-  savedAnnotation?: AnnotationData | null;
+  savedAnnotation?: WebAnnotation | null;
   hideSourceFields?: boolean;
   openTargetArticle?: boolean;
   splitManager?: SplitManager | null;
@@ -25,7 +25,7 @@ export class NoteForm extends Component {
   private app: App;
   private noteLinkInfo: NoteLinkInfo;
   private hideSourceFields: boolean;
-  private savedAnnotation: AnnotationData | null = null;
+  private savedAnnotation: WebAnnotation | null = null;
   private splitManager: SplitManager | null = null;
   private annotationService: AnnotationService | null = null;
   private annotationHighlighter: AnnotationHighlighter | null = null;

@@ -1,11 +1,11 @@
 import { App, WorkspaceLeaf, TFile } from "obsidian";
-import { AnnotationData } from "./annotation-service";
+import { WebAnnotation } from "./annotation-service";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
 
 export class AnnotationHighlighter {
   private app: App;
-  private annotationsByElement: Map<HTMLElement, AnnotationData[]> = new Map();
+  private annotationsByElement: Map<HTMLElement, WebAnnotation[]> = new Map();
   private processedContainers: Set<HTMLElement> = new Set();
   private apiService: ApiService | null = null;
   private fileTracker: IdealogsFileTracker | null = null;
@@ -26,7 +26,7 @@ export class AnnotationHighlighter {
 
   highlightAnnotations(
     container: HTMLElement,
-    annotations: AnnotationData[]
+    annotations: WebAnnotation[]
   ): void {
     // container has already been processed
     if (this.processedContainers.has(container)) {
@@ -54,7 +54,7 @@ export class AnnotationHighlighter {
 
   private highlightAnnotation(
     container: HTMLElement,
-    annotation: AnnotationData
+    annotation: WebAnnotation
   ): void {
     const searchText = annotation.src_txt_display;
 
@@ -180,7 +180,7 @@ export class AnnotationHighlighter {
 
   private findCommentInDOM(
     container: HTMLElement,
-    annotation: AnnotationData
+    annotation: WebAnnotation
   ): Array<{ node: Text; startOffset: number; endOffset: number }> {
     const matches: Array<{
       node: Text;
@@ -228,7 +228,7 @@ export class AnnotationHighlighter {
 
   private findNoteInDOM(
     container: HTMLElement,
-    annotation: AnnotationData
+    annotation: WebAnnotation
   ): {
     matches: Array<{ node: Text; startOffset: number; endOffset: number }>;
     linkElement: Element | null;
@@ -494,7 +494,7 @@ export class AnnotationHighlighter {
     textNode: Text,
     startOffset: number,
     endOffset: number,
-    annotation: AnnotationData
+    annotation: WebAnnotation
   ): HTMLElement | null {
     try {
       const text = textNode.textContent || "";
@@ -663,7 +663,7 @@ export class AnnotationHighlighter {
   //   return container;
   // }
 
-  async openTargetAndFlash(annotation: AnnotationData): Promise<void> {
+  async openTargetAndFlash(annotation: WebAnnotation): Promise<void> {
     if (!this.apiService || !this.fileTracker) {
       console.warn(
         "[AnnotationHighlighter] Dependencies not set, falling back to default"

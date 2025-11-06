@@ -1,6 +1,6 @@
 import { App, normalizePath } from "obsidian";
 
-export interface AnnotationData {
+export interface WebAnnotation {
   id: string;
   timestamp: number;
   kind: "COMMENT" | "NOTE" | "TRANSLATION";
@@ -21,7 +21,7 @@ export interface AnnotationData {
   validationMessage?: string;
 }
 
-export interface SavedAnnotationData {
+export interface Annotation {
   timestamp: number;
   kind: "COMMENT" | "NOTE" | "TRANSLATION";
   src: string;
@@ -41,14 +41,14 @@ export interface SavedAnnotationData {
   validationMessage?: string;
 }
 
-export interface AnnotationsFile {
-  comments: Record<string, AnnotationData>;
-  notes: Record<string, AnnotationData>;
+export interface WebAnnotationsFile {
+  comments: Record<string, WebAnnotation>;
+  notes: Record<string, WebAnnotation>;
 }
 
-export interface SavedAnnotationsFile {
-  comments: Record<string, SavedAnnotationData>;
-  notes: Record<string, SavedAnnotationData>;
+export interface AnnotationFile {
+  comments: Record<string, Annotation>;
+  notes: Record<string, Annotation>;
 }
 
 export class AnnotationService {
@@ -80,7 +80,7 @@ export class AnnotationService {
     );
   }
 
-  async loadAnnotations(targetPath: string): Promise<AnnotationsFile> {
+  async loadAnnotations(targetPath: string): Promise<WebAnnotationsFile> {
     await this.ensureAnnotationsDirectory();
 
     const annotationsPath = this.getAnnotationsFilePath(targetPath);
@@ -88,7 +88,7 @@ export class AnnotationService {
     if (await this.app.vault.adapter.exists(annotationsPath)) {
       try {
         const fileContent = await this.app.vault.adapter.read(annotationsPath);
-        const parsed = JSON.parse(fileContent) as SavedAnnotationsFile;
+        const parsed = JSON.parse(fileContent) as AnnotationFile;
 
         return {
           comments: Object.fromEntries(
@@ -148,7 +148,7 @@ export class AnnotationService {
     const sourceFilename =
       commentData.sourceFilePath.split("/").pop() || commentData.sourceFilePath;
 
-    const annotationData: AnnotationData = {
+    const annotationData: WebAnnotation = {
       id: commentData.commentId,
       kind: "COMMENT",
       timestamp,
@@ -285,7 +285,7 @@ export class AnnotationService {
     const sourceFilename =
       noteData.sourceFilePath.split("/").pop() || noteData.sourceFilePath;
 
-    const annotationData: AnnotationData = {
+    const annotationData: WebAnnotation = {
       id: noteData.noteId,
       kind: "NOTE",
       timestamp,
@@ -324,7 +324,7 @@ export class AnnotationService {
     textDisplay: string,
     textStart: string,
     textEnd: string
-  ): Promise<AnnotationData | null> {
+  ): Promise<WebAnnotation | null> {
     const annotations = await this.loadAnnotations(sourceFilePath);
 
     for (const commentId in annotations.comments) {
@@ -345,7 +345,7 @@ export class AnnotationService {
     sourceFilePath: string,
     linkText: string,
     previousWords: string
-  ): Promise<AnnotationData | null> {
+  ): Promise<WebAnnotation | null> {
     const annotations = await this.loadAnnotations(sourceFilePath);
 
     for (const noteId in annotations.notes) {
@@ -371,7 +371,7 @@ export class AnnotationService {
   async findNoteByLinkText(
     sourceFilePath: string,
     linkText: string
-  ): Promise<AnnotationData | null> {
+  ): Promise<WebAnnotation | null> {
     const annotations = await this.loadAnnotations(sourceFilePath);
 
     for (const noteId in annotations.notes) {
@@ -410,7 +410,7 @@ export class AnnotationService {
     return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  private toSavedFormat(annotation: AnnotationData): SavedAnnotationData {
+  private toSavedFormat(annotation: WebAnnotation): Annotation {
     return {
       timestamp: annotation.timestamp,
       kind: annotation.kind,
@@ -432,10 +432,7 @@ export class AnnotationService {
     };
   }
 
-  private fromSavedFormat(
-    id: string,
-    saved: SavedAnnotationData
-  ): AnnotationData {
+  private fromSavedFormat(id: string, saved: Annotation): WebAnnotation {
     return {
       id,
       timestamp: saved.timestamp,
@@ -459,7 +456,7 @@ export class AnnotationService {
   }
 
   async validateComment(
-    annotation: AnnotationData,
+    annotation: WebAnnotation,
     sourceFilePath: string
   ): Promise<{ isValid: boolean; message?: string }> {
     try {
@@ -540,7 +537,7 @@ export class AnnotationService {
   }
 
   async validateNote(
-    annotation: AnnotationData,
+    annotation: WebAnnotation,
     sourceFilePath: string
   ): Promise<{ isValid: boolean; message?: string }> {
     try {
@@ -699,7 +696,7 @@ export class AnnotationService {
     }
   }
 
-  async updateTargetFileAnnotation(annotation: AnnotationData): Promise<void> {
+  async updateTargetFileAnnotation(annotation: WebAnnotation): Promise<void> {
     try {
       const targetPath = annotation.target;
       const targetAnnotations = await this.loadAnnotations(targetPath);
@@ -728,10 +725,10 @@ export class AnnotationService {
 
   private async saveAnnotationsFile(
     targetPath: string,
-    annotations: AnnotationsFile
+    annotations: WebAnnotationsFile
   ): Promise<void> {
     // Transform to saved format (camelCase, no redundant id)
-    const savedAnnotations: SavedAnnotationsFile = {
+    const savedAnnotations: AnnotationFile = {
       comments: Object.fromEntries(
         Object.entries(annotations.comments).map(([id, comment]) => [
           id,
@@ -823,7 +820,7 @@ export class AnnotationService {
           }
 
           // Convert old format to internal format, then save (which converts to new format)
-          const annotations: AnnotationsFile = {
+          const annotations: WebAnnotationsFile = {
             comments: {},
             notes: {},
           };
@@ -884,7 +881,7 @@ export class AnnotationService {
           const targetPath = fileName.replace(".annotations", ".md");
 
           // Save using saveAnnotationsFile which will transform to new format
-          const savedAnnotations: SavedAnnotationsFile = {
+          const savedAnnotations: AnnotationFile = {
             comments: Object.fromEntries(
               Object.entries(annotations.comments).map(([id, comment]) => [
                 id,
