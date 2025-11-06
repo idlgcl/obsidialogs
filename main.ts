@@ -609,48 +609,5 @@ class IdealogsSettingTab extends PluginSettingTab {
 
     // Annotations section
     containerEl.createEl("h3", { text: "Annotations" });
-
-    new Setting(containerEl)
-      .setName("Migrate annotations to new format")
-      .setDesc(
-        "Convert old annotation files (snake_case with redundant id field) to the new format (camelCase without id). This is a one-time migration for existing annotations."
-      )
-      .addButton((button) =>
-        button
-          .setButtonText("Migrate annotations")
-          .setCta()
-          .onClick(async () => {
-            button.setDisabled(true);
-            button.setButtonText("Migrating...");
-
-            try {
-              const results =
-                await this.plugin.annotationService.migrateAnnotationsToNewFormat();
-
-              if (results.errors.length > 0) {
-                new Notice(
-                  `Migration completed with errors. Migrated: ${results.migrated}, Skipped: ${results.skipped}, Errors: ${results.errors.length}. Check console for details.`
-                );
-                console.error("[Idealogs] Migration errors:", results.errors);
-              } else if (results.migrated === 0 && results.skipped === 0) {
-                new Notice("No annotation files found to migrate");
-              } else if (results.migrated === 0) {
-                new Notice(
-                  `All ${results.skipped} annotation files are already in the new format`
-                );
-              } else {
-                new Notice(
-                  `Successfully migrated ${results.migrated} annotation file(s). ${results.skipped} already in new format.`
-                );
-              }
-            } catch (error) {
-              new Notice(`Migration failed: ${error.message}`);
-              console.error("[Idealogs] Migration error:", error);
-            } finally {
-              button.setDisabled(false);
-              button.setButtonText("Migrate annotations");
-            }
-          })
-      );
   }
 }
