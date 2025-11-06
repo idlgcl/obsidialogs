@@ -728,7 +728,6 @@ export class AnnotationService {
     targetPath: string,
     annotations: AnnotationsFile
   ): Promise<void> {
-    // Transform to saved format (camelCase, no redundant id)
     const savedAnnotations: SavedAnnotationsFile = {
       comments: Object.fromEntries(
         Object.entries(annotations.comments).map(([id, comment]) => [
@@ -762,28 +761,41 @@ export class AnnotationService {
       await this.ensureAnnotationsDirectory();
       const folderPath = normalizePath(this.ANNOTATIONS_FOLDER);
 
-      // Check if folder exists
       if (!(await this.app.vault.adapter.exists(folderPath))) {
         return results;
       }
 
-      // List all files in annotations folder
       const files = await this.app.vault.adapter.list(folderPath);
 
+      const oldFolderPath = normalizePath(`${folderPath}/old`);
+      if (!(await this.app.vault.adapter.exists(oldFolderPath))) {
+        await this.app.vault.createFolder(oldFolderPath);
+      }
+
       for (const filePath of files.files) {
-        if (!filePath.endsWith(".json")) {
+        if (!filePath.endsWith(".annotations")) {
           continue;
         }
 
         try {
-          // Read the file
           const fileContent = await this.app.vault.adapter.read(filePath);
           const parsed = JSON.parse(fileContent);
 
-          // Check if this is old format by looking for snake_case fields
+          // Check if the file is empty (no comments or notes)
+          const hasComments = parsed.comments && Object.keys(parsed.comments).length > 0;
+          const hasNotes = parsed.notes && Object.keys(parsed.notes).length > 0;
+
+          if (!hasComments && !hasNotes) {
+            // Move empty file to old folder
+            const fileName = filePath.split("/").pop() || "";
+            const oldFilePath = normalizePath(`${oldFolderPath}/${fileName}`);
+            await this.app.vault.adapter.rename(filePath, oldFilePath);
+            results.skipped++;
+            continue;
+          }
+
           let isOldFormat = false;
 
-          // Check comments for old format
           for (const id in parsed.comments || {}) {
             const comment = parsed.comments[id];
             if (
@@ -795,7 +807,6 @@ export class AnnotationService {
             }
           }
 
-          // Check notes for old format if not already detected
           if (!isOldFormat) {
             for (const id in parsed.notes || {}) {
               const note = parsed.notes[id];
@@ -809,22 +820,18 @@ export class AnnotationService {
             }
           }
 
-          // Skip if already in new format
           if (!isOldFormat) {
             results.skipped++;
             continue;
           }
 
-          // Convert old format to internal format, then save (which converts to new format)
           const annotations: AnnotationsFile = {
             comments: {},
             notes: {},
           };
 
-          // Process comments
           for (const id in parsed.comments || {}) {
             const oldComment = parsed.comments[id];
-            // If it has old format fields, it's already in AnnotationData format (snake_case)
             annotations.comments[id] = {
               id: oldComment.id || id,
               kind: oldComment.kind,
@@ -847,7 +854,6 @@ export class AnnotationService {
             };
           }
 
-          // Process notes
           for (const id in parsed.notes || {}) {
             const oldNote = parsed.notes[id];
             annotations.notes[id] = {
@@ -872,11 +878,10 @@ export class AnnotationService {
             };
           }
 
-          // Extract the target path from the file path
           const fileName = filePath.split("/").pop() || "";
-          const targetPath = fileName.replace(".annotations", ".md");
+          const targetFile = fileName.replace(".annotations", ".json");
+          const newFile = this.getAnnotationsFilePath(targetFile);
 
-          // Save using saveAnnotationsFile which will transform to new format
           const savedAnnotations: SavedAnnotationsFile = {
             comments: Object.fromEntries(
               Object.entries(annotations.comments).map(([id, comment]) => [
@@ -893,9 +898,12 @@ export class AnnotationService {
           };
 
           await this.app.vault.adapter.write(
-            filePath,
+            newFile,
             JSON.stringify(savedAnnotations, null, 2)
           );
+
+          const oldFilePath = normalizePath(`${oldFolderPath}/${fileName}`);
+          await this.app.vault.adapter.rename(filePath, oldFilePath);
 
           results.migrated++;
         } catch (error) {

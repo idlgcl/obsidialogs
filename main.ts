@@ -610,9 +610,7 @@ class IdealogsSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Migrate annotations to new format")
-      .setDesc(
-        "Convert old annotation files (snake_case with redundant id field) to the new format (camelCase without id). This is a one-time migration for existing annotations."
-      )
+      .setDesc("Convert old annotation files to new format")
       .addButton((button) =>
         button
           .setButtonText("Migrate annotations")
