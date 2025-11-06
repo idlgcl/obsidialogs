@@ -2,6 +2,7 @@ import {
   ItemView,
   WorkspaceLeaf,
   Component as ObsidianComponent,
+  MarkdownView,
 } from "obsidian";
 import { Comment, NoteLinkInfo } from "../utils/parsers";
 import { SplitManager } from "../utils/split-manager";
@@ -39,6 +40,15 @@ export class AnnotationFormView extends ItemView {
 
   setSplitManager(manager: SplitManager): void {
     this.splitManager = manager;
+  }
+
+  updateTargetView(view: MarkdownView): void {
+    if (this.commentForm) {
+      this.commentForm.setTargetView(view);
+    }
+    if (this.noteForm) {
+      this.noteForm.setTargetView(view);
+    }
   }
 
   getViewType() {
@@ -94,10 +104,23 @@ export class AnnotationFormView extends ItemView {
       this.commentForm = null;
     }
 
+    // Get the source view (active markdown view)
+    const sourceView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!sourceView) {
+      console.error("No active markdown view found");
+      return;
+    }
+
+    // Get the target view from split manager if available
+    const targetLeaf = this.splitManager?.getSplitLeaf();
+    const targetView = targetLeaf?.view instanceof MarkdownView ? targetLeaf.view : null;
+
     this.commentForm = new CommentForm({
       container: this.contentEl,
       app: this.app,
       comment,
+      sourceView,
+      targetView,
       savedAnnotation,
       openTargetArticle,
       splitManager: this.splitManager,
@@ -128,10 +151,23 @@ export class AnnotationFormView extends ItemView {
       this.noteForm = null;
     }
 
+    // Get the source view (active markdown view)
+    const sourceView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!sourceView) {
+      console.error("No active markdown view found");
+      return;
+    }
+
+    // Get the target view from split manager if available
+    const targetLeaf = this.splitManager?.getSplitLeaf();
+    const targetView = targetLeaf?.view instanceof MarkdownView ? targetLeaf.view : null;
+
     this.noteForm = new NoteForm({
       container: this.contentEl,
       app: this.app,
       noteLinkInfo,
+      sourceView,
+      targetView,
       savedAnnotation,
       hideSourceFields,
       openTargetArticle: true,

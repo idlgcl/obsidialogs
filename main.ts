@@ -174,7 +174,7 @@ export default class IdealogsPlugin extends Plugin {
         sourcePath
       );
 
-      const allAnnotations: WebAnnotation[] = [];
+      const allAnnotations: Annotation[] = [];
 
       for (const commentId in annotations.comments) {
         allAnnotations.push(annotations.comments[commentId]);

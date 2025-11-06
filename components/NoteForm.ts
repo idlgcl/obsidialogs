@@ -1,4 +1,4 @@
-import { Component, Notice, App } from "obsidian";
+import { Component, Notice, App, MarkdownView } from "obsidian";
 import { NoteLinkInfo } from "../utils/parsers";
 import { SplitManager } from "../utils/split-manager";
 import { AnnotationService, WebAnnotation } from "../utils/annotation-service";
@@ -11,6 +11,8 @@ export interface NoteFormOptions {
   container: HTMLElement;
   app: App;
   noteLinkInfo: NoteLinkInfo;
+  sourceView: MarkdownView;
+  targetView?: MarkdownView | null;
   savedAnnotation?: WebAnnotation | null;
   hideSourceFields?: boolean;
   openTargetArticle?: boolean;
@@ -24,6 +26,8 @@ export class NoteForm extends Component {
   private contentEl: HTMLElement;
   private app: App;
   private noteLinkInfo: NoteLinkInfo;
+  private sourceView: MarkdownView;
+  private targetView: MarkdownView | null = null;
   private hideSourceFields: boolean;
   private savedAnnotation: WebAnnotation | null = null;
   private splitManager: SplitManager | null = null;
@@ -47,6 +51,8 @@ export class NoteForm extends Component {
     this.container = options.container;
     this.app = options.app;
     this.noteLinkInfo = options.noteLinkInfo;
+    this.sourceView = options.sourceView;
+    this.targetView = options.targetView || null;
     this.hideSourceFields = options.hideSourceFields || false;
     this.savedAnnotation = options.savedAnnotation || null;
     this.splitManager = options.splitManager || null;
@@ -212,8 +218,8 @@ export class NoteForm extends Component {
       return;
     }
 
-    if (!this.splitManager) {
-      new Notice("Article handler not available");
+    if (!this.targetView) {
+      new Notice("Target article view not available. Please open the target article first.");
       return;
     }
 
@@ -263,7 +269,7 @@ export class NoteForm extends Component {
       return;
     }
 
-    const articleContent = this.splitManager.getArticleContent();
+    const articleContent = this.targetView.editor.getValue();
     if (!articleContent) {
       new Notice(
         "Article content not available. Please wait for the article to load."
@@ -378,19 +384,19 @@ export class NoteForm extends Component {
         this.savedAnnotation &&
         this.savedAnnotation.isValid !== false &&
         this.annotationHighlighter &&
-        this.splitManager
+        this.targetView
       ) {
         setTimeout(() => {
           if (
             this.annotationHighlighter &&
             this.savedAnnotation &&
-            this.splitManager
+            this.targetView
           ) {
-            const splitLeaf = this.splitManager.getSplitLeaf();
-            if (splitLeaf) {
+            const targetLeaf = this.targetView.leaf;
+            if (targetLeaf) {
               this.annotationHighlighter.flashTargetText(
                 this.savedAnnotation.target_txt,
-                splitLeaf
+                targetLeaf
               );
             }
           }
@@ -400,6 +406,10 @@ export class NoteForm extends Component {
       console.error("Error opening target article:", error);
       new Notice(`Failed to load target article: ${this.noteLinkInfo.target}`);
     }
+  }
+
+  setTargetView(view: MarkdownView): void {
+    this.targetView = view;
   }
 
   show(): void {
