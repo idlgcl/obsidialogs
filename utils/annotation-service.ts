@@ -22,7 +22,7 @@ export interface WebAnnotation {
 }
 
 export interface Annotation {
-  timestamp: number;
+  id: string | undefined;
   kind: "COMMENT" | "NOTE" | "TRANSLATION";
   src: string;
   sourceTextDisplay: string;
@@ -78,7 +78,7 @@ export class AnnotationService {
     return normalizePath(`${this.ANNOTATIONS_FOLDER}/${baseFilename}.json`);
   }
 
-  async loadAnnotations(targetPath: string): Promise<WebAnnotationsFile> {
+  async loadAnnotations(targetPath: string): Promise<AnnotationFile> {
     await this.ensureAnnotationsDirectory();
 
     const annotationsPath = this.getAnnotationsFilePath(targetPath);
@@ -87,21 +87,7 @@ export class AnnotationService {
       try {
         const fileContent = await this.app.vault.adapter.read(annotationsPath);
         const parsed = JSON.parse(fileContent) as AnnotationFile;
-
-        return {
-          comments: Object.fromEntries(
-            Object.entries(parsed.comments || {}).map(([id, comment]) => [
-              id,
-              this.fromSavedFormat(id, comment),
-            ])
-          ),
-          notes: Object.fromEntries(
-            Object.entries(parsed.notes || {}).map(([id, note]) => [
-              id,
-              this.fromSavedFormat(id, note),
-            ])
-          ),
-        };
+        return parsed;
       } catch (error) {
         console.error(`Error reading annotations file: ${error}`);
         return { comments: {}, notes: {} };
@@ -131,38 +117,24 @@ export class AnnotationService {
       throw new Error("Target article and source path are required");
     }
 
-    const timestamp = Date.now();
-
-    const srcTxtDisplay = commentData.textDisplay;
-    const srcTxtStart = srcTxtDisplay.split(/\s+/)[0] || "";
-    const srcTxtEnd = commentData.commentBody.split(/\s+/).pop() || "";
-    const srcTxt = `${srcTxtDisplay} ${commentData.commentBody}`;
-
-    const targetTxtDisplay = commentData.targetTextDisplay;
-    const targetTxtStart = commentData.targetTextStart;
-    const targetTxtEnd = commentData.targetTextEnd;
-    const targetTxt = commentData.targetFullText;
-
-    const sourceFilename =
-      commentData.sourceFilePath.split("/").pop() || commentData.sourceFilePath;
-
-    const annotationData: WebAnnotation = {
+    const annotationData: Annotation = {
       id: commentData.commentId,
       kind: "COMMENT",
-      timestamp,
-      src: sourceFilename,
-      src_txt_display: srcTxtDisplay,
-      src_txt_start: srcTxtStart,
-      src_txt_end: srcTxtEnd,
-      src_txt: srcTxt,
+      src:
+        commentData.sourceFilePath.split("/").pop() ||
+        commentData.sourceFilePath,
+      sourceTextDisplay: commentData.textDisplay,
+      sourceTextStart: commentData.textDisplay.split(" ")[0],
+      sourceTextEnd: commentData.commentBody.split(" ").pop() as string,
+      sourceText: `${commentData.textDisplay} ${commentData.commentBody}`,
       target: commentData.targetArticle,
-      target_txt_display: targetTxtDisplay,
-      target_txt_start: targetTxtStart,
-      target_txt_end: targetTxtEnd,
-      target_txt: targetTxt,
-      target_start_offset: commentData.targetStartOffset,
-      target_end_offset: commentData.targetEndOffset,
-      target_display_offset: commentData.targetDisplayOffset,
+      targetTextDisplay: commentData.targetTextDisplay,
+      targetTextStart: commentData.targetTextStart,
+      targetTextEnd: commentData.targetTextEnd,
+      targetText: commentData.targetFullText,
+      targetStartOffset: commentData.targetStartOffset,
+      targetEndOffset: commentData.targetEndOffset,
+      targetDisplayOffset: commentData.targetDisplayOffset,
     };
 
     const annotations = await this.loadAnnotations(commentData.targetArticle);
@@ -322,15 +294,15 @@ export class AnnotationService {
     textDisplay: string,
     textStart: string,
     textEnd: string
-  ): Promise<WebAnnotation | null> {
+  ): Promise<Annotation | null> {
     const annotations = await this.loadAnnotations(sourceFilePath);
 
     for (const commentId in annotations.comments) {
       const comment = annotations.comments[commentId];
       if (
-        comment.src_txt_display === textDisplay &&
-        comment.src_txt_start === textStart &&
-        comment.src_txt_end === textEnd
+        comment.sourceTextDisplay === textDisplay &&
+        comment.sourceTextStart === textStart &&
+        comment.sourceTextEnd === textEnd
       ) {
         return comment;
       }
@@ -410,7 +382,6 @@ export class AnnotationService {
 
   private toSavedFormat(annotation: WebAnnotation): Annotation {
     return {
-      timestamp: annotation.timestamp,
       kind: annotation.kind,
       src: annotation.src,
       sourceTextDisplay: annotation.src_txt_display,
@@ -433,7 +404,7 @@ export class AnnotationService {
   private fromSavedFormat(id: string, saved: Annotation): WebAnnotation {
     return {
       id,
-      timestamp: saved.timestamp,
+      timestamp: 1,
       kind: saved.kind,
       src: saved.src,
       src_txt_display: saved.sourceTextDisplay,
@@ -723,28 +694,12 @@ export class AnnotationService {
 
   private async saveAnnotationsFile(
     targetPath: string,
-    annotations: WebAnnotationsFile
+    annotations: AnnotationFile
   ): Promise<void> {
-    // Transform to saved format (camelCase, no redundant id)
-    const savedAnnotations: AnnotationFile = {
-      comments: Object.fromEntries(
-        Object.entries(annotations.comments).map(([id, comment]) => [
-          id,
-          this.toSavedFormat(comment),
-        ])
-      ),
-      notes: Object.fromEntries(
-        Object.entries(annotations.notes).map(([id, note]) => [
-          id,
-          this.toSavedFormat(note),
-        ])
-      ),
-    };
-
     const annotationsPath = this.getAnnotationsFilePath(targetPath);
     await this.app.vault.adapter.write(
       annotationsPath,
-      JSON.stringify(savedAnnotations, null, 2)
+      JSON.stringify(annotations, null, 2)
     );
   }
 
