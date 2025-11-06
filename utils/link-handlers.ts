@@ -2,7 +2,7 @@ import { App, TFile, MarkdownView } from "obsidian";
 import { WRITING_LINK_PREFIX, COMMON_LINK_PREFIXES } from "../constants";
 import { ApiService } from "./api";
 import { IdealogsFileTracker } from "./idealogs-file-tracker";
-import { AnnotationService, AnnotationData } from "./annotation-service";
+import { AnnotationService, WebAnnotation } from "./annotation-service";
 import { AnnotationHighlighter } from "./annotation-highlighter";
 import { SplitManager } from "./split-manager";
 
@@ -67,7 +67,7 @@ export class NoteLinkHandler {
       const annotations = await this.annotationService.loadAnnotations(
         sourcePath
       );
-      let noteToHighlight: AnnotationData | null = null;
+      let noteToHighlight: WebAnnotation | null = null;
 
       for (const noteId in annotations.notes) {
         const note = annotations.notes[noteId];

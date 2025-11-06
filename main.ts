@@ -27,7 +27,7 @@ import {
   ANNOTATION_FORM_VIEW,
   AnnotationFormView,
 } from "components/AnnotationFormView";
-import { AnnotationService, AnnotationData } from "./utils/annotation-service";
+import { AnnotationService, WebAnnotation } from "./utils/annotation-service";
 import { AnnotationHighlighter } from "./utils/annotation-highlighter";
 import { EditorView } from "@codemirror/view";
 import { SplitManager } from "./utils/split-manager";
@@ -40,8 +40,8 @@ const DEFAULT_SETTINGS: IdealogsSettings = { enableLogs: false };
 
 export default class IdealogsPlugin extends Plugin {
   settings: IdealogsSettings;
-  apiService: ApiService; // Public for settings tab access
-  annotationService: AnnotationService; // Public for settings tab access
+  apiService: ApiService;
+  annotationService: AnnotationService;
   private articleSuggest: ArticleSuggest;
   private fileTracker: IdealogsFileTracker;
   private splitManager: SplitManager;
@@ -89,10 +89,6 @@ export default class IdealogsPlugin extends Plugin {
       this.fileTracker
     );
 
-    // just in case we bring it back
-    // this.articleSuggest = new ArticleSuggest(this, this.apiService);
-    // this.registerEditorSuggest(this.articleSuggest);
-
     this.registerEditorExtension(this.createArticleTriggerExtension());
     this.registerEditorExtension(this.createCommentClickExtension());
     this.registerEditorExtension(this.createNoteClickExtension());
@@ -128,13 +124,13 @@ export default class IdealogsPlugin extends Plugin {
     );
 
     // Validate annotations when file is modified
-    this.registerEvent(
-      this.app.vault.on("modify", async (file) => {
-        if (file instanceof TFile && file.extension === "md") {
-          await this.annotationService.validateAllAnnotations(file.path);
-        }
-      })
-    );
+    // this.registerEvent(
+    //   this.app.vault.on("modify", async (file) => {
+    //     if (file instanceof TFile && file.extension === "md") {
+    //       await this.annotationService.validateAllAnnotations(file.path);
+    //     }
+    //   })
+    // );
 
     // Check cursor position every 200ms
     this.cursorCheckInterval = window.setInterval(() => {
@@ -142,9 +138,9 @@ export default class IdealogsPlugin extends Plugin {
     }, 200);
 
     // markdown processor for annotation in preview/read mode only
-    this.registerMarkdownPostProcessor(async (el, ctx) => {
-      await this.renderAnnotations(el, ctx.sourcePath);
-    });
+    // this.registerMarkdownPostProcessor(async (el, ctx) => {
+    //   await this.renderAnnotations(el, ctx.sourcePath);
+    // });
 
     // Settings tab
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
@@ -172,7 +168,7 @@ export default class IdealogsPlugin extends Plugin {
         sourcePath
       );
 
-      const allAnnotations: AnnotationData[] = [];
+      const allAnnotations: WebAnnotation[] = [];
 
       for (const commentId in annotations.comments) {
         allAnnotations.push(annotations.comments[commentId]);
@@ -487,7 +483,7 @@ export default class IdealogsPlugin extends Plugin {
   private showAnnotationFormPanel(
     data: Comment,
     type: "comment",
-    savedAnnotation: AnnotationData | null = null,
+    savedAnnotation: WebAnnotation | null = null,
     openTargetArticle = false
   ): void {
     const existingRightPanelLeaves =
@@ -518,7 +514,7 @@ export default class IdealogsPlugin extends Plugin {
 
   private showNoteFormPanel(
     noteLinkInfo: NoteLinkInfo,
-    savedAnnotation: AnnotationData | null,
+    savedAnnotation: WebAnnotation | null,
     hideSourceFields: boolean
   ): void {
     const existingRightPanelLeaves =
