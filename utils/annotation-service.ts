@@ -75,9 +75,7 @@ export class AnnotationService {
   getAnnotationsFilePath(targetPath: string): string {
     const baseFilename =
       targetPath.split("/").pop()?.split(".")[0] || "unknown";
-    return normalizePath(
-      `${this.ANNOTATIONS_FOLDER}/${baseFilename}.annotations`
-    );
+    return normalizePath(`${this.ANNOTATIONS_FOLDER}/${baseFilename}.json`);
   }
 
   async loadAnnotations(targetPath: string): Promise<AnnotationsFile> {
@@ -753,10 +751,6 @@ export class AnnotationService {
     );
   }
 
-  /**
-   * Migrate all annotation files from old format (snake_case with id) to new format (camelCase without id)
-   * @returns Object with migrated count and any errors encountered
-   */
   async migrateAnnotationsToNewFormat(): Promise<{
     migrated: number;
     skipped: number;
@@ -777,8 +771,7 @@ export class AnnotationService {
       const files = await this.app.vault.adapter.list(folderPath);
 
       for (const filePath of files.files) {
-        // Only process .annotations files
-        if (!filePath.endsWith(".annotations")) {
+        if (!filePath.endsWith(".json")) {
           continue;
         }
 
