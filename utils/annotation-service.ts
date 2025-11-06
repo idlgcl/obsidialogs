@@ -171,24 +171,15 @@ export class AnnotationService {
 
     annotations.comments[commentData.commentId] = annotationData;
 
-    const annotationsPath = this.getAnnotationsFilePath(
-      commentData.targetArticle
-    );
-    await this.app.vault.adapter.write(
-      annotationsPath,
-      JSON.stringify(annotations, null, 2)
-    );
+    await this.saveAnnotationsFile(commentData.targetArticle, annotations);
 
     const sourceAnnotations = await this.loadAnnotations(
       commentData.sourceFilePath
     );
     sourceAnnotations.comments[commentData.commentId] = annotationData;
-    const sourceAnnotationsPath = this.getAnnotationsFilePath(
-      commentData.sourceFilePath
-    );
-    await this.app.vault.adapter.write(
-      sourceAnnotationsPath,
-      JSON.stringify(sourceAnnotations, null, 2)
+    await this.saveAnnotationsFile(
+      commentData.sourceFilePath,
+      sourceAnnotations
     );
 
     return commentData.commentId;
@@ -317,23 +308,13 @@ export class AnnotationService {
 
     annotations.notes[noteData.noteId] = annotationData;
 
-    const annotationsPath = this.getAnnotationsFilePath(noteData.targetArticle);
-    await this.app.vault.adapter.write(
-      annotationsPath,
-      JSON.stringify(annotations, null, 2)
-    );
+    await this.saveAnnotationsFile(noteData.targetArticle, annotations);
 
     const sourceAnnotations = await this.loadAnnotations(
       noteData.sourceFilePath
     );
     sourceAnnotations.notes[noteData.noteId] = annotationData;
-    const sourceAnnotationsPath = this.getAnnotationsFilePath(
-      noteData.sourceFilePath
-    );
-    await this.app.vault.adapter.write(
-      sourceAnnotationsPath,
-      JSON.stringify(sourceAnnotations, null, 2)
-    );
+    await this.saveAnnotationsFile(noteData.sourceFilePath, sourceAnnotations);
 
     return noteData.noteId;
   }
@@ -770,5 +751,168 @@ export class AnnotationService {
       annotationsPath,
       JSON.stringify(savedAnnotations, null, 2)
     );
+  }
+
+  /**
+   * Migrate all annotation files from old format (snake_case with id) to new format (camelCase without id)
+   * @returns Object with migrated count and any errors encountered
+   */
+  async migrateAnnotationsToNewFormat(): Promise<{
+    migrated: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    const results = { migrated: 0, skipped: 0, errors: [] as string[] };
+
+    try {
+      await this.ensureAnnotationsDirectory();
+      const folderPath = normalizePath(this.ANNOTATIONS_FOLDER);
+
+      // Check if folder exists
+      if (!(await this.app.vault.adapter.exists(folderPath))) {
+        return results;
+      }
+
+      // List all files in annotations folder
+      const files = await this.app.vault.adapter.list(folderPath);
+
+      for (const filePath of files.files) {
+        // Only process .annotations files
+        if (!filePath.endsWith(".annotations")) {
+          continue;
+        }
+
+        try {
+          // Read the file
+          const fileContent = await this.app.vault.adapter.read(filePath);
+          const parsed = JSON.parse(fileContent);
+
+          // Check if this is old format by looking for snake_case fields
+          let isOldFormat = false;
+
+          // Check comments for old format
+          for (const id in parsed.comments || {}) {
+            const comment = parsed.comments[id];
+            if (
+              comment.hasOwnProperty("src_txt_display") ||
+              comment.hasOwnProperty("id")
+            ) {
+              isOldFormat = true;
+              break;
+            }
+          }
+
+          // Check notes for old format if not already detected
+          if (!isOldFormat) {
+            for (const id in parsed.notes || {}) {
+              const note = parsed.notes[id];
+              if (
+                note.hasOwnProperty("src_txt_display") ||
+                note.hasOwnProperty("id")
+              ) {
+                isOldFormat = true;
+                break;
+              }
+            }
+          }
+
+          // Skip if already in new format
+          if (!isOldFormat) {
+            results.skipped++;
+            continue;
+          }
+
+          // Convert old format to internal format, then save (which converts to new format)
+          const annotations: AnnotationsFile = {
+            comments: {},
+            notes: {},
+          };
+
+          // Process comments
+          for (const id in parsed.comments || {}) {
+            const oldComment = parsed.comments[id];
+            // If it has old format fields, it's already in AnnotationData format (snake_case)
+            annotations.comments[id] = {
+              id: oldComment.id || id,
+              kind: oldComment.kind,
+              timestamp: oldComment.timestamp,
+              src: oldComment.src,
+              src_txt_display: oldComment.src_txt_display,
+              src_txt_start: oldComment.src_txt_start,
+              src_txt_end: oldComment.src_txt_end,
+              src_txt: oldComment.src_txt,
+              target: oldComment.target,
+              target_txt_display: oldComment.target_txt_display,
+              target_txt_start: oldComment.target_txt_start,
+              target_txt_end: oldComment.target_txt_end,
+              target_txt: oldComment.target_txt,
+              target_start_offset: oldComment.target_start_offset,
+              target_end_offset: oldComment.target_end_offset,
+              target_display_offset: oldComment.target_display_offset,
+              isValid: oldComment.isValid,
+              validationMessage: oldComment.validationMessage,
+            };
+          }
+
+          // Process notes
+          for (const id in parsed.notes || {}) {
+            const oldNote = parsed.notes[id];
+            annotations.notes[id] = {
+              id: oldNote.id || id,
+              kind: oldNote.kind,
+              timestamp: oldNote.timestamp,
+              src: oldNote.src,
+              src_txt_display: oldNote.src_txt_display,
+              src_txt_start: oldNote.src_txt_start,
+              src_txt_end: oldNote.src_txt_end,
+              src_txt: oldNote.src_txt,
+              target: oldNote.target,
+              target_txt_display: oldNote.target_txt_display,
+              target_txt_start: oldNote.target_txt_start,
+              target_txt_end: oldNote.target_txt_end,
+              target_txt: oldNote.target_txt,
+              target_start_offset: oldNote.target_start_offset,
+              target_end_offset: oldNote.target_end_offset,
+              target_display_offset: oldNote.target_display_offset,
+              isValid: oldNote.isValid,
+              validationMessage: oldNote.validationMessage,
+            };
+          }
+
+          // Extract the target path from the file path
+          const fileName = filePath.split("/").pop() || "";
+          const targetPath = fileName.replace(".annotations", ".md");
+
+          // Save using saveAnnotationsFile which will transform to new format
+          const savedAnnotations: SavedAnnotationsFile = {
+            comments: Object.fromEntries(
+              Object.entries(annotations.comments).map(([id, comment]) => [
+                id,
+                this.toSavedFormat(comment),
+              ])
+            ),
+            notes: Object.fromEntries(
+              Object.entries(annotations.notes).map(([id, note]) => [
+                id,
+                this.toSavedFormat(note),
+              ])
+            ),
+          };
+
+          await this.app.vault.adapter.write(
+            filePath,
+            JSON.stringify(savedAnnotations, null, 2)
+          );
+
+          results.migrated++;
+        } catch (error) {
+          results.errors.push(`Error processing ${filePath}: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      results.errors.push(`Migration error: ${error.message}`);
+    }
+
+    return results;
   }
 }

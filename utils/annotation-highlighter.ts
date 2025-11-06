@@ -59,7 +59,7 @@ export class AnnotationHighlighter {
     const searchText = annotation.src_txt_display;
 
     if (!searchText) {
-      console.warn("Annotation has no src_txt_display:", annotation.id);
+      console.warn("Annotation has no src_txt_display:", annotation);
       return;
     }
 
