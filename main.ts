@@ -10,6 +10,7 @@ import {
 import { EditorView } from "@codemirror/view";
 import { ApiService } from "./utils/api";
 import { ArticleSearchModal } from "./components/ArticleSearchModal";
+import { CommonLinkHandler, patchLinkOpening } from "./utils/link-handlers";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -20,12 +21,18 @@ const DEFAULT_SETTINGS: IdealogsSettings = { enableLogs: false };
 export default class IdealogsPlugin extends Plugin {
   settings: IdealogsSettings;
   apiService: ApiService;
+  commonLinkHandler: CommonLinkHandler;
+  private cleanupLinkPatching: () => void;
 
   async onload() {
     await this.loadSettings();
 
     // Initialize core services
     this.apiService = new ApiService();
+
+    // Initialize link handlers
+    this.commonLinkHandler = new CommonLinkHandler(this.app, this.apiService);
+    this.cleanupLinkPatching = patchLinkOpening(this.app, this.commonLinkHandler);
 
     // CodeMirror extensions
     this.registerEditorExtension(this.createArticleLookupExtension());
@@ -108,7 +115,12 @@ export default class IdealogsPlugin extends Plugin {
     });
   }
 
-  onunload() {}
+  onunload() {
+    // Restore original link opening behavior
+    if (this.cleanupLinkPatching) {
+      this.cleanupLinkPatching();
+    }
+  }
 }
 
 class IdealogsSettingTab extends PluginSettingTab {

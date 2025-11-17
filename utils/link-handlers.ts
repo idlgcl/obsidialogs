@@ -5,16 +5,13 @@ import { ApiService } from "./api";
 export class CommonLinkHandler {
   private app: App;
   private apiService: ApiService;
-  private fileTracker: IdealogsFileTracker;
 
   constructor(
     app: App,
-    apiService: ApiService,
-    fileTracker: IdealogsFileTracker
+    apiService: ApiService
   ) {
     this.app = app;
     this.apiService = apiService;
-    this.fileTracker = fileTracker;
   }
 
   async handleLink(linkText: string, sourcePath: string): Promise<void> {
@@ -41,8 +38,6 @@ export class CommonLinkHandler {
       } else {
         file = await this.app.vault.create(fileName, content);
       }
-
-      this.fileTracker.track(fileName, articleId);
 
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file as TFile);
