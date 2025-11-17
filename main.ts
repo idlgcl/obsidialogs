@@ -184,7 +184,7 @@ export default class IdealogsPlugin extends Plugin {
       file.path
     );
 
-    if (comment) {
+    if (comment && this.settings.enableLogs) {
       console.log("[Idealogs] Comment detected:", {
         title: comment.title,
         body: comment.body,
@@ -367,5 +367,20 @@ class IdealogsSettingTab extends PluginSettingTab {
         });
       });
     }
+
+    // Developer section
+    containerEl.createEl("h3", { text: "Developer" });
+
+    new Setting(containerEl)
+      .setName("Enable logs")
+      .setDesc("Show console logs for debugging (requires reload)")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.enableLogs)
+          .onChange(async (value) => {
+            this.plugin.settings.enableLogs = value;
+            await this.plugin.saveSettings();
+          })
+      );
   }
 }
