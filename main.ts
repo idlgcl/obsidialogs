@@ -11,16 +11,22 @@ import { EditorView } from "@codemirror/view";
 import { ApiService } from "./utils/api";
 import { ArticleSearchModal } from "./components/ArticleSearchModal";
 import { CommonLinkHandler, patchLinkOpening } from "./utils/link-handlers";
+import { FileTracker } from "./utils/file-tracker";
 
 interface IdealogsSettings {
   enableLogs: boolean;
+  trackedFiles?: object;
 }
 
-const DEFAULT_SETTINGS: IdealogsSettings = { enableLogs: false };
+const DEFAULT_SETTINGS: IdealogsSettings = {
+  enableLogs: false,
+  trackedFiles: {},
+};
 
 export default class IdealogsPlugin extends Plugin {
   settings: IdealogsSettings;
   apiService: ApiService;
+  fileTracker: FileTracker;
   commonLinkHandler: CommonLinkHandler;
   private cleanupLinkPatching: () => void;
 
@@ -30,8 +36,17 @@ export default class IdealogsPlugin extends Plugin {
     // Initialize core services
     this.apiService = new ApiService();
 
+    // Initialize file tracker
+    this.fileTracker = new FileTracker();
+    this.fileTracker.fromJSON(this.settings.trackedFiles || {});
+
     // Initialize link handlers
-    this.commonLinkHandler = new CommonLinkHandler(this.app, this.apiService);
+    this.commonLinkHandler = new CommonLinkHandler(
+      this.app,
+      this.apiService,
+      this.fileTracker,
+      () => this.saveTracking()
+    );
     this.cleanupLinkPatching = patchLinkOpening(this.app, this.commonLinkHandler);
 
     // CodeMirror extensions
@@ -53,6 +68,11 @@ export default class IdealogsPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  async saveTracking() {
+    this.settings.trackedFiles = this.fileTracker.toJSON();
+    await this.saveSettings();
   }
 
   private createArticleLookupExtension() {
@@ -155,5 +175,42 @@ class IdealogsSettingTab extends PluginSettingTab {
             new Notice("API cache cleared successfully");
           })
       );
+
+    // Idealogs Files section
+    containerEl.createEl("h3", { text: "Idealogs Files" });
+
+    const trackedFiles = this.plugin.fileTracker.getAllTrackedFiles();
+
+    if (trackedFiles.length === 0) {
+      containerEl.createEl("p", {
+        text: "No Idealogs files are currently being tracked.",
+        cls: "setting-item-description",
+      });
+    } else {
+      const detailsEl = containerEl.createEl("details");
+      detailsEl.createEl("summary", {
+        text: `Tracked files (${trackedFiles.length})`,
+      });
+
+      const listEl = detailsEl.createEl("ul", { cls: "idealogs-file-list" });
+
+      trackedFiles.forEach((file) => {
+        const itemEl = listEl.createEl("li");
+        const date = new Date(file.downloadedAt).toLocaleString();
+
+        itemEl.createEl("div", {
+          text: file.fileName,
+          cls: "idealogs-file-name",
+        });
+        itemEl.createEl("div", {
+          text: `Article ID: ${file.articleId}`,
+          cls: "idealogs-file-meta setting-item-description",
+        });
+        itemEl.createEl("div", {
+          text: `Downloaded: ${date}`,
+          cls: "idealogs-file-meta setting-item-description",
+        });
+      });
+    }
   }
 }
