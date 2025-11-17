@@ -12,21 +12,25 @@ import { ApiService } from "./utils/api";
 import { ArticleSearchModal } from "./components/ArticleSearchModal";
 import { CommonLinkHandler, patchLinkOpening } from "./utils/link-handlers";
 import { FileTracker } from "./utils/file-tracker";
+import { FileDeletionManager } from "./utils/file-deletion-manager";
 
 interface IdealogsSettings {
   enableLogs: boolean;
   trackedFiles?: object;
+  deletionDelay?: number;
 }
 
 const DEFAULT_SETTINGS: IdealogsSettings = {
   enableLogs: false,
   trackedFiles: {},
+  deletionDelay: 5,
 };
 
 export default class IdealogsPlugin extends Plugin {
   settings: IdealogsSettings;
   apiService: ApiService;
   fileTracker: FileTracker;
+  fileDeletionManager: FileDeletionManager;
   commonLinkHandler: CommonLinkHandler;
   private cleanupLinkPatching: () => void;
 
@@ -40,6 +44,14 @@ export default class IdealogsPlugin extends Plugin {
     this.fileTracker = new FileTracker();
     this.fileTracker.fromJSON(this.settings.trackedFiles || {});
 
+    // Initialize file deletion manager
+    this.fileDeletionManager = new FileDeletionManager(
+      this.app,
+      this.fileTracker,
+      () => this.settings.deletionDelay || 5,
+      () => this.saveTracking()
+    );
+
     // Initialize link handlers
     this.commonLinkHandler = new CommonLinkHandler(
       this.app,
@@ -47,7 +59,10 @@ export default class IdealogsPlugin extends Plugin {
       this.fileTracker,
       () => this.saveTracking()
     );
-    this.cleanupLinkPatching = patchLinkOpening(this.app, this.commonLinkHandler);
+    this.cleanupLinkPatching = patchLinkOpening(
+      this.app,
+      this.commonLinkHandler
+    );
 
     // CodeMirror extensions
     this.registerEditorExtension(this.createArticleLookupExtension());
@@ -56,8 +71,26 @@ export default class IdealogsPlugin extends Plugin {
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
 
     this.registerEvent(
-      this.app.workspace.on("file-open", (file: TFile) => {
-        console.log("test", file.basename);
+      this.app.workspace.on("file-open", (file: TFile | null) => {
+        if (file && this.fileTracker.isTracked(file.name)) {
+          // Cancel any pending deletion for this file
+          this.fileDeletionManager.cancelDeletion(file.name);
+
+          this.fileTracker.updateLastAccessed(file.name);
+          this.saveTracking();
+        }
+      })
+    );
+
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        this.fileDeletionManager.checkAllTrackedFiles();
+      })
+    );
+
+    this.registerEvent(
+      this.app.workspace.on("layout-change", () => {
+        this.fileDeletionManager.checkAllTrackedFiles();
       })
     );
   }
@@ -136,6 +169,9 @@ export default class IdealogsPlugin extends Plugin {
   }
 
   onunload() {
+    // Clear all pending deletion timers
+    this.fileDeletionManager.destroy();
+
     // Restore original link opening behavior
     if (this.cleanupLinkPatching) {
       this.cleanupLinkPatching();
@@ -157,6 +193,25 @@ class IdealogsSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "Idealogs Settings" });
+
+    // File Management section
+    containerEl.createEl("h3", { text: "File Management" });
+
+    new Setting(containerEl)
+      .setName("Auto-delete delay")
+      .setDesc(
+        "Delay in seconds before automatically deleting closed Idealogs articles (2-5 seconds)"
+      )
+      .addSlider((slider) =>
+        slider
+          .setLimits(2, 5, 1)
+          .setValue(this.plugin.settings.deletionDelay ?? 5)
+          .setDynamicTooltip()
+          .onChange(async (value) => {
+            this.plugin.settings.deletionDelay = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
     // Cache section
     containerEl.createEl("h3", { text: "Cache" });
