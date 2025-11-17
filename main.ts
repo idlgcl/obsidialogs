@@ -13,6 +13,7 @@ import { ArticleSearchModal } from "./components/ArticleSearchModal";
 import { CommonLinkHandler, patchLinkOpening } from "./utils/link-handlers";
 import { FileTracker } from "./utils/file-tracker";
 import { FileDeletionManager } from "./utils/file-deletion-manager";
+import { CommentParser } from "./utils/parsers";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -33,6 +34,11 @@ export default class IdealogsPlugin extends Plugin {
   fileDeletionManager: FileDeletionManager;
   commonLinkHandler: CommonLinkHandler;
   private cleanupLinkPatching: () => void;
+  private commentParser: CommentParser;
+  private cursorCheckInterval: number | null = null;
+  private lastCursorLine = -1;
+  private lastCursorCh = -1;
+  private editorChangeDebounceTimer: number | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -51,6 +57,9 @@ export default class IdealogsPlugin extends Plugin {
       () => this.settings.deletionDelay || 5,
       () => this.saveTracking()
     );
+
+    // Initialize comment parser
+    this.commentParser = new CommentParser();
 
     // Initialize link handlers
     this.commonLinkHandler = new CommonLinkHandler(
@@ -93,6 +102,18 @@ export default class IdealogsPlugin extends Plugin {
         this.fileDeletionManager.checkAllTrackedFiles();
       })
     );
+
+    // Comment detection
+    this.registerEvent(
+      this.app.workspace.on("editor-change", () => {
+        this.debouncedCheckCursorInComment();
+      })
+    );
+
+    // Check cursor position every 200ms
+    this.cursorCheckInterval = window.setInterval(() => {
+      this.checkCursorInComment();
+    }, 200);
   }
 
   async loadSettings() {
@@ -106,6 +127,75 @@ export default class IdealogsPlugin extends Plugin {
   async saveTracking() {
     this.settings.trackedFiles = this.fileTracker.toJSON();
     await this.saveSettings();
+  }
+
+  private debouncedCheckCursorInComment(): void {
+    if (this.editorChangeDebounceTimer !== null) {
+      window.clearTimeout(this.editorChangeDebounceTimer);
+    }
+
+    this.editorChangeDebounceTimer = window.setTimeout(() => {
+      this.checkCursorInComment(true);
+      this.editorChangeDebounceTimer = null;
+    }, 500);
+  }
+
+  private async checkCursorInComment(force = false): Promise<void> {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+
+    if (!activeView) {
+      return;
+    }
+
+    const mode = activeView.getMode();
+    if (mode !== "source") {
+      return;
+    }
+
+    const editor = activeView.editor;
+    const cursor = editor.getCursor();
+    const cursorLine = cursor.line;
+    const cursorCh = cursor.ch;
+
+    // Check if cursor position changed
+    if (
+      !force &&
+      cursorLine === this.lastCursorLine &&
+      cursorCh === this.lastCursorCh
+    ) {
+      return;
+    }
+
+    this.lastCursorLine = cursorLine;
+    this.lastCursorCh = cursorCh;
+
+    const file = activeView.file;
+    if (!file) {
+      return;
+    }
+
+    const lineText = editor.getLine(cursorLine);
+
+    // Find comment at cursor position
+    const comment = this.commentParser.findCommentAtPosition(
+      lineText,
+      cursorCh,
+      file.name,
+      file.path
+    );
+
+    if (comment) {
+      console.log("[Idealogs] Comment detected:", {
+        title: comment.title,
+        body: comment.body,
+        filePath: comment.filePath,
+        line: cursorLine,
+        cursorChar: cursorCh,
+        startPos: comment.startPos,
+        endPos: comment.endPos,
+        lineText: lineText,
+      });
+    }
   }
 
   private createArticleLookupExtension() {
@@ -169,6 +259,16 @@ export default class IdealogsPlugin extends Plugin {
   }
 
   onunload() {
+    // Clear cursor check interval
+    if (this.cursorCheckInterval !== null) {
+      window.clearInterval(this.cursorCheckInterval);
+    }
+
+    // Clear debounce timer if pending
+    if (this.editorChangeDebounceTimer !== null) {
+      window.clearTimeout(this.editorChangeDebounceTimer);
+    }
+
     // Clear all pending deletion timers
     this.fileDeletionManager.destroy();
 
