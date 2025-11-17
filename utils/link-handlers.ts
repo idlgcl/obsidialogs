@@ -1,17 +1,24 @@
 import { App, TFile } from "obsidian";
 import { COMMON_LINK_PREFIXES } from "../constants";
 import { ApiService } from "./api";
+import { FileTracker } from "./file-tracker";
 
 export class CommonLinkHandler {
   private app: App;
   private apiService: ApiService;
+  private fileTracker: FileTracker;
+  private onTrackingChanged: () => void;
 
   constructor(
     app: App,
-    apiService: ApiService
+    apiService: ApiService,
+    fileTracker: FileTracker,
+    onTrackingChanged: () => void
   ) {
     this.app = app;
     this.apiService = apiService;
+    this.fileTracker = fileTracker;
+    this.onTrackingChanged = onTrackingChanged;
   }
 
   async handleLink(linkText: string, sourcePath: string): Promise<void> {
@@ -38,6 +45,10 @@ export class CommonLinkHandler {
       } else {
         file = await this.app.vault.create(fileName, content);
       }
+
+      // Track the file
+      this.fileTracker.track(fileName, articleId);
+      this.onTrackingChanged();
 
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file as TFile);
