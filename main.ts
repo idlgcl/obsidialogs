@@ -14,6 +14,7 @@ import { CommonLinkHandler, patchLinkOpening } from "./utils/link-handlers";
 import { FileTracker } from "./utils/file-tracker";
 import { FileDeletionManager } from "./utils/file-deletion-manager";
 import { CommentParser } from "./utils/parsers";
+import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -42,6 +43,9 @@ export default class IdealogsPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // Register FormView
+    this.registerView(FORM_VIEW_TYPE, (leaf) => new FormView(leaf));
 
     // Initialize core services
     this.apiService = new ApiService();
@@ -129,6 +133,17 @@ export default class IdealogsPlugin extends Plugin {
     await this.saveSettings();
   }
 
+  getFormView(): FormView | null {
+    const leaves = this.app.workspace.getLeavesOfType(FORM_VIEW_TYPE);
+    if (leaves.length > 0) {
+      const view = leaves[0].view;
+      if (view instanceof FormView) {
+        return view;
+      }
+    }
+    return null;
+  }
+
   private debouncedCheckCursorInComment(): void {
     if (this.editorChangeDebounceTimer !== null) {
       window.clearTimeout(this.editorChangeDebounceTimer);
@@ -184,17 +199,25 @@ export default class IdealogsPlugin extends Plugin {
       file.path
     );
 
-    if (comment && this.settings.enableLogs) {
-      console.log("[Idealogs] Comment detected:", {
-        title: comment.title,
-        body: comment.body,
-        filePath: comment.filePath,
-        line: cursorLine,
-        cursorChar: cursorCh,
-        startPos: comment.startPos,
-        endPos: comment.endPos,
-        lineText: lineText,
-      });
+    if (comment) {
+      if (this.settings.enableLogs) {
+        console.log("[Idealogs] Comment detected:", {
+          title: comment.title,
+          body: comment.body,
+          filePath: comment.filePath,
+          line: cursorLine,
+          cursorChar: cursorCh,
+          startPos: comment.startPos,
+          endPos: comment.endPos,
+          lineText: lineText,
+        });
+      }
+
+      // Update FormView if it exists
+      const formView = this.getFormView();
+      if (formView) {
+        formView.updateComment(comment);
+      }
     }
   }
 
