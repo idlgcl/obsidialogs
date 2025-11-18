@@ -480,26 +480,11 @@ class IdealogsSettingTab extends PluginSettingTab {
           })
       );
 
-    // Cache section
-    containerEl.createEl("h3", { text: "Cache" });
-
-    new Setting(containerEl)
-      .setName("Clear API cache")
-      .setDesc(
-        "Clear all cached API responses. Use this if you're seeing stale data or want to force fresh data from the server."
-      )
-      .addButton((button) =>
-        button
-          .setButtonText("Clear cache")
-          .setCta()
-          .onClick(() => {
-            this.plugin.apiService.clearCache();
-            new Notice("API cache cleared successfully");
-          })
-      );
-
     // Idealogs Files section
-    containerEl.createEl("h3", { text: "Idealogs Files" });
+    containerEl.createEl("div", {
+      text: "Idealogs Files",
+      cls: "setting-item-name",
+    });
 
     const trackedFiles = this.plugin.fileTracker.getAllTrackedFiles();
 
@@ -534,6 +519,24 @@ class IdealogsSettingTab extends PluginSettingTab {
         });
       });
     }
+
+    // Cache section
+    containerEl.createEl("h3", { text: "Cache" });
+
+    new Setting(containerEl)
+      .setName("Clear API cache")
+      .setDesc(
+        "Clear all cached API responses. Use this if you're seeing stale data or want to force fresh data from the server."
+      )
+      .addButton((button) =>
+        button
+          .setButtonText("Clear cache")
+          .setCta()
+          .onClick(() => {
+            this.plugin.apiService.clearCache();
+            new Notice("API cache cleared successfully");
+          })
+      );
 
     // Developer section
     containerEl.createEl("h3", { text: "Developer" });
