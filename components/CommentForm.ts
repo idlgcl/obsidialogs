@@ -1,10 +1,17 @@
-import { Component } from "obsidian";
+import { Component, App, Notice } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
+import { AnnotationService, Annotation } from "../utils/annotation-service";
+import { ApiService } from "../utils/api";
+import { validateTextRange } from "../utils/text-validator";
+import { v4 as uuidv4 } from "uuid";
 
 export interface CommentFormOptions {
   container: HTMLElement;
+  app: App;
+  apiService: ApiService;
+  annotationService: AnnotationService;
   comment?: Comment;
   onArticleSelected?: (article: Article) => void;
 }
@@ -13,6 +20,9 @@ export class CommentForm extends Component {
   private options: CommentFormOptions;
   private container: HTMLElement;
   private contentEl: HTMLElement;
+  private app: App;
+  private apiService: ApiService;
+  private annotationService: AnnotationService;
   private currentComment: Comment | null = null;
   private commentTitleInput: HTMLInputElement | null = null;
   private commentBodyInput: HTMLTextAreaElement | null = null;
@@ -28,6 +38,9 @@ export class CommentForm extends Component {
     super();
     this.options = options;
     this.container = options.container;
+    this.app = options.app;
+    this.apiService = options.apiService;
+    this.annotationService = options.annotationService;
     this.currentComment = options.comment || null;
     this.createForm();
 
@@ -121,11 +134,89 @@ export class CommentForm extends Component {
   }
 
   private handleShowTarget(): void {
-    // TODO: Implement show target functionality
+    if (!this.selectedArticle) {
+      new Notice("Please select a target article first");
+      return;
+    }
+    // The article is already shown via the onArticleSelected callback
+    new Notice(`Target article "${this.selectedArticle.title}" is displayed`);
   }
 
-  private handleSave(): void {
-    // TODO: Implement save functionality
+  private async handleSave(): Promise<void> {
+    if (!this.currentComment) {
+      new Notice("No comment detected");
+      return;
+    }
+
+    if (!this.selectedArticle) {
+      new Notice("Please select a target article");
+      return;
+    }
+
+    if (
+      !this.targetTextStartInput ||
+      !this.targetTextEndInput ||
+      !this.targetTextDisplayInput
+    ) {
+      return;
+    }
+
+    const targetTextStart = this.targetTextStartInput.value.trim();
+    const targetTextEnd = this.targetTextEndInput.value.trim();
+    const targetTextDisplay = this.targetTextDisplayInput.value.trim();
+
+    if (!targetTextStart || !targetTextEnd || !targetTextDisplay) {
+      new Notice("Please fill in all target text fields");
+      return;
+    }
+
+    try {
+      // Fetch target article content for validation
+      const targetContent = await this.apiService.fetchFileContent(
+        this.selectedArticle.id
+      );
+
+      // Validate target text fields
+      const validation = validateTextRange(
+        targetContent,
+        targetTextStart,
+        targetTextEnd,
+        targetTextDisplay
+      );
+
+      if (!validation.valid) {
+        new Notice(validation.error || "Validation failed");
+        return;
+      }
+
+      // Create annotation
+      const annotation: Annotation = {
+        id: uuidv4(),
+        kind: "Comment",
+        targetId: this.selectedArticle.id,
+        targetStart: targetTextStart,
+        targetEnd: targetTextEnd,
+        targetDisplay: targetTextDisplay,
+        targetText: validation.rangeText || "",
+        sourceId: this.currentComment.filePath,
+        sourceStart: this.currentComment.title.split(" ")[0],
+        sourceEnd:
+          this.currentComment.body.split(" ").pop() ||
+          this.currentComment.title,
+        sourceDisplay: this.currentComment.title,
+        sourceText: `${this.currentComment.title} ${this.currentComment.body}`,
+        isValid: true,
+      };
+
+      // Save annotation
+      await this.annotationService.saveAnnotation(annotation);
+
+      new Notice("Comment saved successfully");
+      this.clearForm();
+    } catch (error) {
+      new Notice(`Error saving comment: ${error.message}`);
+      console.error("[Idealogs] Error saving comment:", error);
+    }
   }
 
   loadComment(comment: Comment): void {
