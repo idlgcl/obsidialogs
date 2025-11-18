@@ -6,9 +6,11 @@ import { Article } from "../types";
 export interface CommentFormOptions {
   container: HTMLElement;
   comment?: Comment;
+  onArticleSelected?: (article: Article) => void;
 }
 
 export class CommentForm extends Component {
+  private options: CommentFormOptions;
   private container: HTMLElement;
   private contentEl: HTMLElement;
   private currentComment: Comment | null = null;
@@ -24,6 +26,7 @@ export class CommentForm extends Component {
 
   constructor(options: CommentFormOptions) {
     super();
+    this.options = options;
     this.container = options.container;
     this.currentComment = options.comment || null;
     this.createForm();
@@ -70,6 +73,9 @@ export class CommentForm extends Component {
       placeholder: "Search for an article...",
       onChange: (article) => {
         this.selectedArticle = article;
+        if (this.options.onArticleSelected) {
+          this.options.onArticleSelected(article);
+        }
       },
     });
 

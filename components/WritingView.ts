@@ -6,6 +6,7 @@ export class WritingView extends ItemView {
   private currentArticleId: string | null = null;
   private currentTitle = "";
   private contentContainer: HTMLElement | null = null;
+  private showAnnotation = false;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
