@@ -19,6 +19,7 @@ import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
 import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
 import { Logger } from "./utils/logger";
 import { Article } from "./types";
+import { AnnotationService } from "./utils/annotation-service";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -35,6 +36,7 @@ const DEFAULT_SETTINGS: IdealogsSettings = {
 export default class IdealogsPlugin extends Plugin {
   settings: IdealogsSettings;
   apiService: ApiService;
+  annotationService: AnnotationService;
   fileTracker: FileTracker;
   fileDeletionManager: FileDeletionManager;
   commonLinkHandler: CommonLinkHandler;
@@ -60,6 +62,7 @@ export default class IdealogsPlugin extends Plugin {
 
     // Initialize core services
     this.apiService = new ApiService();
+    this.annotationService = new AnnotationService(this.app);
 
     // Initialize file tracker
     this.fileTracker = new FileTracker();
@@ -158,6 +161,7 @@ export default class IdealogsPlugin extends Plugin {
     if (existingLeaves.length > 0) {
       const formView = this.getFormView();
       if (formView) {
+        formView.setServices(this.apiService, this.annotationService);
         formView.setOnArticleSelected((article) =>
           this.handleArticleSelected(article)
         );
@@ -179,6 +183,7 @@ export default class IdealogsPlugin extends Plugin {
 
       const formView = this.getFormView();
       if (formView) {
+        formView.setServices(this.apiService, this.annotationService);
         formView.setOnArticleSelected((article) =>
           this.handleArticleSelected(article)
         );
