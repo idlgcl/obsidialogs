@@ -83,6 +83,11 @@ export default class IdealogsPlugin extends Plugin {
     // Settings tab
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
 
+    // Automatically open FormView in right panel
+    this.app.workspace.onLayoutReady(() => {
+      this.activateFormView();
+    });
+
     this.registerEvent(
       this.app.workspace.on("file-open", (file: TFile | null) => {
         if (file && this.fileTracker.isTracked(file.name)) {
@@ -131,6 +136,24 @@ export default class IdealogsPlugin extends Plugin {
   async saveTracking() {
     this.settings.trackedFiles = this.fileTracker.toJSON();
     await this.saveSettings();
+  }
+
+  async activateFormView(): Promise<void> {
+    const { workspace } = this.app;
+
+    let leaf = workspace.getRightLeaf(false);
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(true);
+    }
+
+    if (leaf) {
+      await leaf.setViewState({
+        type: FORM_VIEW_TYPE,
+        active: true,
+      });
+
+      workspace.revealLeaf(leaf);
+    }
   }
 
   getFormView(): FormView | null {
