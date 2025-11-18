@@ -6,6 +6,7 @@ import {
   Notice,
   MarkdownView,
   TFile,
+  WorkspaceLeaf,
 } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { ApiService } from "./utils/api";
@@ -15,6 +16,7 @@ import { FileTracker } from "./utils/file-tracker";
 import { FileDeletionManager } from "./utils/file-deletion-manager";
 import { CommentParser } from "./utils/parsers";
 import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
+import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -46,6 +48,9 @@ export default class IdealogsPlugin extends Plugin {
 
     // Register FormView
     this.registerView(FORM_VIEW_TYPE, (leaf) => new FormView(leaf));
+
+    // Register WritingView
+    this.registerView(WRITING_VIEW_TYPE, (leaf) => new WritingView(leaf));
 
     // Initialize core services
     this.apiService = new ApiService();
@@ -79,6 +84,7 @@ export default class IdealogsPlugin extends Plugin {
 
     // CodeMirror extensions
     this.registerEditorExtension(this.createArticleLookupExtension());
+    this.registerEditorExtension(this.createWritingClickExtension());
 
     // Settings tab
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
@@ -302,6 +308,121 @@ export default class IdealogsPlugin extends Plugin {
         }
       },
     });
+  }
+
+  private createWritingClickExtension() {
+    const handleWritingLinkClick = this.handleWritingLinkClick.bind(this);
+    const app = this.app;
+
+    return EditorView.domEventHandlers({
+      mousedown: (event: MouseEvent, view: EditorView) => {
+        try {
+          const pos = view.posAtCoords({
+            x: event.clientX,
+            y: event.clientY,
+          });
+
+          if (pos === null) {
+            return false;
+          }
+
+          const line = view.state.doc.lineAt(pos);
+          const lineText = line.text;
+
+          // Check for @Tx link
+          if (!lineText.match(/\[\[@Tx[^\]]+\]\]/)) {
+            return false;
+          }
+
+          const activeView = app.workspace.getActiveViewOfType(MarkdownView);
+          if (!activeView?.file) {
+            return false;
+          }
+
+          // Parse the link
+          const linkPattern = /\[\[@(Tx[^\]]+)\]\]/;
+          const match = lineText.match(linkPattern);
+
+          if (match) {
+            const articleId = match[1];
+            const charOffset = pos - line.from;
+            const linkStart = lineText.indexOf(match[0]);
+            const linkEnd = linkStart + match[0].length;
+
+            if (charOffset >= linkStart && charOffset <= linkEnd) {
+              handleWritingLinkClick(articleId);
+              return false;
+            }
+          }
+        } catch (error) {
+          console.error("[Idealogs] Error handling writing click:", error);
+        }
+
+        return false;
+      },
+    });
+  }
+
+  private async handleWritingLinkClick(articleId: string): Promise<void> {
+    try {
+      // Fetch article data and content
+      const articleData = await this.apiService.fetchArticleById(articleId);
+      const content = await this.apiService.fetchFileContent(articleId);
+
+      // Get active leaf
+      const activeLeaf =
+        this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf;
+      if (!activeLeaf) {
+        return;
+      }
+
+      // Get or create WritingView
+      const writingView = await this.getOrCreateWritingView(activeLeaf);
+      if (writingView) {
+        await writingView.updateContent(articleId, articleData.title, content);
+        return;
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error handling writing link:", error);
+      new Notice("Failed to load writing article");
+    }
+  }
+
+  private async getOrCreateWritingView(
+    sourceLeaf: WorkspaceLeaf
+  ): Promise<WritingView | null> {
+    // Check if WritingView already exists
+    const existingLeaves =
+      this.app.workspace.getLeavesOfType(WRITING_VIEW_TYPE);
+    if (existingLeaves.length > 0) {
+      const view = existingLeaves[0].view;
+      if (view instanceof WritingView) {
+        return view;
+      }
+    }
+
+    // Create split to the right of source leaf
+    const newLeaf = this.app.workspace.createLeafBySplit(
+      sourceLeaf,
+      "vertical",
+      false
+    );
+
+    if (!newLeaf) {
+      return null;
+    }
+
+    await newLeaf.setViewState({
+      type: WRITING_VIEW_TYPE,
+      active: true,
+    });
+
+    const view = newLeaf.view;
+    if (view instanceof WritingView) {
+      return view;
+    }
+
+    return null;
   }
 
   onunload() {

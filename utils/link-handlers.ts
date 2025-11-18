@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { COMMON_LINK_PREFIXES } from "../constants";
+import { COMMON_LINK_PREFIXES, WRITING_LINK_PREFIX } from "../constants";
 import { ApiService } from "./api";
 import { FileTracker } from "./file-tracker";
 
@@ -77,6 +77,11 @@ export function patchLinkOpening(
         commonLinkHandler.handleLink(linktext, sourcePath);
         return;
       }
+    }
+
+    if (linktext.startsWith(WRITING_LINK_PREFIX)) {
+      // Let main.createWritingClickExtension handle this
+      return;
     }
 
     // Fall back to default link handling
