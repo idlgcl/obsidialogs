@@ -12,7 +12,7 @@ export interface CommentFormOptions {
   app: App;
   apiService: ApiService;
   annotationService: AnnotationService;
-  comment?: Comment;
+  comment: Comment;
   onArticleSelected?: (article: Article) => void;
 }
 
