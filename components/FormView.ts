@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, App } from "obsidian";
+import { ItemView, WorkspaceLeaf } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { CommentForm } from "./CommentForm";
 import { Article } from "../types";
@@ -53,7 +53,10 @@ export class FormView extends ItemView {
     this.onArticleSelectedCallback = callback;
   }
 
-  setServices(apiService: ApiService, annotationService: AnnotationService): void {
+  setServices(
+    apiService: ApiService,
+    annotationService: AnnotationService
+  ): void {
     this.apiService = apiService;
     this.annotationService = annotationService;
   }
