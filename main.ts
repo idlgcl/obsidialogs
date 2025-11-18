@@ -152,6 +152,13 @@ export default class IdealogsPlugin extends Plugin {
   async activateFormView(): Promise<void> {
     const { workspace } = this.app;
 
+    // Check if FormView already exists
+    const existingLeaves = workspace.getLeavesOfType(FORM_VIEW_TYPE);
+    if (existingLeaves.length > 0) {
+      return;
+    }
+
+    // Create new FormView
     let leaf = workspace.getRightLeaf(false);
     if (!leaf) {
       leaf = workspace.getRightLeaf(true);
@@ -160,10 +167,8 @@ export default class IdealogsPlugin extends Plugin {
     if (leaf) {
       await leaf.setViewState({
         type: FORM_VIEW_TYPE,
-        active: true,
+        active: false,
       });
-
-      workspace.revealLeaf(leaf);
     }
   }
 
