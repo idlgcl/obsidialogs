@@ -17,6 +17,7 @@ import { FileDeletionManager } from "./utils/file-deletion-manager";
 import { CommentParser } from "./utils/parsers";
 import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
 import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
+import { Logger } from "./utils/logger";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -36,6 +37,7 @@ export default class IdealogsPlugin extends Plugin {
   fileTracker: FileTracker;
   fileDeletionManager: FileDeletionManager;
   commonLinkHandler: CommonLinkHandler;
+  logger: Logger;
   private cleanupLinkPatching: () => void;
   private commentParser: CommentParser;
   private cursorCheckInterval: number | null = null;
@@ -45,6 +47,9 @@ export default class IdealogsPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // Initialize logger
+    this.logger = new Logger();
 
     // Register FormView
     this.registerView(FORM_VIEW_TYPE, (leaf) => new FormView(leaf));
@@ -230,7 +235,7 @@ export default class IdealogsPlugin extends Plugin {
 
     if (comment) {
       if (this.settings.enableLogs) {
-        console.log("[Idealogs] Comment detected:", {
+        this.logger.log("Comment detected", {
           title: comment.title,
           body: comment.body,
           filePath: comment.filePath,
@@ -552,5 +557,35 @@ class IdealogsSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+
+    // Show log management buttons only when logs are enabled
+    if (this.plugin.settings.enableLogs) {
+      new Setting(containerEl)
+        .setName("Copy logs")
+        .setDesc("Copy all logs to clipboard")
+        .addButton((button) =>
+          button
+            .setButtonText("Copy logs")
+            .setCta()
+            .onClick(async () => {
+              const success = await this.plugin.logger.copyToClipboard();
+              if (success) {
+                new Notice("Logs copied to clipboard");
+              } else {
+                new Notice("No logs to copy");
+              }
+            })
+        );
+
+      new Setting(containerEl)
+        .setName("Clear logs")
+        .setDesc("Clear all stored logs")
+        .addButton((button) =>
+          button.setButtonText("Clear logs").onClick(() => {
+            this.plugin.logger.clear();
+            new Notice("Logs cleared");
+          })
+        );
+    }
   }
 }
