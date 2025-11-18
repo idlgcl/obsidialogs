@@ -1,12 +1,14 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { CommentForm } from "./CommentForm";
+import { Article } from "../types";
 
 export const FORM_VIEW_TYPE = "form-view";
 
 export class FormView extends ItemView {
   private commentForm: CommentForm | null = null;
   private container: HTMLElement | null = null;
+  private onArticleSelectedCallback: ((article: Article) => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -43,6 +45,10 @@ export class FormView extends ItemView {
     }
   }
 
+  setOnArticleSelected(callback: (article: Article) => void): void {
+    this.onArticleSelectedCallback = callback;
+  }
+
   updateComment(comment: Comment): void {
     // Clear existing form if any
     if (this.commentForm) {
@@ -59,6 +65,7 @@ export class FormView extends ItemView {
       this.commentForm = new CommentForm({
         container: this.container,
         comment: comment,
+        onArticleSelected: this.onArticleSelectedCallback || undefined,
       });
       this.commentForm.load();
     }

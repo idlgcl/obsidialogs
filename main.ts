@@ -18,6 +18,7 @@ import { CommentParser } from "./utils/parsers";
 import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
 import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
 import { Logger } from "./utils/logger";
+import { Article } from "./types";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -155,6 +156,12 @@ export default class IdealogsPlugin extends Plugin {
     // Check if FormView already exists
     const existingLeaves = workspace.getLeavesOfType(FORM_VIEW_TYPE);
     if (existingLeaves.length > 0) {
+      const formView = this.getFormView();
+      if (formView) {
+        formView.setOnArticleSelected((article) =>
+          this.handleArticleSelected(article)
+        );
+      }
       return;
     }
 
@@ -169,6 +176,13 @@ export default class IdealogsPlugin extends Plugin {
         type: FORM_VIEW_TYPE,
         active: false,
       });
+
+      const formView = this.getFormView();
+      if (formView) {
+        formView.setOnArticleSelected((article) =>
+          this.handleArticleSelected(article)
+        );
+      }
     }
   }
 
@@ -371,6 +385,36 @@ export default class IdealogsPlugin extends Plugin {
         return false;
       },
     });
+  }
+
+  private async handleArticleSelected(article: Article): Promise<void> {
+    try {
+      // Fetch article content
+      const content = await this.apiService.fetchFileContent(article.id);
+
+      // Get active markdown leaf or create one
+      let activeLeaf =
+        this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf;
+
+      if (!activeLeaf) {
+        // No active markdown view, use any leaf from main area
+        activeLeaf = this.app.workspace.getLeaf(false);
+      }
+
+      if (!activeLeaf) {
+        new Notice("Could not find a suitable location for the article");
+        return;
+      }
+
+      // Get or create WritingView
+      const writingView = await this.getOrCreateWritingView(activeLeaf);
+      if (writingView) {
+        await writingView.updateContent(article.id, article.title, content);
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error handling article selection:", error);
+      new Notice("Failed to load article");
+    }
   }
 
   private async handleWritingLinkClick(articleId: string): Promise<void> {
