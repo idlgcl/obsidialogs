@@ -4,6 +4,7 @@ export const WRITING_VIEW_TYPE = "writing-view";
 
 export class WritingView extends ItemView {
   private currentArticleId: string | null = null;
+  private currentTitle = "";
   private contentContainer: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
@@ -15,11 +16,7 @@ export class WritingView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "";
-  }
-
-  getIcon(): string {
-    return "brackets";
+    return this.currentTitle;
   }
 
   async onOpen(): Promise<void> {
@@ -37,6 +34,7 @@ export class WritingView extends ItemView {
       this.contentContainer.empty();
     }
     this.currentArticleId = null;
+    this.currentTitle = "";
   }
 
   getCurrentArticleId(): string | null {
@@ -54,6 +52,7 @@ export class WritingView extends ItemView {
 
     this.clear();
     this.currentArticleId = articleId;
+    this.currentTitle = title;
 
     // Create title element
     const titleEl = this.contentContainer.createDiv({
