@@ -271,7 +271,13 @@ export class NoteForm extends Component {
 
     // Flash the target text in WritingView
     if (this.options.onFlashText && note.targetText) {
-      this.options.onFlashText(note.targetText);
+      // this.options.onFlashText(note.targetText);
+      const textToFlash = note.targetText;
+      setTimeout(() => {
+        if (this.options.onFlashText) {
+          this.options.onFlashText(textToFlash);
+        }
+      }, 100);
     }
   }
 

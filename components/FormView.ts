@@ -85,6 +85,7 @@ export class FormView extends ItemView {
         annotationService: this.annotationService,
         comment: comment,
         onArticleSelected: this.onArticleSelectedCallback || undefined,
+        onFlashText: this.onFlashTextCallback || undefined,
       });
       this.commentForm.load();
     }

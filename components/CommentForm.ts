@@ -14,6 +14,7 @@ export interface CommentFormOptions {
   annotationService: AnnotationService;
   comment: Comment;
   onArticleSelected?: (article: Article) => void;
+  onFlashText?: (text: string) => void;
 }
 
 export class CommentForm extends Component {
@@ -286,6 +287,16 @@ export class CommentForm extends Component {
       // Trigger the onArticleSelected callback to show the article
       if (this.options.onArticleSelected) {
         this.options.onArticleSelected(targetArticle);
+      }
+
+      // Flash the target text in WritingView after content is rendered
+      if (this.options.onFlashText && this.savedAnnotation.targetText) {
+        const textToFlash = this.savedAnnotation.targetText;
+        setTimeout(() => {
+          if (this.options.onFlashText) {
+            this.options.onFlashText(textToFlash);
+          }
+        }, 100);
       }
     } catch (error) {
       console.error("[Idealogs] Error loading target article:", error);
