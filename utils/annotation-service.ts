@@ -100,4 +100,26 @@ export class AnnotationService {
     sourceAnnotations[collection][annotation.id] = annotation;
     await this.saveAnnotationsFile(annotation.sourceId, sourceAnnotations);
   }
+
+  async findCommentBySource(
+    sourceId: string,
+    sourceDisplay: string,
+    sourceStart: string,
+    sourceEnd: string
+  ): Promise<Annotation | null> {
+    const annotations = await this.loadAnnotations(sourceId);
+
+    for (const commentId in annotations.comments) {
+      const comment = annotations.comments[commentId];
+      if (
+        comment.sourceDisplay === sourceDisplay &&
+        comment.sourceStart === sourceStart &&
+        comment.sourceEnd === sourceEnd
+      ) {
+        return comment;
+      }
+    }
+
+    return null;
+  }
 }
