@@ -161,6 +161,10 @@ export class AnnotationService {
     return results;
   }
 
+  async getAnnotations(sourceId: string): Promise<AnnotationsFile> {
+    return this.loadAnnotations(sourceId);
+  }
+
   private escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
