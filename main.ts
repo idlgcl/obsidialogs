@@ -19,7 +19,7 @@ import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
 import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
 import { Logger } from "./utils/logger";
 import { Article } from "./types";
-import { AnnotationService } from "./utils/annotation-service";
+import { AnnotationService, Annotation } from "./utils/annotation-service";
 import { LinkTransformer } from "./utils/link-transformer";
 
 interface IdealogsSettings {
@@ -68,22 +68,81 @@ export default class IdealogsPlugin extends Plugin {
     this.linkTransformer = new LinkTransformer();
 
     // Register markdown post processor for reading mode
-    this.registerMarkdownPostProcessor((element, context) => {
+    this.registerMarkdownPostProcessor(async (element, context) => {
       const file = context.sourcePath;
       if (!file) return;
 
       // Get article ID
       const articleId = file.split("/").pop()?.replace(".md", "") || "";
 
-      // Transform links in reading mode
-      // Note: In reading mode we don't have line context, so hide source fields
+      // Load annotations for this file
+      const annotations = await this.annotationService.getAnnotations(file);
+
+      // Build a map of targetId -> notes without source (for WritingLink flash)
+      const notesWithoutSource: Map<string, Annotation[]> = new Map();
+      for (const noteId in annotations.notes) {
+        const note = annotations.notes[noteId];
+        if (note.isValid && !note.sourceDisplay) {
+          const existing = notesWithoutSource.get(note.targetId) || [];
+          existing.push(note);
+          notesWithoutSource.set(note.targetId, existing);
+        }
+      }
+
+      // Transform links in reading mode with flash support for notes without source
       this.linkTransformer.transformLinks(
         element,
         articleId,
         (targetArticleId) => {
-          this.handleWritingLinkClick(targetArticleId, true, "", -1, 1);
+          // Check if there's a note without source for this target
+          const notes = notesWithoutSource.get(targetArticleId);
+          const targetText =
+            notes && notes.length > 0 ? notes[0].targetText : undefined;
+
+          this.handleWritingLinkClick(targetArticleId, true, "", -1, 1, false);
+
+          // Flash the target text if we have a note
+          if (targetText) {
+            setTimeout(() => {
+              const writingView = this.getWritingView();
+              if (writingView) {
+                writingView.flashText(targetText);
+              }
+            }, 100);
+          }
         }
       );
+
+      // Process comments - bold sourceDisplay with click handler
+      for (const commentId in annotations.comments) {
+        const comment = annotations.comments[commentId];
+        if (comment.isValid && comment.sourceDisplay) {
+          this.wrapAnnotationSourceText(
+            element,
+            comment.sourceDisplay,
+            async () => {
+              await this.showTargetAndFlash(
+                comment.targetId,
+                comment.targetText
+              );
+            }
+          );
+        }
+      }
+
+      // Process notes with source - bold sourceDisplay with click handler
+      for (const noteId in annotations.notes) {
+        const note = annotations.notes[noteId];
+        if (note.isValid && note.sourceDisplay) {
+          this.wrapAnnotationSourceText(
+            element,
+            note.sourceDisplay,
+            async () => {
+              await this.showTargetAndFlash(note.targetId, note.targetText);
+            }
+          );
+        }
+      }
     });
 
     // Initialize file tracker
@@ -428,8 +487,8 @@ export default class IdealogsPlugin extends Plugin {
                 `\\[\\[@${articleId}\\]\\]`,
                 "g"
               );
-              const sameLinkCount =
-                (lineText.match(sameLinkPattern) || []).length;
+              const sameLinkCount = (lineText.match(sameLinkPattern) || [])
+                .length;
 
               handleWritingLinkClick(
                 articleId,
@@ -485,7 +544,8 @@ export default class IdealogsPlugin extends Plugin {
     hideSourceFields: boolean,
     sourceLineText: string,
     lineIndex: number,
-    sameLinkCount: number
+    sameLinkCount: number,
+    showForm = true
   ): Promise<void> {
     try {
       // Fetch article data and content
@@ -508,7 +568,7 @@ export default class IdealogsPlugin extends Plugin {
 
       // Show NoteForm in FormView
       const formView = this.getFormView();
-      if (formView) {
+      if (formView && showForm) {
         formView.updateNote(
           articleData,
           sourceFilePath,
@@ -571,6 +631,92 @@ export default class IdealogsPlugin extends Plugin {
       }
     }
     return null;
+  }
+
+  private wrapAnnotationSourceText(
+    element: HTMLElement,
+    text: string,
+    onClick: () => void
+  ): void {
+    // Find text in the element by walking through text nodes
+    const treeWalker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    let node: Text | null;
+    let found = false;
+
+    while ((node = treeWalker.nextNode() as Text | null) && !found) {
+      const nodeText = node.textContent || "";
+      const index = nodeText.indexOf(text);
+
+      if (index !== -1) {
+        found = true;
+
+        // Split the text node and wrap the matched text
+        const before = nodeText.substring(0, index);
+        const match = nodeText.substring(index, index + text.length);
+        const after = nodeText.substring(index + text.length);
+
+        const parent = node.parentNode;
+        if (!parent) {
+          continue;
+        }
+
+        // Create elements
+        const beforeNode = document.createTextNode(before);
+        const wrapperSpan = document.createElement("span");
+        wrapperSpan.className = "idl-annotation-source";
+        wrapperSpan.textContent = match;
+        wrapperSpan.style.fontWeight = "bold";
+        wrapperSpan.style.cursor = "pointer";
+        wrapperSpan.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick();
+        });
+        const afterNode = document.createTextNode(after);
+
+        // Replace original node
+        parent.insertBefore(beforeNode, node);
+        parent.insertBefore(wrapperSpan, node);
+        parent.insertBefore(afterNode, node);
+        parent.removeChild(node);
+      }
+    }
+  }
+
+  private async showTargetAndFlash(
+    targetId: string,
+    targetText: string
+  ): Promise<void> {
+    try {
+      // Fetch article data
+      const articleData = await this.apiService.fetchArticleById(targetId);
+      const content = await this.apiService.fetchFileContent(targetId);
+
+      // Get active markdown leaf
+      const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (!activeView) {
+        return;
+      }
+
+      // Get or create WritingView
+      const writingView = await this.getOrCreateWritingView(activeView.leaf);
+      if (writingView) {
+        await writingView.updateContent(targetId, articleData.title, content);
+
+        // Flash the target text after content is rendered
+        setTimeout(() => {
+          writingView.flashText(targetText);
+        }, 100);
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error showing target and flash:", error);
+      new Notice("Failed to load target article");
+    }
   }
 
   onunload() {
