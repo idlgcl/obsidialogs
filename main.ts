@@ -81,7 +81,7 @@ export default class IdealogsPlugin extends Plugin {
         element,
         articleId,
         (targetArticleId) => {
-          this.handleWritingLinkClick(targetArticleId, true, "", -1);
+          this.handleWritingLinkClick(targetArticleId, true, "", -1, 1);
         }
       );
     });
@@ -411,11 +411,20 @@ export default class IdealogsPlugin extends Plugin {
               // Get line index
               const lineIndex = line.number - 1;
 
+              // Count same links on this line
+              const sameLinkPattern = new RegExp(
+                `\\[\\[@${articleId}\\]\\]`,
+                "g"
+              );
+              const sameLinkCount =
+                (lineText.match(sameLinkPattern) || []).length;
+
               handleWritingLinkClick(
                 articleId,
                 isAlone,
                 sourceLineText,
-                lineIndex
+                lineIndex,
+                sameLinkCount
               );
               return false;
             }
@@ -463,7 +472,8 @@ export default class IdealogsPlugin extends Plugin {
     articleId: string,
     hideSourceFields: boolean,
     sourceLineText: string,
-    lineIndex: number
+    lineIndex: number,
+    sameLinkCount: number
   ): Promise<void> {
     try {
       // Fetch article data and content
@@ -492,7 +502,8 @@ export default class IdealogsPlugin extends Plugin {
           sourceFilePath,
           hideSourceFields,
           sourceLineText,
-          lineIndex
+          lineIndex,
+          sameLinkCount
         );
       }
     } catch (error) {
