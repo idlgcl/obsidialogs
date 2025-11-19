@@ -448,18 +448,24 @@ export default class IdealogsPlugin extends Plugin {
       const articleData = await this.apiService.fetchArticleById(articleId);
       const content = await this.apiService.fetchFileContent(articleId);
 
-      // Get active leaf
-      const activeLeaf =
-        this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf;
-      if (!activeLeaf) {
+      // Get active markdown view and source file path
+      const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (!activeView?.leaf) {
         return;
       }
 
+      const sourceFilePath = activeView.file?.path || "";
+
       // Get or create WritingView
-      const writingView = await this.getOrCreateWritingView(activeLeaf);
+      const writingView = await this.getOrCreateWritingView(activeView.leaf);
       if (writingView) {
         await writingView.updateContent(articleId, articleData.title, content);
-        return;
+      }
+
+      // Show NoteForm in FormView
+      const formView = this.getFormView();
+      if (formView) {
+        formView.updateNote(articleData, sourceFilePath);
       }
     } catch (error) {
       console.error("[Idealogs] Error handling writing link:", error);

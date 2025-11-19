@@ -1,6 +1,7 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { Comment } from "../utils/parsers";
 import { CommentForm } from "./CommentForm";
+import { NoteForm } from "./NoteForm";
 import { Article } from "../types";
 import { ApiService } from "../utils/api";
 import { AnnotationService } from "../utils/annotation-service";
@@ -9,6 +10,7 @@ export const FORM_VIEW_TYPE = "form-view";
 
 export class FormView extends ItemView {
   private commentForm: CommentForm | null = null;
+  private noteForm: NoteForm | null = null;
   private container: HTMLElement | null = null;
   private onArticleSelectedCallback: ((article: Article) => void) | null = null;
   private apiService: ApiService | null = null;
@@ -44,6 +46,10 @@ export class FormView extends ItemView {
       this.commentForm.unload();
       this.commentForm = null;
     }
+    if (this.noteForm) {
+      this.noteForm.unload();
+      this.noteForm = null;
+    }
     if (this.container) {
       this.container.empty();
     }
@@ -62,15 +68,8 @@ export class FormView extends ItemView {
   }
 
   updateComment(comment: Comment): void {
-    // Clear existing form if any
-    if (this.commentForm) {
-      this.commentForm.unload();
-      this.commentForm = null;
-    }
-
-    if (this.container) {
-      this.container.empty();
-    }
+    // Clear all existing forms
+    this.clear();
 
     // Create new form with the detected comment
     if (this.container && this.apiService && this.annotationService) {
@@ -83,6 +82,25 @@ export class FormView extends ItemView {
         onArticleSelected: this.onArticleSelectedCallback || undefined,
       });
       this.commentForm.load();
+    }
+  }
+
+  updateNote(targetArticle: Article, sourceFilePath: string): void {
+    // Clear all existing forms
+    this.clear();
+
+    // Create new note form with the target article
+    if (this.container && this.apiService && this.annotationService) {
+      this.noteForm = new NoteForm({
+        container: this.container,
+        app: this.app,
+        apiService: this.apiService,
+        annotationService: this.annotationService,
+        targetArticle: targetArticle,
+        sourceFilePath: sourceFilePath,
+        onArticleSelected: this.onArticleSelectedCallback || undefined,
+      });
+      this.noteForm.load();
     }
   }
 }
