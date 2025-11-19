@@ -16,6 +16,9 @@ export interface Annotation {
   sourceDisplay?: string;
   sourceText?: string;
 
+  // Note only. Fragile.
+  lineIndex?: number;
+
   validationError?: string;
   isValid?: boolean;
 }
@@ -121,5 +124,40 @@ export class AnnotationService {
     }
 
     return null;
+  }
+
+  async findNoteBySource(
+    sourceId: string,
+    targetId: string,
+    lineIndex: number
+  ): Promise<Annotation | null> {
+    const annotations = await this.loadAnnotations(sourceId);
+
+    for (const noteId in annotations.notes) {
+      const note = annotations.notes[noteId];
+      if (note.targetId === targetId && note.lineIndex === lineIndex) {
+        return note;
+      }
+    }
+
+    return null;
+  }
+
+  async findNotesByLineIndex(
+    sourceId: string,
+    targetId: string,
+    lineIndex: number
+  ): Promise<Annotation[]> {
+    const annotations = await this.loadAnnotations(sourceId);
+    const results: Annotation[] = [];
+
+    for (const noteId in annotations.notes) {
+      const note = annotations.notes[noteId];
+      if (note.targetId === targetId && note.lineIndex === lineIndex) {
+        results.push(note);
+      }
+    }
+
+    return results;
   }
 }

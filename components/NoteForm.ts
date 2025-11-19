@@ -235,6 +235,34 @@ export class NoteForm extends Component {
         new Notice("Source Text Display not found in the line");
         return;
       }
+
+      // Validate source range uniqueness for same-line duplicate links
+      const existingNotes = await this.annotationService.findNotesByLineIndex(
+        this.sourceFilePath,
+        this.targetArticle.id,
+        this.lineIndex
+      );
+
+      for (const existingNote of existingNotes) {
+        // Skip the current annotation being updated
+        if (
+          this.savedAnnotation &&
+          existingNote.id === this.savedAnnotation.id
+        ) {
+          continue;
+        }
+
+        // Check for duplicate source range
+        if (
+          existingNote.sourceStart === sourceTextStart &&
+          existingNote.sourceEnd === sourceTextEnd
+        ) {
+          new Notice(
+            "Source text range already used by another note on this line"
+          );
+          return;
+        }
+      }
     }
 
     try {
@@ -292,7 +320,10 @@ export class NoteForm extends Component {
     }
   }
 
-  private extractSourceText(sourceTextStart: string, sourceTextEnd: string): string {
+  private extractSourceText(
+    sourceTextStart: string,
+    sourceTextEnd: string
+  ): string {
     const startIndex = this.sourceLineText.indexOf(sourceTextStart);
     const endIndex = this.sourceLineText.indexOf(sourceTextEnd);
 
@@ -300,7 +331,10 @@ export class NoteForm extends Component {
       return `${sourceTextStart}...${sourceTextEnd}`;
     }
 
-    return this.sourceLineText.substring(startIndex, endIndex + sourceTextEnd.length);
+    return this.sourceLineText.substring(
+      startIndex,
+      endIndex + sourceTextEnd.length
+    );
   }
 
   private async loadExistingAnnotation(): Promise<void> {
@@ -320,7 +354,8 @@ export class NoteForm extends Component {
           this.sourceTextEndInput.value = this.savedAnnotation.sourceEnd;
         }
         if (this.sourceTextDisplayInput && this.savedAnnotation.sourceDisplay) {
-          this.sourceTextDisplayInput.value = this.savedAnnotation.sourceDisplay;
+          this.sourceTextDisplayInput.value =
+            this.savedAnnotation.sourceDisplay;
         }
         if (this.targetTextStartInput) {
           this.targetTextStartInput.value = this.savedAnnotation.targetStart;
@@ -329,7 +364,8 @@ export class NoteForm extends Component {
           this.targetTextEndInput.value = this.savedAnnotation.targetEnd;
         }
         if (this.targetTextDisplayInput) {
-          this.targetTextDisplayInput.value = this.savedAnnotation.targetDisplay;
+          this.targetTextDisplayInput.value =
+            this.savedAnnotation.targetDisplay;
         }
       }
     } catch (error) {
