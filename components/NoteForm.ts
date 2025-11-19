@@ -377,11 +377,12 @@ export class NoteForm extends Component {
 
         // Check for duplicate source range
         if (
-          existingNote.sourceStart === sourceTextStart &&
-          existingNote.sourceEnd === sourceTextEnd
+          existingNote.sourceDisplay === sourceTextDisplay
+          // existingNote.sourceStart === sourceTextStart &&
+          // existingNote.sourceEnd === sourceTextEnd
         ) {
           new Notice(
-            "Source text range already used by another note on this line"
+            "Source text display already used by another note on this line"
           );
           return;
         }
