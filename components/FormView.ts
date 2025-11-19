@@ -90,7 +90,8 @@ export class FormView extends ItemView {
     sourceFilePath: string,
     hideSourceFields: boolean,
     sourceLineText: string,
-    lineIndex: number
+    lineIndex: number,
+    sameLinkCount: number
   ): void {
     // Clear all existing forms
     this.clear();
@@ -107,6 +108,7 @@ export class FormView extends ItemView {
         hideSourceFields: hideSourceFields,
         sourceLineText: sourceLineText,
         lineIndex: lineIndex,
+        sameLinkCount: sameLinkCount,
         onArticleSelected: this.onArticleSelectedCallback || undefined,
       });
       this.noteForm.load();
