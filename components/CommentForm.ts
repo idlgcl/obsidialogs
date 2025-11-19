@@ -24,6 +24,7 @@ export class CommentForm extends Component {
   private apiService: ApiService;
   private annotationService: AnnotationService;
   private currentComment: Comment | null = null;
+  private savedAnnotation: Annotation | null = null;
   private commentTitleInput: HTMLInputElement | null = null;
   private commentBodyInput: HTMLTextAreaElement | null = null;
   private articleAutocomplete: ArticleAutocompleteField | null = null;
@@ -45,7 +46,10 @@ export class CommentForm extends Component {
     this.createForm();
 
     if (this.currentComment) {
-      this.loadComment(this.currentComment);
+      // Load comment asynchronously (including checking for existing annotation)
+      this.loadComment(this.currentComment).catch((error) => {
+        console.error("[Idealogs] Error loading comment:", error);
+      });
     }
   }
 
@@ -189,9 +193,9 @@ export class CommentForm extends Component {
         return;
       }
 
-      // Create annotation
+      // Create annotation (use existing ID if updating, otherwise create new)
       const annotation: Annotation = {
-        id: uuidv4(),
+        id: this.savedAnnotation?.id || uuidv4(),
         kind: "Comment",
         targetId: this.selectedArticle.id,
         targetStart: targetTextStart,
@@ -211,7 +215,12 @@ export class CommentForm extends Component {
       // Save annotation
       await this.annotationService.saveAnnotation(annotation);
 
-      new Notice("Comment saved successfully");
+      const action = this.savedAnnotation ? "updated" : "saved";
+      new Notice(`Comment ${action} successfully`);
+
+      // Update savedAnnotation for subsequent saves
+      this.savedAnnotation = annotation;
+
       this.clearForm();
     } catch (error) {
       new Notice(`Error saving comment: ${error.message}`);
@@ -219,13 +228,70 @@ export class CommentForm extends Component {
     }
   }
 
-  loadComment(comment: Comment): void {
+  async loadComment(comment: Comment): Promise<void> {
     this.currentComment = comment;
     if (this.commentTitleInput) {
       this.commentTitleInput.value = comment.title;
     }
     if (this.commentBodyInput) {
       this.commentBodyInput.value = comment.body;
+    }
+
+    // Try to find existing annotation for this comment
+    try {
+      const sourceStart = comment.title.split(" ")[0];
+      const sourceEnd = comment.body.split(" ").pop() as string;
+
+      this.savedAnnotation = await this.annotationService.findCommentBySource(
+        comment.filePath,
+        comment.title,
+        sourceStart,
+        sourceEnd
+      );
+
+      if (this.savedAnnotation) {
+        // Populate form with saved annotation data
+        await this.loadSavedAnnotation();
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error loading saved annotation:", error);
+    }
+  }
+
+  private async loadSavedAnnotation(): Promise<void> {
+    if (!this.savedAnnotation) return;
+
+    // Populate target text fields
+    if (this.targetTextStartInput) {
+      this.targetTextStartInput.value = this.savedAnnotation.targetStart;
+    }
+    if (this.targetTextEndInput) {
+      this.targetTextEndInput.value = this.savedAnnotation.targetEnd;
+    }
+    if (this.targetTextDisplayInput) {
+      this.targetTextDisplayInput.value = this.savedAnnotation.targetDisplay;
+    }
+
+    // Load and set the target article
+    try {
+      const targetArticle = await this.apiService.fetchArticleById(
+        this.savedAnnotation.targetId
+      );
+      this.selectedArticle = targetArticle;
+
+      if (this.articleAutocomplete) {
+        this.articleAutocomplete.setValue(targetArticle.id);
+      }
+
+      // Trigger the onArticleSelected callback to show the article
+      if (this.options.onArticleSelected) {
+        this.options.onArticleSelected(targetArticle);
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error loading target article:", error);
+      new Notice(
+        `Failed to load saved target article: ${this.savedAnnotation.targetId}`
+      );
     }
   }
 
