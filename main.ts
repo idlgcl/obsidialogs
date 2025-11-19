@@ -76,11 +76,12 @@ export default class IdealogsPlugin extends Plugin {
       const articleId = file.split("/").pop()?.replace(".md", "") || "";
 
       // Transform links in reading mode
+      // Note: In reading mode we don't have line context, so hide source fields
       this.linkTransformer.transformLinks(
         element,
         articleId,
         (targetArticleId) => {
-          this.handleWritingLinkClick(targetArticleId);
+          this.handleWritingLinkClick(targetArticleId, true, "", -1);
         }
       );
     });
@@ -399,7 +400,23 @@ export default class IdealogsPlugin extends Plugin {
             const linkEnd = linkStart + match[0].length;
 
             if (charOffset >= linkStart && charOffset <= linkEnd) {
-              handleWritingLinkClick(articleId);
+              // Check if link is alone on line
+              const isAlone = /^\s*\[\[@Tx[^\]]+\]\]\s*$/.test(lineText);
+
+              // Get text before and after the link
+              const textBeforeLink = lineText.substring(0, linkStart);
+              const textAfterLink = lineText.substring(linkEnd);
+              const sourceLineText = (textBeforeLink + textAfterLink).trim();
+
+              // Get line index
+              const lineIndex = line.number - 1;
+
+              handleWritingLinkClick(
+                articleId,
+                isAlone,
+                sourceLineText,
+                lineIndex
+              );
               return false;
             }
           }
@@ -442,7 +459,12 @@ export default class IdealogsPlugin extends Plugin {
     }
   }
 
-  private async handleWritingLinkClick(articleId: string): Promise<void> {
+  private async handleWritingLinkClick(
+    articleId: string,
+    hideSourceFields: boolean,
+    sourceLineText: string,
+    lineIndex: number
+  ): Promise<void> {
     try {
       // Fetch article data and content
       const articleData = await this.apiService.fetchArticleById(articleId);
@@ -465,7 +487,13 @@ export default class IdealogsPlugin extends Plugin {
       // Show NoteForm in FormView
       const formView = this.getFormView();
       if (formView) {
-        formView.updateNote(articleData, sourceFilePath);
+        formView.updateNote(
+          articleData,
+          sourceFilePath,
+          hideSourceFields,
+          sourceLineText,
+          lineIndex
+        );
       }
     } catch (error) {
       console.error("[Idealogs] Error handling writing link:", error);
