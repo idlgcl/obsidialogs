@@ -17,6 +17,7 @@ export interface NoteFormOptions {
   lineIndex: number;
   sameLinkCount: number;
   onArticleSelected?: (article: Article) => void;
+  onFlashText?: (text: string) => void;
 }
 
 export class NoteForm extends Component {
@@ -267,6 +268,11 @@ export class NoteForm extends Component {
     }
 
     this.updateNavigationUI();
+
+    // Flash the target text in WritingView
+    if (this.options.onFlashText && note.targetText) {
+      this.options.onFlashText(note.targetText);
+    }
   }
 
   private updateNavigationUI(): void {

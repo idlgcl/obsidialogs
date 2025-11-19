@@ -118,4 +118,73 @@ export class WritingView extends ItemView {
     // Render markdown content
     await MarkdownRenderer.renderMarkdown(content, markdownContainer, "", this);
   }
+
+  flashText(text: string): void {
+    if (!this.contentContainer || !text) {
+      return;
+    }
+
+    // Remove any existing flash spans first
+    const existingFlashes =
+      this.contentContainer.querySelectorAll(".idl-target-flash");
+    existingFlashes.forEach((span) => {
+      const parent = span.parentNode;
+      if (parent) {
+        // Replace span with its text content
+        const textNode = document.createTextNode(span.textContent || "");
+        parent.replaceChild(textNode, span);
+        // Normalize to merge adjacent text nodes
+        parent.normalize();
+      }
+    });
+
+    // Find text in the content by walking through text nodes
+    const treeWalker = document.createTreeWalker(
+      this.contentContainer,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    let node: Text | null;
+    let found = false;
+
+    while ((node = treeWalker.nextNode() as Text | null) && !found) {
+      const nodeText = node.textContent || "";
+      const index = nodeText.indexOf(text);
+
+      if (index !== -1) {
+        found = true;
+
+        // Split the text node and wrap the matched text
+        const before = nodeText.substring(0, index);
+        const match = nodeText.substring(index, index + text.length);
+        const after = nodeText.substring(index + text.length);
+
+        const parent = node.parentNode;
+        if (!parent) {
+          continue;
+        }
+
+        // Create elements
+        const beforeNode = document.createTextNode(before);
+        const flashSpan = document.createElement("span");
+        flashSpan.className = "idl-target-flash";
+        flashSpan.textContent = match;
+        const afterNode = document.createTextNode(after);
+
+        // Replace original node
+        parent.insertBefore(beforeNode, node);
+        parent.insertBefore(flashSpan, node);
+        parent.insertBefore(afterNode, node);
+        parent.removeChild(node);
+
+        // Scroll into view
+        flashSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    if (!found) {
+      console.error("[Idealogs] flashText: text not found in content");
+    }
+  }
 }
