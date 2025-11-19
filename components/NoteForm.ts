@@ -12,6 +12,9 @@ export interface NoteFormOptions {
   annotationService: AnnotationService;
   targetArticle: Article;
   sourceFilePath: string;
+  hideSourceFields: boolean;
+  sourceLineText: string;
+  lineIndex: number;
   onArticleSelected?: (article: Article) => void;
 }
 
@@ -24,9 +27,13 @@ export class NoteForm extends Component {
   private annotationService: AnnotationService;
   private targetArticle: Article;
   private sourceFilePath: string;
+  private hideSourceFields: boolean;
+  private sourceLineText: string;
+  private lineIndex: number;
   private savedAnnotation: Annotation | null = null;
 
   // Source fields
+  private sourceFieldsContainer: HTMLElement | null = null;
   private sourceTextStartInput: HTMLInputElement | null = null;
   private sourceTextEndInput: HTMLInputElement | null = null;
   private sourceTextDisplayInput: HTMLInputElement | null = null;
@@ -50,8 +57,16 @@ export class NoteForm extends Component {
     this.annotationService = options.annotationService;
     this.targetArticle = options.targetArticle;
     this.sourceFilePath = options.sourceFilePath;
+    this.hideSourceFields = options.hideSourceFields;
+    this.sourceLineText = options.sourceLineText;
+    this.lineIndex = options.lineIndex;
 
     this.createForm();
+
+    // Try to load existing annotation
+    this.loadExistingAnnotation().catch((error) => {
+      console.error("[Idealogs] Error loading existing annotation:", error);
+    });
   }
 
   private createForm(): void {
@@ -64,8 +79,17 @@ export class NoteForm extends Component {
     // Form container
     const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
 
+    // Source fields container (can be hidden)
+    this.sourceFieldsContainer = formContainer.createDiv({
+      cls: "idl-source-fields-container",
+    });
+
+    if (this.hideSourceFields) {
+      this.sourceFieldsContainer.style.display = "none";
+    }
+
     // Source Text Start and End
-    const sourceRangeFields = formContainer.createDiv({
+    const sourceRangeFields = this.sourceFieldsContainer.createDiv({
       cls: "idl-form-field idl-range-field",
     });
 
@@ -86,7 +110,7 @@ export class NoteForm extends Component {
     });
 
     // Source Text Display
-    const sourceDisplayField = formContainer.createDiv({
+    const sourceDisplayField = this.sourceFieldsContainer.createDiv({
       cls: "idl-form-field",
     });
     sourceDisplayField.createEl("label", { text: "Source Text Display" });
@@ -157,9 +181,6 @@ export class NoteForm extends Component {
 
   private async handleSave(): Promise<void> {
     if (
-      !this.sourceTextStartInput ||
-      !this.sourceTextEndInput ||
-      !this.sourceTextDisplayInput ||
       !this.targetTextStartInput ||
       !this.targetTextEndInput ||
       !this.targetTextDisplayInput
@@ -167,23 +188,53 @@ export class NoteForm extends Component {
       return;
     }
 
-    const sourceTextStart = this.sourceTextStartInput.value.trim();
-    const sourceTextEnd = this.sourceTextEndInput.value.trim();
-    const sourceTextDisplay = this.sourceTextDisplayInput.value.trim();
     const targetTextStart = this.targetTextStartInput.value.trim();
     const targetTextEnd = this.targetTextEndInput.value.trim();
     const targetTextDisplay = this.targetTextDisplayInput.value.trim();
-
-    // Validate source fields
-    if (!sourceTextStart || !sourceTextEnd || !sourceTextDisplay) {
-      new Notice("Please fill in all source text fields");
-      return;
-    }
 
     // Validate target fields
     if (!targetTextStart || !targetTextEnd || !targetTextDisplay) {
       new Notice("Please fill in all target text fields");
       return;
+    }
+
+    // Get source field values (may be empty if hidden)
+    let sourceTextStart = "";
+    let sourceTextEnd = "";
+    let sourceTextDisplay = "";
+
+    if (!this.hideSourceFields) {
+      if (
+        !this.sourceTextStartInput ||
+        !this.sourceTextEndInput ||
+        !this.sourceTextDisplayInput
+      ) {
+        return;
+      }
+
+      sourceTextStart = this.sourceTextStartInput.value.trim();
+      sourceTextEnd = this.sourceTextEndInput.value.trim();
+      sourceTextDisplay = this.sourceTextDisplayInput.value.trim();
+
+      // Validate source fields are filled
+      if (!sourceTextStart || !sourceTextEnd || !sourceTextDisplay) {
+        new Notice("Please fill in all source text fields");
+        return;
+      }
+
+      // Validate source fields exist in the line text
+      if (!this.sourceLineText.includes(sourceTextStart)) {
+        new Notice("Source Text Start not found in the line");
+        return;
+      }
+      if (!this.sourceLineText.includes(sourceTextEnd)) {
+        new Notice("Source Text End not found in the line");
+        return;
+      }
+      if (!this.sourceLineText.includes(sourceTextDisplay)) {
+        new Notice("Source Text Display not found in the line");
+        return;
+      }
     }
 
     try {
@@ -218,7 +269,10 @@ export class NoteForm extends Component {
         sourceStart: sourceTextStart,
         sourceEnd: sourceTextEnd,
         sourceDisplay: sourceTextDisplay,
-        sourceText: `${sourceTextStart}...${sourceTextEnd}`,
+        sourceText: this.hideSourceFields
+          ? ""
+          : this.extractSourceText(sourceTextStart, sourceTextEnd),
+        lineIndex: this.lineIndex,
         isValid: true,
       };
 
@@ -233,8 +287,53 @@ export class NoteForm extends Component {
 
       this.clearForm();
     } catch (error) {
-      new Notice(`Error saving note: ${error.message}`);
+      new Notice(`Error saving note: ${(error as Error).message}`);
       console.error("[Idealogs] Error saving note:", error);
+    }
+  }
+
+  private extractSourceText(sourceTextStart: string, sourceTextEnd: string): string {
+    const startIndex = this.sourceLineText.indexOf(sourceTextStart);
+    const endIndex = this.sourceLineText.indexOf(sourceTextEnd);
+
+    if (startIndex === -1 || endIndex === -1) {
+      return `${sourceTextStart}...${sourceTextEnd}`;
+    }
+
+    return this.sourceLineText.substring(startIndex, endIndex + sourceTextEnd.length);
+  }
+
+  private async loadExistingAnnotation(): Promise<void> {
+    try {
+      this.savedAnnotation = await this.annotationService.findNoteBySource(
+        this.sourceFilePath,
+        this.targetArticle.id,
+        this.lineIndex
+      );
+
+      if (this.savedAnnotation) {
+        // Populate form with saved annotation data
+        if (this.sourceTextStartInput && this.savedAnnotation.sourceStart) {
+          this.sourceTextStartInput.value = this.savedAnnotation.sourceStart;
+        }
+        if (this.sourceTextEndInput && this.savedAnnotation.sourceEnd) {
+          this.sourceTextEndInput.value = this.savedAnnotation.sourceEnd;
+        }
+        if (this.sourceTextDisplayInput && this.savedAnnotation.sourceDisplay) {
+          this.sourceTextDisplayInput.value = this.savedAnnotation.sourceDisplay;
+        }
+        if (this.targetTextStartInput) {
+          this.targetTextStartInput.value = this.savedAnnotation.targetStart;
+        }
+        if (this.targetTextEndInput) {
+          this.targetTextEndInput.value = this.savedAnnotation.targetEnd;
+        }
+        if (this.targetTextDisplayInput) {
+          this.targetTextDisplayInput.value = this.savedAnnotation.targetDisplay;
+        }
+      }
+    } catch (error) {
+      console.error("[Idealogs] Error loading existing annotation:", error);
     }
   }
 

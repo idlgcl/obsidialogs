@@ -85,7 +85,13 @@ export class FormView extends ItemView {
     }
   }
 
-  updateNote(targetArticle: Article, sourceFilePath: string): void {
+  updateNote(
+    targetArticle: Article,
+    sourceFilePath: string,
+    hideSourceFields: boolean,
+    sourceLineText: string,
+    lineIndex: number
+  ): void {
     // Clear all existing forms
     this.clear();
 
@@ -98,6 +104,9 @@ export class FormView extends ItemView {
         annotationService: this.annotationService,
         targetArticle: targetArticle,
         sourceFilePath: sourceFilePath,
+        hideSourceFields: hideSourceFields,
+        sourceLineText: sourceLineText,
+        lineIndex: lineIndex,
         onArticleSelected: this.onArticleSelectedCallback || undefined,
       });
       this.noteForm.load();
