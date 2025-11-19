@@ -419,9 +419,7 @@ export class AnnotationService {
     }
   }
 
-  async validateNote(
-    annotation: Annotation
-  ): Promise<{
+  async validateNote(annotation: Annotation): Promise<{
     isValid: boolean;
     message?: string;
     sourceText?: string;

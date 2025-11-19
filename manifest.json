@@ -1,7 +1,7 @@
 {
   "id": "idealogs-annotator",
   "name": "Idealogs Annotator",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minAppVersion": "1.8.7",
   "description": "For viewing, linking and annotating Idealogs articles.",
   "author": "Idealogical Foundation",
