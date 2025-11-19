@@ -15,6 +15,7 @@ export interface NoteFormOptions {
   hideSourceFields: boolean;
   sourceLineText: string;
   lineIndex: number;
+  sameLinkCount: number;
   onArticleSelected?: (article: Article) => void;
 }
 
@@ -30,7 +31,10 @@ export class NoteForm extends Component {
   private hideSourceFields: boolean;
   private sourceLineText: string;
   private lineIndex: number;
+  private sameLinkCount: number;
   private savedAnnotation: Annotation | null = null;
+  private savedNotes: Annotation[] = [];
+  private currentNoteIndex = 0;
 
   // Source fields
   private sourceFieldsContainer: HTMLElement | null = null;
@@ -47,6 +51,12 @@ export class NoteForm extends Component {
   // Buttons
   private showTargetButton: HTMLButtonElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
+  private newNoteButton: HTMLButtonElement | null = null;
+  private prevButton: HTMLButtonElement | null = null;
+  private nextButton: HTMLButtonElement | null = null;
+
+  // Navigation indicator
+  private noteIndicator: HTMLElement | null = null;
 
   constructor(options: NoteFormOptions) {
     super();
@@ -60,6 +70,7 @@ export class NoteForm extends Component {
     this.hideSourceFields = options.hideSourceFields;
     this.sourceLineText = options.sourceLineText;
     this.lineIndex = options.lineIndex;
+    this.sameLinkCount = options.sameLinkCount;
 
     this.createForm();
 
@@ -72,9 +83,34 @@ export class NoteForm extends Component {
   private createForm(): void {
     this.contentEl = this.container.createDiv({ cls: "idl-note-form" });
 
-    // Header
+    // Header with navigation controls
     const headerContainer = this.contentEl.createDiv({ cls: "form-header" });
     headerContainer.createEl("h3", { text: "Note" });
+
+    // Spacer to push buttons to the right
+    headerContainer.createDiv({ cls: "idl-spacer" });
+
+    // New Note button
+    this.newNoteButton = headerContainer.createEl("button", {
+      text: "New Note",
+    });
+    this.newNoteButton.style.display = "none";
+    this.newNoteButton.addEventListener("click", () => this.handleNewNote());
+
+    // Navigation container
+    const navContainer = headerContainer.createDiv({ cls: "idl-note-nav" });
+    navContainer.style.display = "none";
+
+    this.prevButton = navContainer.createEl("button", { text: "<<" });
+    this.prevButton.addEventListener("click", () => this.handlePrevNote());
+
+    this.noteIndicator = navContainer.createEl("span", {
+      cls: "idl-note-indicator",
+      text: "1 of 1",
+    });
+
+    this.nextButton = navContainer.createEl("button", { text: ">>" });
+    this.nextButton.addEventListener("click", () => this.handleNextNote());
 
     // Form container
     const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
@@ -159,8 +195,9 @@ export class NoteForm extends Component {
       type: "text",
     });
 
-    // Buttons
+    // Primary buttons row
     const buttonContainer = formContainer.createDiv({ cls: "idl-btns" });
+
     this.showTargetButton = buttonContainer.createEl("button", {
       text: "Show Target",
     });
@@ -177,6 +214,80 @@ export class NoteForm extends Component {
       this.options.onArticleSelected(this.targetArticle);
     }
     new Notice(`Target article "${this.targetArticle.title}" is displayed`);
+  }
+
+  private handleNewNote(): void {
+    // Clear form for new note
+    this.savedAnnotation = null;
+    this.clearForm();
+    new Notice("Creating new note");
+  }
+
+  private handlePrevNote(): void {
+    if (this.savedNotes.length <= 1) return;
+
+    this.currentNoteIndex =
+      (this.currentNoteIndex - 1 + this.savedNotes.length) %
+      this.savedNotes.length;
+    this.loadNoteAtIndex(this.currentNoteIndex);
+  }
+
+  private handleNextNote(): void {
+    if (this.savedNotes.length <= 1) return;
+
+    this.currentNoteIndex =
+      (this.currentNoteIndex + 1) % this.savedNotes.length;
+    this.loadNoteAtIndex(this.currentNoteIndex);
+  }
+
+  private loadNoteAtIndex(index: number): void {
+    const note = this.savedNotes[index];
+    if (!note) return;
+
+    this.savedAnnotation = note;
+
+    // Populate form fields
+    if (this.sourceTextStartInput && note.sourceStart) {
+      this.sourceTextStartInput.value = note.sourceStart;
+    }
+    if (this.sourceTextEndInput && note.sourceEnd) {
+      this.sourceTextEndInput.value = note.sourceEnd;
+    }
+    if (this.sourceTextDisplayInput && note.sourceDisplay) {
+      this.sourceTextDisplayInput.value = note.sourceDisplay;
+    }
+    if (this.targetTextStartInput) {
+      this.targetTextStartInput.value = note.targetStart;
+    }
+    if (this.targetTextEndInput) {
+      this.targetTextEndInput.value = note.targetEnd;
+    }
+    if (this.targetTextDisplayInput) {
+      this.targetTextDisplayInput.value = note.targetDisplay;
+    }
+
+    this.updateNavigationUI();
+  }
+
+  private updateNavigationUI(): void {
+    // Update note indicator
+    if (this.noteIndicator) {
+      this.noteIndicator.textContent = ` ${this.currentNoteIndex + 1} of ${
+        this.savedNotes.length
+      }`;
+    }
+
+    // Show/hide navigation based on number of saved notes
+    const navContainer = this.noteIndicator?.parentElement;
+    if (navContainer) {
+      navContainer.style.display = this.savedNotes.length > 1 ? "flex" : "none";
+    }
+
+    // Show/hide New Note button
+    if (this.newNoteButton) {
+      this.newNoteButton.style.display =
+        this.savedNotes.length < this.sameLinkCount ? "block" : "none";
+    }
   }
 
   private async handleSave(): Promise<void> {
@@ -307,12 +418,27 @@ export class NoteForm extends Component {
       // Save annotation
       await this.annotationService.saveAnnotation(annotation);
 
-      const action = this.savedAnnotation ? "updated" : "saved";
+      const isUpdate = this.savedAnnotation !== null;
+      const action = isUpdate ? "updated" : "saved";
       new Notice(`Note ${action} successfully`);
 
       // Update savedAnnotation for subsequent saves
       this.savedAnnotation = annotation;
 
+      // Update savedNotes array
+      if (isUpdate) {
+        // Replace existing note in array
+        const index = this.savedNotes.findIndex((n) => n.id === annotation.id);
+        if (index >= 0) {
+          this.savedNotes[index] = annotation;
+        }
+      } else {
+        // Add new note to array
+        this.savedNotes.push(annotation);
+        this.currentNoteIndex = this.savedNotes.length - 1;
+      }
+
+      this.updateNavigationUI();
       this.clearForm();
     } catch (error) {
       new Notice(`Error saving note: ${(error as Error).message}`);
@@ -339,34 +465,20 @@ export class NoteForm extends Component {
 
   private async loadExistingAnnotation(): Promise<void> {
     try {
-      this.savedAnnotation = await this.annotationService.findNoteBySource(
+      // Load all notes for this link on this line
+      this.savedNotes = await this.annotationService.findNotesByLineIndex(
         this.sourceFilePath,
         this.targetArticle.id,
         this.lineIndex
       );
 
-      if (this.savedAnnotation) {
-        // Populate form with saved annotation data
-        if (this.sourceTextStartInput && this.savedAnnotation.sourceStart) {
-          this.sourceTextStartInput.value = this.savedAnnotation.sourceStart;
-        }
-        if (this.sourceTextEndInput && this.savedAnnotation.sourceEnd) {
-          this.sourceTextEndInput.value = this.savedAnnotation.sourceEnd;
-        }
-        if (this.sourceTextDisplayInput && this.savedAnnotation.sourceDisplay) {
-          this.sourceTextDisplayInput.value =
-            this.savedAnnotation.sourceDisplay;
-        }
-        if (this.targetTextStartInput) {
-          this.targetTextStartInput.value = this.savedAnnotation.targetStart;
-        }
-        if (this.targetTextEndInput) {
-          this.targetTextEndInput.value = this.savedAnnotation.targetEnd;
-        }
-        if (this.targetTextDisplayInput) {
-          this.targetTextDisplayInput.value =
-            this.savedAnnotation.targetDisplay;
-        }
+      if (this.savedNotes.length > 0) {
+        // Load the first note
+        this.currentNoteIndex = 0;
+        this.loadNoteAtIndex(0);
+      } else {
+        // No saved notes, update UI to show New Note button if applicable
+        this.updateNavigationUI();
       }
     } catch (error) {
       console.error("[Idealogs] Error loading existing annotation:", error);
