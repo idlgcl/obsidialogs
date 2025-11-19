@@ -20,6 +20,7 @@ import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
 import { Logger } from "./utils/logger";
 import { Article } from "./types";
 import { AnnotationService } from "./utils/annotation-service";
+import { LinkTransformer } from "./utils/link-transformer";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -41,6 +42,7 @@ export default class IdealogsPlugin extends Plugin {
   fileDeletionManager: FileDeletionManager;
   commonLinkHandler: CommonLinkHandler;
   logger: Logger;
+  linkTransformer: LinkTransformer;
   private cleanupLinkPatching: () => void;
   private commentParser: CommentParser;
   private cursorCheckInterval: number | null = null;
@@ -63,6 +65,25 @@ export default class IdealogsPlugin extends Plugin {
     // Initialize core services
     this.apiService = new ApiService();
     this.annotationService = new AnnotationService(this.app);
+    this.linkTransformer = new LinkTransformer();
+
+    // Register markdown post processor for reading mode
+    this.registerMarkdownPostProcessor((element, context) => {
+      const file = context.sourcePath;
+      if (!file) return;
+
+      // Get article ID
+      const articleId = file.split("/").pop()?.replace(".md", "") || "";
+
+      // Transform links in reading mode
+      this.linkTransformer.transformLinks(
+        element,
+        articleId,
+        (targetArticleId) => {
+          this.handleWritingLinkClick(targetArticleId);
+        }
+      );
+    });
 
     // Initialize file tracker
     this.fileTracker = new FileTracker();
