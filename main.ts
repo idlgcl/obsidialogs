@@ -368,14 +368,13 @@ export default class IdealogsPlugin extends Plugin {
             return false;
           }
 
-          // Parse the link
-          const linkPattern = /\[\[@(Tx[^\]]+)\]\]/;
-          const match = lineText.match(linkPattern);
-
-          if (match) {
+          // Parse all links on the line and find which one was clicked
+          const linkPattern = /\[\[@(Tx[^\]]+)\]\]/g;
+          const charOffset = pos - line.from;
+          let match;
+          while ((match = linkPattern.exec(lineText)) !== null) {
             const articleId = match[1];
-            const charOffset = pos - line.from;
-            const linkStart = lineText.indexOf(match[0]);
+            const linkStart = match.index;
             const linkEnd = linkStart + match[0].length;
 
             if (charOffset >= linkStart && charOffset <= linkEnd) {
