@@ -13,6 +13,7 @@ export class FormView extends ItemView {
   private noteForm: NoteForm | null = null;
   private container: HTMLElement | null = null;
   private onArticleSelectedCallback: ((article: Article) => void) | null = null;
+  private onFlashTextCallback: ((text: string) => void) | null = null;
   private apiService: ApiService | null = null;
   private annotationService: AnnotationService | null = null;
 
@@ -57,6 +58,10 @@ export class FormView extends ItemView {
 
   setOnArticleSelected(callback: (article: Article) => void): void {
     this.onArticleSelectedCallback = callback;
+  }
+
+  setOnFlashText(callback: (text: string) => void): void {
+    this.onFlashTextCallback = callback;
   }
 
   setServices(
@@ -110,6 +115,7 @@ export class FormView extends ItemView {
         lineIndex: lineIndex,
         sameLinkCount: sameLinkCount,
         onArticleSelected: this.onArticleSelectedCallback || undefined,
+        onFlashText: this.onFlashTextCallback || undefined,
       });
       this.noteForm.load();
     }

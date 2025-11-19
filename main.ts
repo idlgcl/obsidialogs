@@ -187,6 +187,12 @@ export default class IdealogsPlugin extends Plugin {
         formView.setOnArticleSelected((article) =>
           this.handleArticleSelected(article)
         );
+        formView.setOnFlashText((text) => {
+          const writingView = this.getWritingView();
+          if (writingView) {
+            writingView.flashText(text);
+          }
+        });
       }
       return;
     }
@@ -209,6 +215,12 @@ export default class IdealogsPlugin extends Plugin {
         formView.setOnArticleSelected((article) =>
           this.handleArticleSelected(article)
         );
+        formView.setOnFlashText((text) => {
+          const writingView = this.getWritingView();
+          if (writingView) {
+            writingView.flashText(text);
+          }
+        });
       }
     }
   }
@@ -546,6 +558,18 @@ export default class IdealogsPlugin extends Plugin {
       return view;
     }
 
+    return null;
+  }
+
+  private getWritingView(): WritingView | null {
+    const existingLeaves =
+      this.app.workspace.getLeavesOfType(WRITING_VIEW_TYPE);
+    if (existingLeaves.length > 0) {
+      const view = existingLeaves[0].view;
+      if (view instanceof WritingView) {
+        return view;
+      }
+    }
     return null;
   }
 
