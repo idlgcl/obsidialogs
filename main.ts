@@ -866,45 +866,43 @@ class IdealogsSettingTab extends PluginSettingTab {
         "Convert .annotations files to new format and save to .idealogs/annotations/old/"
       )
       .addButton((button) =>
-        button
-          .setButtonText("Migrate")
-          .onClick(async () => {
-            button.setDisabled(true);
-            button.setButtonText("Migrating...");
+        button.setButtonText("Migrate").onClick(async () => {
+          button.setDisabled(true);
+          button.setButtonText("Migrating...");
 
-            try {
-              const result: MigrationResult =
-                await this.plugin.annotationService.migrateOldAnnotations();
+          try {
+            const result: MigrationResult =
+              await this.plugin.annotationService.migrateOldAnnotations();
 
-              if (result.migratedFiles.length > 0) {
-                new Notice(
-                  `Migrated ${result.migratedFiles.length} file(s) successfully`
-                );
-              }
-
-              if (result.errors.length > 0) {
-                result.errors.forEach((error) => {
-                  console.error("[Idealogs Migration]", error);
-                });
-                new Notice(
-                  `Migration completed with ${result.errors.length} error(s). Check console for details.`
-                );
-              }
-
-              if (
-                result.migratedFiles.length === 0 &&
-                result.errors.length === 0
-              ) {
-                new Notice("No files to migrate");
-              }
-            } catch (error) {
-              console.error("[Idealogs Migration] Error:", error);
-              new Notice(`Migration failed: ${error.message}`);
-            } finally {
-              button.setDisabled(false);
-              button.setButtonText("Migrate");
+            if (result.migratedFiles.length > 0) {
+              new Notice(
+                `Migrated ${result.migratedFiles.length} file(s) successfully`
+              );
             }
-          })
+
+            if (result.errors.length > 0) {
+              result.errors.forEach((error) => {
+                console.error("[Idealogs Migration]", error);
+              });
+              new Notice(
+                `Migration completed with ${result.errors.length} error(s). Check console for details.`
+              );
+            }
+
+            if (
+              result.migratedFiles.length === 0 &&
+              result.errors.length === 0
+            ) {
+              new Notice("No files to migrate");
+            }
+          } catch (error) {
+            console.error("[Idealogs Migration] Error:", error);
+            new Notice(`Migration failed: ${error.message}`);
+          } finally {
+            button.setDisabled(false);
+            button.setButtonText("Migrate");
+          }
+        })
       );
 
     // Show log management buttons only when logs are enabled
