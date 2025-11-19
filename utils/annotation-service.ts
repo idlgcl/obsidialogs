@@ -1,5 +1,47 @@
 import { App, normalizePath } from "obsidian";
 
+// Old annotation format interfaces
+interface OldNote {
+  src: string;
+  src_txt_display: string;
+  src_txt_start: string;
+  src_txt_end: string;
+  src_txt: string;
+  target: string;
+  target_txt_display: string;
+  target_txt_start: string;
+  target_txt_end: string;
+  target_txt: string;
+  isValid?: boolean;
+  validationMessage?: string;
+  lineIndex?: number;
+}
+
+interface OldComment {
+  src: string;
+  src_txt_display: string;
+  src_txt_start: string;
+  src_txt_end: string;
+  src_txt: string;
+  target: string;
+  target_txt_display: string;
+  target_txt_start: string;
+  target_txt_end: string;
+  target_txt: string;
+  isValid?: boolean;
+  validationMessage?: string;
+}
+
+interface OldAnnotationsFile {
+  notes: Record<string, OldNote>;
+  comments: Record<string, OldComment>;
+}
+
+export interface MigrationResult {
+  migratedFiles: string[];
+  errors: string[];
+}
+
 export interface Annotation {
   id: string;
   kind: "Note" | "Comment";
@@ -31,9 +73,129 @@ export interface AnnotationsFile {
 export class AnnotationService {
   private app: App;
   private readonly ANNOTATIONS_FOLDER = ".idealogs/annotations";
+  private readonly OLD_MIGRATIONS_FOLDER = ".idealogs/annotations/old";
 
   constructor(app: App) {
     this.app = app;
+  }
+
+  async migrateOldAnnotations(): Promise<MigrationResult> {
+    const result: MigrationResult = {
+      migratedFiles: [],
+      errors: [],
+    };
+
+    try {
+      // Ensure old migrations folder exists
+      await this.ensureOldMigrationsDirectory();
+
+      // Find all .annotations files in the vault
+      const files = this.app.vault.getFiles();
+      const annotationFiles = files.filter((f) =>
+        f.path.endsWith(".annotations")
+      );
+
+      if (annotationFiles.length === 0) {
+        result.errors.push("No .annotations files found in vault");
+        return result;
+      }
+
+      for (const file of annotationFiles) {
+        try {
+          const content = await this.app.vault.read(file);
+          const oldData = JSON.parse(content) as OldAnnotationsFile;
+
+          // Convert to new format
+          const newData: AnnotationsFile = {
+            notes: {},
+            comments: {},
+          };
+
+          // Migrate notes
+          for (const noteId in oldData.notes) {
+            const oldNote = oldData.notes[noteId];
+            const newNote: Annotation = {
+              id: noteId,
+              kind: "Note",
+              sourceId: oldNote.src,
+              sourceStart: oldNote.src_txt_start,
+              sourceEnd: oldNote.src_txt_end,
+              sourceDisplay: oldNote.src_txt_display,
+              sourceText: oldNote.src_txt,
+              targetId: oldNote.target,
+              targetStart: oldNote.target_txt_start,
+              targetEnd: oldNote.target_txt_end,
+              targetDisplay: oldNote.target_txt_display,
+              targetText: oldNote.target_txt,
+              isValid: oldNote.isValid,
+              validationError: oldNote.validationMessage,
+              lineIndex: oldNote.lineIndex,
+            };
+            newData.notes[noteId] = newNote;
+          }
+
+          // Migrate comments
+          for (const commentId in oldData.comments) {
+            const oldComment = oldData.comments[commentId];
+            const newComment: Annotation = {
+              id: commentId,
+              kind: "Comment",
+              sourceId: oldComment.src,
+              sourceStart: oldComment.src_txt_start,
+              sourceEnd: oldComment.src_txt_end,
+              sourceDisplay: oldComment.src_txt_display,
+              sourceText: oldComment.src_txt,
+              targetId: oldComment.target,
+              targetStart: oldComment.target_txt_start,
+              targetEnd: oldComment.target_txt_end,
+              targetDisplay: oldComment.target_txt_display,
+              targetText: oldComment.target_txt,
+              isValid: oldComment.isValid,
+              validationError: oldComment.validationMessage,
+            };
+            newData.comments[commentId] = newComment;
+          }
+
+          // Save to old migrations folder
+          const baseName = file.name.replace(".annotations", "");
+          const newPath = normalizePath(
+            `${this.OLD_MIGRATIONS_FOLDER}/${baseName}.json`
+          );
+          await this.app.vault.adapter.write(
+            newPath,
+            JSON.stringify(newData, null, 2)
+          );
+
+          result.migratedFiles.push(file.path);
+        } catch (error) {
+          result.errors.push(`Error migrating ${file.path}: ${error.message}`);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      result.errors.push(`Migration failed: ${error.message}`);
+      return result;
+    }
+  }
+
+  private async ensureOldMigrationsDirectory(): Promise<void> {
+    const folderPath = normalizePath(this.OLD_MIGRATIONS_FOLDER);
+
+    if (!(await this.app.vault.adapter.exists(folderPath))) {
+      // Ensure parent directories exist
+      const idealogsFolderPath = normalizePath(".idealogs");
+      if (!(await this.app.vault.adapter.exists(idealogsFolderPath))) {
+        await this.app.vault.createFolder(idealogsFolderPath);
+      }
+
+      const annotationsFolderPath = normalizePath(this.ANNOTATIONS_FOLDER);
+      if (!(await this.app.vault.adapter.exists(annotationsFolderPath))) {
+        await this.app.vault.createFolder(annotationsFolderPath);
+      }
+
+      await this.app.vault.createFolder(folderPath);
+    }
   }
 
   private async ensureAnnotationsDirectory(): Promise<void> {
