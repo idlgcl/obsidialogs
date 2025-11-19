@@ -185,6 +185,7 @@ export class WritingView extends ItemView {
 
     if (!found) {
       console.error("[Idealogs] flashText: text not found in content");
+      console.log(text);
     }
   }
 }
