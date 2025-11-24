@@ -162,6 +162,9 @@ export class WritingView extends ItemView {
       this.txLinkCounter = 0;
 
       for (const annotation of annotations) {
+        console.log(
+          `[applyAnnotations] Processing ${annotation.kind} annotation ID ${annotation.id}`
+        );
         if (annotation.kind === "Comment") {
           await this.processCommentAnnotation(container, annotation);
         } else if (annotation.kind === "Note") {
@@ -310,19 +313,99 @@ export class WritingView extends ItemView {
     };
   }
 
+  private safeToRange(container: HTMLElement, descriptor: any): Range | null {
+    try {
+      const range = textQuote.toRange(container, descriptor);
+      if (!range || range.collapsed) {
+        console.log(
+          `[safeToRange] Range is ${!range ? "null" : "collapsed"} for "${
+            descriptor.exact
+          }"`
+        );
+        return null;
+      }
+
+      // range touches an annotation container → discard
+      const common = range.commonAncestorContainer;
+      console.log(`[safeToRange] commonAncestor for "${descriptor.exact}":`, {
+        nodeType: common.nodeType,
+        nodeName: common.nodeName,
+        isHTMLElement: common instanceof HTMLElement,
+        textContent: common.textContent?.substring(0, 50),
+      });
+
+      //  common ancestor or any parent is an annotation container
+      let checkNode: Node | null = common;
+      while (checkNode && checkNode !== container) {
+        if (
+          checkNode instanceof HTMLElement &&
+          checkNode.classList.contains("idl-annotation-container")
+        ) {
+          console.log(
+            `[safeToRange] REJECTED - Found annotation container in parent chain for "${descriptor.exact}"`
+          );
+          return null;
+        }
+        checkNode = checkNode.parentNode;
+      }
+
+      console.log(`[safeToRange] ACCEPTED range for "${descriptor.exact}"`);
+      return range;
+    } catch (e) {
+      console.log(`[safeToRange] Exception for "${descriptor.exact}":`, e);
+      return null;
+    }
+  }
+
   // Fallback: simple text search
   private findTextRange(container: HTMLElement, text: string): Range | null {
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    console.log(`[findTextRange] Searching for "${text}"`);
+    let nodesChecked = 0;
+    let nodesRejected = 0;
+
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node: Node) => {
+        nodesChecked++;
+        // Reject any text node that lives inside an annotation container
+        let el: HTMLElement | null = node.parentElement;
+        const parentChain: string[] = [];
+        while (el && el !== container) {
+          parentChain.push(el.className || el.nodeName);
+          if (el.classList?.contains("idl-annotation-container")) {
+            nodesRejected++;
+            console.log(
+              `[findTextRange] REJECTED text node (inside annotation-container). Chain: ${parentChain.join(
+                " > "
+              )}`
+            );
+            return NodeFilter.FILTER_REJECT;
+          }
+          el = el.parentElement;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
     let node: Text | null;
     while ((node = walker.nextNode() as Text | null)) {
       const idx = node.textContent?.indexOf(text);
+      console.log(
+        `[findTextRange] Checking text node: "${node.textContent?.substring(
+          0,
+          50
+        )}..." idx=${idx}`
+      );
       if (idx !== undefined && idx !== -1) {
+        console.log(`[findTextRange] FOUND "${text}" at index ${idx}`);
         const range = new Range();
         range.setStart(node, idx);
         range.setEnd(node, idx + text.length);
         return range;
       }
     }
+    console.log(
+      `[findTextRange] NOT FOUND "${text}". Checked ${nodesChecked} nodes, rejected ${nodesRejected}`
+    );
     return null;
   }
 
@@ -340,7 +423,7 @@ export class WritingView extends ItemView {
         textEnd,
         textDisplay
       );
-      let range: Range | null = textQuote.toRange(container, {
+      let range: Range | null = this.safeToRange(container, {
         exact,
         prefix,
         suffix,
@@ -397,7 +480,7 @@ export class WritingView extends ItemView {
         textDisplay
       );
 
-      let range: Range | null = textQuote.toRange(container, {
+      let range: Range | null = this.safeToRange(container, {
         exact,
         prefix,
         suffix,
