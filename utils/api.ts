@@ -196,13 +196,13 @@ export class ApiService {
     }
 
     let page = 1;
-    const limit = 50;
+    const limit = 100;
     let hasMore = true;
     const allAnnotations: IdealogsAnnotation[] = [];
 
     try {
       while (hasMore) {
-        const url = `${ANNOTATION_ENDPOINT}/annotations?target_id=${targetId}&source_id=${sourceId}&is_valid=true&commit_is_merged=true&page=${page}&limit=${limit}`;
+        const url = `${ANNOTATION_ENDPOINT}/annotations?target_id=${targetId}&source_id=${sourceId}&kind=Note&kind=Comment&is_valid=true&commit_is_merged=true&page=${page}&limit=${limit}`;
 
         const response = await fetch(url);
         if (!response.ok) {
