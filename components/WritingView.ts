@@ -126,6 +126,15 @@ export class WritingView extends ItemView {
     this.currentTitle = title;
     this.currentContent = content;
     this.updateHeader();
+
+    if (this.mode !== "read") {
+      this.mode = "read";
+      if (this.modeToggleButton) {
+        setIcon(this.modeToggleButton, "highlighter");
+        this.modeToggleButton.removeClass("is-active");
+      }
+    }
+
     await this.renderContent();
   }
 
@@ -562,6 +571,12 @@ export class WritingView extends ItemView {
       linkDiv.appendChild(link);
       item.appendChild(linkDiv);
       // TODO Click handler
+      link.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        if (this.onTxClick) {
+          this.onTxClick(annotationSource);
+        }
+      });
       container.appendChild(item);
 
       wrapper.addEventListener("click", (e) => {
