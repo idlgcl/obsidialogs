@@ -552,6 +552,41 @@ export default class IdealogsPlugin extends Plugin {
     }
   }
 
+  private async handleAnnotatedModeNoteClick(articleId: string): Promise<void> {
+    try {
+      const articleData = await this.apiService.fetchArticleById(articleId);
+      const content = await this.apiService.fetchFileContent(articleId);
+
+      const existingWritingView = this.getWritingView();
+      if (existingWritingView) {
+        await existingWritingView.updateContent(
+          articleId,
+          articleData.title,
+          content
+        );
+        return;
+      }
+
+      // Fallback: try to get active markdown view to create WritingView
+      const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (!activeView?.leaf) {
+        new Notice("No suitable location to open article");
+        return;
+      }
+
+      const writingView = await this.getOrCreateWritingView(activeView.leaf);
+      if (writingView) {
+        await writingView.updateContent(articleId, articleData.title, content);
+      }
+    } catch (error) {
+      console.error(
+        "[Idealogs] Error handling annotated mode note click:",
+        error
+      );
+      new Notice("Failed to load article");
+    }
+  }
+
   private async handleWritingLinkClick(
     articleId: string,
     hideSourceFields: boolean,
@@ -606,6 +641,11 @@ export default class IdealogsPlugin extends Plugin {
     if (existingLeaves.length > 0) {
       const view = existingLeaves[0].view;
       if (view instanceof WritingView) {
+        // Ensure services are set
+        view.setServices(this.apiService, this.linkTransformer);
+        view.setOnTxClick((targetArticleId) =>
+          this.handleAnnotatedModeNoteClick(targetArticleId)
+        );
         return view;
       }
     }
@@ -628,6 +668,11 @@ export default class IdealogsPlugin extends Plugin {
 
     const view = newLeaf.view;
     if (view instanceof WritingView) {
+      // Set services on the newly created view
+      view.setServices(this.apiService, this.linkTransformer);
+      view.setOnTxClick((targetArticleId) =>
+        this.handleAnnotatedModeNoteClick(targetArticleId)
+      );
       return view;
     }
 
