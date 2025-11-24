@@ -16,6 +16,7 @@ export class WritingView extends ItemView {
   private apiService: ApiService | null = null;
   private linkTransformer: LinkTransformer | null = null;
   private onTxClick: ((targetArticleId: string) => void) | null = null;
+  private onFxIxClick: ((targetArticleId: string) => void) | null = null;
   private modeToggleButton: HTMLElement | null = null;
   private txLinkCounter = 0;
 
@@ -30,6 +31,10 @@ export class WritingView extends ItemView {
 
   setOnTxClick(callback: (targetArticleId: string) => void): void {
     this.onTxClick = callback;
+  }
+
+  setOnFxIxClick(callback: (targetArticleId: string) => void): void {
+    this.onFxIxClick = callback;
   }
 
   getViewType(): string {
@@ -430,6 +435,11 @@ export class WritingView extends ItemView {
         e.stopPropagation();
         if (this.onTxClick && targetArticleId.startsWith("Tx")) {
           this.onTxClick(targetArticleId);
+        } else if (
+          this.onFxIxClick &&
+          (targetArticleId.startsWith("Fx") || targetArticleId.startsWith("Ix"))
+        ) {
+          this.onFxIxClick(targetArticleId);
         }
       });
 

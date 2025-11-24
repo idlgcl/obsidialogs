@@ -587,6 +587,18 @@ export default class IdealogsPlugin extends Plugin {
     }
   }
 
+  private async handleAnnotatedQIClick(articleId: string): Promise<void> {
+    try {
+      this.commonLinkHandler.handleLink(`@${articleId}`, articleId);
+    } catch (error) {
+      console.error(
+        "[Idealogs] Error handling annotated mode link click:",
+        error
+      );
+      new Notice("Failed to load article");
+    }
+  }
+
   private async handleWritingLinkClick(
     articleId: string,
     hideSourceFields: boolean,
@@ -646,6 +658,9 @@ export default class IdealogsPlugin extends Plugin {
         view.setOnTxClick((targetArticleId) =>
           this.handleAnnotatedModeNoteClick(targetArticleId)
         );
+        view.setOnFxIxClick((targetArticleId) =>
+          this.handleAnnotatedQIClick(targetArticleId)
+        );
         return view;
       }
     }
@@ -672,6 +687,9 @@ export default class IdealogsPlugin extends Plugin {
       view.setServices(this.apiService, this.linkTransformer);
       view.setOnTxClick((targetArticleId) =>
         this.handleAnnotatedModeNoteClick(targetArticleId)
+      );
+      view.setOnFxIxClick((targetArticleId) =>
+        this.handleAnnotatedQIClick(targetArticleId)
       );
       return view;
     }
