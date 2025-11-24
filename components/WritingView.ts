@@ -7,6 +7,7 @@ import * as textQuote from "dom-anchor-text-quote";
 export const WRITING_VIEW_TYPE = "writing-view";
 type ViewMode = "read" | "annotated";
 
+// TODO comments dont work for source
 export class WritingView extends ItemView {
   private currentArticleId: string | null = null;
   private currentTitle = "";
