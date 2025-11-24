@@ -698,6 +698,53 @@
   }
 }
 
+/* Annotated Mode Styles */
+.idl-annotated-word {
+  cursor: pointer;
+}
+
+.idl-annotated-word:hover {
+  font-style: bold;
+}
+
+.idl-note-marker {
+  color: var(--text-accent);
+}
+
+/* Annotation Container */
+.idl-annotation-container {
+  display: block;
+  margin: 4px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.idl-annotation-item {
+  padding: 8px;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  /* line-height: 1.5; */
+}
+
+.idl-annotation-item:last-child {
+  margin-bottom: 0;
+}
+
+.idl-annotation-comment {
+  border-left: 3px solid var(--text-accent);
+}
+
+.idl-annotation-note {
+  border-left: 3px solid var(--text-accent);
+}
+
+/* Active state for toggle button */
+.view-action.is-active {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-accent);
+}
+
 .form-header {
   display: flex;
   align-items: center;
