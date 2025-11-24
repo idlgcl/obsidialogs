@@ -30,6 +30,7 @@
 		"typescript": "4.7.4"
 	},
 	"dependencies": {
+		"dom-anchor-text-quote": "^4.0.2",
 		"uuid": "^11.1.0"
 	}
 }
