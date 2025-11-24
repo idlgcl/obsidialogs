@@ -277,7 +277,7 @@ export class WritingView extends ItemView {
   }
 
   private getLinkType(articleId: string): string {
-    if (articleId.startsWith("Fx")) return "[Question]";
+    if (articleId.startsWith("Fx")) return "[?]";
     if (articleId.startsWith("Ix")) return "[!]";
     if (articleId.startsWith("Tx")) return `[${++this.txLinkCounter}]`;
     return "";
