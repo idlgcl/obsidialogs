@@ -191,7 +191,8 @@ export class WritingView extends ItemView {
         annotation.sTxtDisplay!,
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         annotation.tTxt!,
-        "comment"
+        "comment",
+        annotation.sourceId
       );
     } else {
       await this.addAnnotationHighlight(
@@ -204,7 +205,8 @@ export class WritingView extends ItemView {
         annotation.tTxtDisplay!,
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         annotation.sTxt!,
-        "comment"
+        "comment",
+        annotation.sourceId
       );
     }
   }
@@ -241,7 +243,8 @@ export class WritingView extends ItemView {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           annotation.sTxtDisplay!,
           annotation.tTxt,
-          "note"
+          "note",
+          annotation.sourceId
         );
       }
     } else {
@@ -266,7 +269,8 @@ export class WritingView extends ItemView {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           annotation.tTxtDisplay!,
           annotation.sTxt,
-          "note"
+          "note",
+          annotation.sourceId
         );
       }
     }
@@ -441,7 +445,8 @@ export class WritingView extends ItemView {
     textEnd: string,
     textDisplay: string,
     annotationText: string,
-    type: "comment" | "note"
+    type: "comment" | "note",
+    annotationSource: string
   ): Promise<void> {
     try {
       const { exact, prefix, suffix } = this.getAnchorContext(
@@ -483,7 +488,8 @@ export class WritingView extends ItemView {
         range.endOffset,
         words,
         annotationText,
-        type
+        type,
+        annotationSource
       );
     } catch (error) {
       console.error("[WritingView] Error in addAnnotationHighlight:", error);
@@ -496,7 +502,8 @@ export class WritingView extends ItemView {
     endOffset: number,
     words: string[],
     annotationText: string,
-    type: "comment" | "note"
+    type: "comment" | "note",
+    annotationSource: string
   ): Promise<void> {
     const parent = textNode.parentNode;
     if (!parent) return;
@@ -537,6 +544,14 @@ export class WritingView extends ItemView {
       const item = document.createElement("div");
       item.className = `idl-annotation-item idl-annotation-${type}`;
       item.textContent = annotationText;
+      const linkDiv = document.createElement("div");
+      const link = document.createElement("a");
+      link.href = `@${annotationSource}`;
+      link.className = "internal-link";
+      link.textContent = annotationSource;
+      linkDiv.appendChild(link);
+      item.appendChild(linkDiv);
+      // TODO Click handler
       container.appendChild(item);
 
       wrapper.addEventListener("click", (e) => {
