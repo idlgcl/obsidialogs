@@ -532,11 +532,19 @@ export default class IdealogsPlugin extends Plugin {
         return text;
       }
 
-      // Get current file content to count existing Tx links
+      // Get current file content to find max existing hex ID
       const fileContent = state.doc.toString();
-      const txLinkPattern = /\[\[@Tx[^\]]+\]\]/g;
-      const existingMatches = fileContent.match(txLinkPattern) || [];
-      let counter = existingMatches.length + 10;
+      const txLinkWithHexPattern = /\[\[@Tx[^.\]]+\.(\w+)\]\]/g;
+      const matches = [...fileContent.matchAll(txLinkWithHexPattern)];
+
+      let counter: number;
+      if (matches.length === 0) {
+        counter = 10; // Start at 0xa
+      } else {
+        const hexIds = matches.map((match) => parseInt(match[1], 16));
+        const maxId = Math.max(...hexIds);
+        counter = maxId + 1;
+      }
 
       // Find and replace all Tx links in pasted text with updated hex IDs
       const txLinkInPastePattern = /\[\[@(Tx[^\].]+)(?:\.\w+)?\]\]/g;
