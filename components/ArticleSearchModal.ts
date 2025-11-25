@@ -6,6 +6,7 @@ export class ArticleSearchModal extends Modal {
   private apiService: ApiService;
   private editor: Editor;
   private cursorPos: { line: number; ch: number };
+  private fileContent: string;
   private searchInput: HTMLInputElement;
   private resultsContainer: HTMLElement;
   private previewContainer: HTMLElement;
@@ -30,12 +31,14 @@ export class ArticleSearchModal extends Modal {
     app: App,
     apiService: ApiService,
     editor: Editor,
-    cursorPos: { line: number; ch: number }
+    cursorPos: { line: number; ch: number },
+    fileContent: string
   ) {
     super(app);
     this.apiService = apiService;
     this.editor = editor;
     this.cursorPos = cursorPos;
+    this.fileContent = fileContent;
   }
 
   onOpen() {
@@ -426,8 +429,31 @@ export class ArticleSearchModal extends Modal {
     }
   }
 
+  private calculateHexCounter(): string {
+    // Find all Tx links in the file content
+    const txLinkPattern = /\[\[@Tx[^\]]+\]\]/g;
+    const matches = this.fileContent.match(txLinkPattern) || [];
+
+    // Count existing Tx links
+    const count = matches.length;
+
+    // Calculate next counter: count + 10
+    const counterValue = count + 10;
+
+    // Convert to hex without "0x" prefix
+    const hexCounter = counterValue.toString(16);
+
+    return hexCounter;
+  }
+
   private selectArticle(article: Article): void {
-    const articleLink = `[[@${article.id}]]`;
+    let articleLink = `[[@${article.id}]]`;
+
+    // Add hex counter for Writing articles (Tx...)
+    if (article.id.startsWith("Tx")) {
+      const hexCounter = this.calculateHexCounter();
+      articleLink = `[[@${article.id}.${hexCounter}]]`;
+    }
 
     this.editor.replaceRange(articleLink, this.cursorPos, this.cursorPos);
 
