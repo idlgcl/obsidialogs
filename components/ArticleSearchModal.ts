@@ -430,20 +430,24 @@ export class ArticleSearchModal extends Modal {
   }
 
   private calculateHexCounter(): string {
-    // Find all Tx links in the file content
-    const txLinkPattern = /\[\[@Tx[^\]]+\]\]/g;
-    const matches = this.fileContent.match(txLinkPattern) || [];
+    // Pattern to match Tx links with hex IDs: [[@Tx123.a]]
+    const txLinkWithHexPattern = /\[\[@Tx[^.\]]+\.(\w+)\]\]/g;
+    const matches = [...this.fileContent.matchAll(txLinkWithHexPattern)];
 
-    // Count existing Tx links
-    const count = matches.length;
+    if (matches.length === 0) {
+      // No existing hex IDs, start at 10 (0xa)
+      return "a";
+    }
 
-    // Calculate next counter: count + 10
-    const counterValue = count + 10;
+    // Extract all hex IDs and convert to numbers
+    const hexIds = matches.map((match) => parseInt(match[1], 16));
 
-    // Convert to hex without "0x" prefix
-    const hexCounter = counterValue.toString(16);
+    // Find max and add 1
+    const maxId = Math.max(...hexIds);
+    const nextId = maxId + 1;
 
-    return hexCounter;
+    // Convert back to hex
+    return nextId.toString(16);
   }
 
   private selectArticle(article: Article): void {
