@@ -103,7 +103,7 @@ export default class IdealogsPlugin extends Plugin {
           const targetText =
             notes && notes.length > 0 ? notes[0].targetText : undefined;
 
-          this.handleWritingLinkClick(targetArticleId, true, "", -1, 1, false);
+          this.handleWritingLinkClick(targetArticleId, true, "", -1, null, false);
 
           // Flash the target text if we have a note
           if (targetText) {
@@ -485,11 +485,12 @@ export default class IdealogsPlugin extends Plugin {
           }
 
           // Parse all links on the line and find which one was clicked
-          const linkPattern = /\[\[@(Tx[^\]]+)\]\]/g;
+          const linkPattern = /\[\[@(Tx[^.\]]+)(?:\.(\w+))?\]\]/g;
           const charOffset = pos - line.from;
           let match;
           while ((match = linkPattern.exec(lineText)) !== null) {
             const articleId = match[1];
+            const hexId = match[2] || null;
             const linkStart = match.index;
             const linkEnd = linkStart + match[0].length;
 
@@ -505,20 +506,12 @@ export default class IdealogsPlugin extends Plugin {
               // Get line index
               const lineIndex = line.number - 1;
 
-              // Count same links on this line
-              const sameLinkPattern = new RegExp(
-                `\\[\\[@${articleId}\\]\\]`,
-                "g"
-              );
-              const sameLinkCount = (lineText.match(sameLinkPattern) || [])
-                .length;
-
               handleWritingLinkClick(
                 articleId,
                 isAlone,
                 sourceLineText,
                 lineIndex,
-                sameLinkCount
+                hexId
               );
               return false;
             }
@@ -642,7 +635,7 @@ export default class IdealogsPlugin extends Plugin {
     hideSourceFields: boolean,
     sourceLineText: string,
     lineIndex: number,
-    sameLinkCount: number,
+    hexId: string | null = null,
     showForm = true
   ): Promise<void> {
     try {
@@ -673,7 +666,7 @@ export default class IdealogsPlugin extends Plugin {
           hideSourceFields,
           sourceLineText,
           lineIndex,
-          sameLinkCount
+          hexId
         );
       }
     } catch (error) {

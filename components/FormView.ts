@@ -97,7 +97,7 @@ export class FormView extends ItemView {
     hideSourceFields: boolean,
     sourceLineText: string,
     lineIndex: number,
-    sameLinkCount: number
+    hexId: string | null
   ): void {
     // Clear all existing forms
     this.clear();
@@ -114,7 +114,7 @@ export class FormView extends ItemView {
         hideSourceFields: hideSourceFields,
         sourceLineText: sourceLineText,
         lineIndex: lineIndex,
-        sameLinkCount: sameLinkCount,
+        hexId: hexId,
         onArticleSelected: this.onArticleSelectedCallback || undefined,
         onFlashText: this.onFlashTextCallback || undefined,
       });
