@@ -220,7 +220,7 @@ export class WritingView extends ItemView {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         annotation.tTxt!,
         "comment",
-        annotation.sourceId
+        annotation.targetId
       );
     } else {
       await this.addAnnotationHighlight(
@@ -272,7 +272,7 @@ export class WritingView extends ItemView {
           annotation.sTxtDisplay!,
           annotation.tTxt,
           "note",
-          annotation.sourceId
+          annotation.targetId
         );
       }
     } else {
