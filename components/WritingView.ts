@@ -179,6 +179,13 @@ export class WritingView extends ItemView {
       this.txLinkCounter = 0;
 
       for (const annotation of annotations) {
+        console.log("[WritingView] Processing annotation:", {
+          id: annotation.id,
+          kind: annotation.kind,
+          sourceId: annotation.sourceId,
+          targetId: annotation.targetId,
+          sTxtDisplay: annotation.sTxtDisplay,
+        });
         if (annotation.kind === "Comment") {
           await this.processCommentAnnotation(container, annotation);
         } else if (annotation.kind === "Note") {
@@ -195,6 +202,12 @@ export class WritingView extends ItemView {
     annotation: IdealogsAnnotation
   ): Promise<void> {
     const isSource = annotation.sourceId === this.currentArticleId;
+    console.log("[WritingView] processCommentAnnotation:", {
+      id: annotation.id,
+      isSource,
+      currentArticleId: this.currentArticleId,
+      textDisplay: isSource ? annotation.sTxtDisplay : annotation.tTxtDisplay,
+    });
     if (isSource) {
       await this.addAnnotationHighlight(
         container,
@@ -469,16 +482,30 @@ export class WritingView extends ItemView {
     annotationSource: string
   ): Promise<void> {
     try {
+      console.log("[WritingView] addAnnotationHighlight:", {
+        textStart,
+        textEnd,
+        textDisplay,
+      });
       const { exact, prefix, suffix } = this.getAnchorContext(
         textStart,
         textEnd,
         textDisplay
       );
 
+      console.log("[WritingView] Anchor context:", { exact, prefix, suffix });
+
       let range: Range | null = this.safeToRange(container, {
         exact,
         prefix,
         suffix,
+      });
+
+      console.log("[WritingView] safeToRange result:", {
+        hasRange: !!range,
+        collapsed: range?.collapsed,
+        startOffset: range?.startOffset,
+        endOffset: range?.endOffset,
       });
 
       if (!range || range.collapsed || range.startOffset >= range.endOffset) {
@@ -488,6 +515,9 @@ export class WritingView extends ItemView {
           suffix,
         });
         range = this.findTextRange(container, exact);
+        console.log("[WritingView] Fallback range result:", {
+          hasRange: !!range,
+        });
         if (!range) {
           console.warn(
             "[WritingView] Text not found even with fallback:",
@@ -497,10 +527,47 @@ export class WritingView extends ItemView {
         }
       }
 
-      if (range.startContainer.nodeType !== Node.TEXT_NODE) return;
+      console.log("[WritingView] Range container nodeType:", {
+        nodeType: range.startContainer.nodeType,
+        isTextNode: range.startContainer.nodeType === Node.TEXT_NODE,
+      });
 
-      const textNode = range.startContainer as Text;
+      let textNode: Text;
+      if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+        console.log(
+          "[WritingView] startContainer is ELEMENT_NODE, finding first text node"
+        );
+        // Navigate to first text node within the element
+        const walker = document.createTreeWalker(
+          range.startContainer,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        const firstTextNode = walker.nextNode() as Text;
+        if (!firstTextNode) {
+          console.warn("[WritingView] No text node found in element");
+          return;
+        }
+        textNode = firstTextNode;
+        range.setStart(textNode, 0);
+        range.setEnd(textNode, Math.min(exact.length, textNode.length));
+        console.log("[WritingView] Found text node:", {
+          textContent: textNode.textContent?.substring(0, 50),
+          newStartOffset: range.startOffset,
+          newEndOffset: range.endOffset,
+        });
+      } else {
+        textNode = range.startContainer as Text;
+      }
+
       const words = exact.split(/\s+/).filter(Boolean);
+
+      console.log("[WritingView] Calling wrapWordsInTextNode:", {
+        words,
+        startOffset: range.startOffset,
+        endOffset: range.endOffset,
+        textNodeLength: textNode.textContent?.length,
+      });
 
       await this.wrapWordsInTextNode(
         textNode,
@@ -533,6 +600,12 @@ export class WritingView extends ItemView {
     const rangeText = fullText.substring(startOffset, endOffset);
     const after = fullText.substring(endOffset);
 
+    console.log("[WritingView] wrapWordsInTextNode start:", {
+      fullTextLength: fullText.length,
+      rangeText,
+      words,
+    });
+
     const fragment = document.createDocumentFragment();
     if (before) fragment.appendChild(document.createTextNode(before));
 
@@ -540,8 +613,14 @@ export class WritingView extends ItemView {
     let wrapped = false;
 
     for (const word of words) {
-      const regex = new RegExp(`\\b${this.escapeRegex(word)}\\b`, "i");
+      const regex = new RegExp(`\\b${this.escapeRegex(word)}`, "i");
       const match = remaining.match(regex);
+      console.log("[WritingView] Word match attempt:", {
+        word,
+        regex: regex.toString(),
+        hasMatch: !!match,
+        remaining: remaining.substring(0, 50),
+      });
       if (!match) continue;
 
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -591,10 +670,19 @@ export class WritingView extends ItemView {
       wrapped = true;
 
       remaining = remaining.substring(idx + word.length);
+      console.log("[WritingView] Word wrapped successfully:", {
+        word,
+        newRemaining: remaining.substring(0, 50),
+      });
     }
 
     if (remaining) fragment.appendChild(document.createTextNode(remaining));
     if (after) fragment.appendChild(document.createTextNode(after));
+
+    console.log("[WritingView] wrapWordsInTextNode end:", {
+      wrapped,
+      updatingDOM: wrapped,
+    });
 
     if (wrapped) {
       parent.replaceChild(fragment, textNode);
