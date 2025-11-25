@@ -530,13 +530,29 @@ export class AnnotationService {
         };
       }
 
-      // Calculate lineIndex from the link position
-      const expectedLink = `[[@${annotation.targetId}]]`;
-      const linkIndex = sourceContent.indexOf(expectedLink);
-      let lineIndex: number | undefined;
-      if (linkIndex !== -1) {
-        const textBeforeLink = sourceContent.substring(0, linkIndex);
-        lineIndex = textBeforeLink.split("\n").length - 1;
+      // Construct expected link with hex ID
+      const expectedLink = `[[@${annotation.targetId}.${annotation.hexId}]]`;
+
+      // Get the line at lineIndex and check if link exists on that line
+      const lines = sourceContent.split("\n");
+      const lineIndex = annotation.lineIndex;
+
+      if (lineIndex === undefined || lineIndex >= lines.length) {
+        return {
+          isValid: false,
+          message: `Invalid line index: ${lineIndex}`,
+        };
+      }
+
+      const lineContent = lines[lineIndex];
+
+      if (!lineContent.includes(expectedLink)) {
+        return {
+          isValid: false,
+          message: `Expected link "${expectedLink}" not found on the same line (${
+            lineIndex + 1
+          }) with source data.`,
+        };
       }
 
       return {
