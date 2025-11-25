@@ -532,11 +532,17 @@ export default class IdealogsPlugin extends Plugin {
         return text;
       }
 
-      // Get current file content to find max existing hex ID
+      // Get current file content to find existing hex IDs
       const fileContent = state.doc.toString();
       const txLinkWithHexPattern = /\[\[@Tx[^.\]]+\.(\w+)\]\]/g;
       const matches = [...fileContent.matchAll(txLinkWithHexPattern)];
 
+      // Build Set of existing hex IDs (case-insensitive)
+      const existingHexIds = new Set(
+        matches.map((match) => match[1].toLowerCase())
+      );
+
+      // Find max hex ID for generating new ones
       let counter: number;
       if (matches.length === 0) {
         counter = 10; // Start at 0xa
@@ -546,14 +552,57 @@ export default class IdealogsPlugin extends Plugin {
         counter = maxId + 1;
       }
 
-      // Find and replace all Tx links in pasted text with updated hex IDs
-      const txLinkInPastePattern = /\[\[@(Tx[^\].]+)(?:\.\w+)?\]\]/g;
+      // Track hex IDs within this paste to handle duplicates
+      const pastedHexIds = new Set<string>();
+
+      // Helper function to generate non-conflicting hex IDs
+      const generateNewHexId = (
+        startCounter: number,
+        existing: Set<string>,
+        pasted: Set<string>
+      ): string => {
+        let newHexId: string;
+        let testCounter = startCounter;
+
+        do {
+          newHexId = testCounter.toString(16);
+          testCounter++;
+        } while (existing.has(newHexId) || pasted.has(newHexId));
+
+        pasted.add(newHexId);
+        return newHexId;
+      };
+
+      // Find and process all Tx links in pasted text
+      const txLinkInPastePattern = /\[\[@(Tx[^\].]+)(?:\.(\w+))?\]\]/g;
       const modifiedText = text.replace(
         txLinkInPastePattern,
-        (_match, articleId) => {
-          const hexId = counter.toString(16);
-          counter++;
-          return `[[@${articleId}.${hexId}]]`;
+        (_match, articleId, originalHexId) => {
+          let finalHexId: string;
+
+          if (originalHexId) {
+            // Link has a hex ID - check if it conflicts
+            const hexIdLower = originalHexId.toLowerCase();
+
+            if (
+              !existingHexIds.has(hexIdLower) &&
+              !pastedHexIds.has(hexIdLower)
+            ) {
+              // No conflict - keep original
+              finalHexId = originalHexId;
+              pastedHexIds.add(hexIdLower);
+            } else {
+              // Conflict detected - generate new ID
+              finalHexId = generateNewHexId(counter, existingHexIds, pastedHexIds);
+              counter++;
+            }
+          } else {
+            // Link has no hex ID - generate new one
+            finalHexId = generateNewHexId(counter, existingHexIds, pastedHexIds);
+            counter++;
+          }
+
+          return `[[@${articleId}.${finalHexId}]]`;
         }
       );
 
