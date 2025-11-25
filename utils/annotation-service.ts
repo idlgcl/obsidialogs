@@ -60,6 +60,7 @@ export interface Annotation {
 
   // Note only. Fragile.
   lineIndex?: number;
+  hexId?: string;
 
   validationError?: string;
   isValid?: boolean;
@@ -321,6 +322,28 @@ export class AnnotationService {
     }
 
     return results;
+  }
+
+  async findNoteByHexId(
+    sourceId: string,
+    targetId: string,
+    lineIndex: number,
+    hexId: string
+  ): Promise<Annotation | null> {
+    const annotations = await this.loadAnnotations(sourceId);
+
+    for (const noteId in annotations.notes) {
+      const note = annotations.notes[noteId];
+      if (
+        note.targetId === targetId &&
+        note.lineIndex === lineIndex &&
+        note.hexId === hexId
+      ) {
+        return note;
+      }
+    }
+
+    return null;
   }
 
   async getAnnotations(sourceId: string): Promise<AnnotationsFile> {
