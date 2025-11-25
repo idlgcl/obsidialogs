@@ -1,4 +1,4 @@
-import { Component, App, Notice } from "obsidian";
+import { Component, App, Notice, setIcon } from "obsidian";
 import { Article } from "../types";
 import { AnnotationService, Annotation } from "../utils/annotation-service";
 import { ApiService } from "../utils/api";
@@ -51,6 +51,9 @@ export class NoteForm extends Component {
   private showTargetButton: HTMLButtonElement | null = null;
   private saveButton: HTMLButtonElement | null = null;
 
+  // Validation warning
+  private validationWarningEl: HTMLElement | null = null;
+
   constructor(options: NoteFormOptions) {
     super();
     this.options = options;
@@ -79,6 +82,22 @@ export class NoteForm extends Component {
     // Header with navigation controls
     const headerContainer = this.contentEl.createDiv({ cls: "form-header" });
     headerContainer.createEl("h3", { text: "Note" });
+
+    // Validation warning container (initially hidden)
+    this.validationWarningEl = this.contentEl.createDiv({
+      cls: "idl-validation-warning",
+    });
+    this.validationWarningEl.style.display = "none";
+
+    const warningIconEl = this.validationWarningEl.createDiv({
+      cls: "idl-warning-icon",
+    });
+    setIcon(warningIconEl, "alert-triangle");
+
+    const warningMessageEl = this.validationWarningEl.createDiv({
+      cls: "idl-warning-message",
+    });
+    warningMessageEl.textContent = "";
 
     // Form container
     const formContainer = this.contentEl.createDiv({ cls: "idl-form" });
@@ -184,8 +203,33 @@ export class NoteForm extends Component {
     new Notice(`Target article "${this.targetArticle.title}" is displayed`);
   }
 
+  private showValidationError(message: string): void {
+    if (this.validationWarningEl) {
+      const messageEl = this.validationWarningEl.querySelector(
+        ".idl-warning-message"
+      ) as HTMLElement;
+      if (messageEl) {
+        messageEl.textContent = message;
+      }
+      this.validationWarningEl.style.display = "flex";
+    }
+  }
+
+  private hideValidationError(): void {
+    if (this.validationWarningEl) {
+      this.validationWarningEl.style.display = "none";
+    }
+  }
+
   private loadNote(note: Annotation): void {
     this.savedAnnotation = note;
+
+    // Check for validation errors
+    if (note.isValid === false && note.validationError) {
+      this.showValidationError(note.validationError);
+    } else {
+      this.hideValidationError();
+    }
 
     // Populate form fields
     if (this.sourceTextStartInput && note.sourceStart) {
@@ -325,6 +369,9 @@ export class NoteForm extends Component {
 
       // Update savedAnnotation for subsequent saves
       this.savedAnnotation = annotation;
+
+      // Hide validation error on successful save
+      this.hideValidationError();
 
       this.clearForm();
     } catch (error) {
