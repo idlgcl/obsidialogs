@@ -48,6 +48,14 @@ export class LinkTransformer {
         continue;
       }
 
+      // Strip hex counter from Tx article IDs
+      if (targetArticleId.startsWith("Tx")) {
+        const dotIndex = targetArticleId.lastIndexOf(".");
+        if (dotIndex !== -1) {
+          targetArticleId = targetArticleId.substring(0, dotIndex);
+        }
+      }
+
       let newLinkText = "";
 
       if (targetArticleId.startsWith("Fx")) {
