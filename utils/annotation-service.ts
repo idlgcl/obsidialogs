@@ -336,7 +336,7 @@ export class AnnotationService {
       const note = annotations.notes[noteId];
       if (
         note.targetId === targetId &&
-        note.lineIndex === lineIndex &&
+        // note.lineIndex === lineIndex &&
         note.hexId === hexId
       ) {
         return note;
