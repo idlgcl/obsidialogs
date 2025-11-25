@@ -179,6 +179,7 @@ export default class IdealogsPlugin extends Plugin {
     // CodeMirror extensions
     this.registerEditorExtension(this.createArticleLookupExtension());
     this.registerEditorExtension(this.createWritingClickExtension());
+    this.registerEditorExtension(this.createPasteHandlerExtension());
 
     // Settings tab
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
@@ -428,10 +429,19 @@ export default class IdealogsPlugin extends Plugin {
                 { line: cursor.line, ch: cursor.ch + 3 }
               );
 
-              const modal = new ArticleSearchModal(app, apiService, editor, {
-                line: cursor.line,
-                ch: cursor.ch - 2,
-              });
+              // Get full file content for hex counter calculation
+              const fileContent = editor.getValue();
+
+              const modal = new ArticleSearchModal(
+                app,
+                apiService,
+                editor,
+                {
+                  line: cursor.line,
+                  ch: cursor.ch - 2,
+                },
+                fileContent
+              );
               modal.open();
             }
           }, 0);
@@ -519,6 +529,34 @@ export default class IdealogsPlugin extends Plugin {
 
         return false;
       },
+    });
+  }
+
+  private createPasteHandlerExtension() {
+    return EditorView.clipboardInputFilter.of((text, state) => {
+      // Check if pasted text contains any Tx links
+      if (!text.includes("[[@Tx")) {
+        return text;
+      }
+
+      // Get current file content to count existing Tx links
+      const fileContent = state.doc.toString();
+      const txLinkPattern = /\[\[@Tx[^\]]+\]\]/g;
+      const existingMatches = fileContent.match(txLinkPattern) || [];
+      let counter = existingMatches.length + 10;
+
+      // Find and replace all Tx links in pasted text with updated hex IDs
+      const txLinkInPastePattern = /\[\[@(Tx[^\].]+)(?:\.\w+)?\]\]/g;
+      const modifiedText = text.replace(
+        txLinkInPastePattern,
+        (_match, articleId) => {
+          const hexId = counter.toString(16);
+          counter++;
+          return `[[@${articleId}.${hexId}]]`;
+        }
+      );
+
+      return modifiedText;
     });
   }
 
