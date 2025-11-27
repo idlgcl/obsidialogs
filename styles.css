@@ -707,8 +707,10 @@
   font-style: bold;
 }
 
-.idl-note-marker {
+.idl-note-link {
   color: var(--text-accent);
+  cursor: pointer;
+  font-weight: 600;
 }
 
 /* Annotation Container */

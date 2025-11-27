@@ -24,6 +24,7 @@ export class WritingView extends ItemView {
   private contentContainer: HTMLElement | null = null;
   private markdownContainer: HTMLElement | null = null;
   private annotationsMainContainer: HTMLElement | null = null;
+  private notesMainContainer: HTMLElement | null = null;
   private mode: ViewMode = "read";
   private apiService: ApiService | null = null;
   private linkTransformer: LinkTransformer | null = null;
@@ -166,6 +167,9 @@ export class WritingView extends ItemView {
     this.annotationsMainContainer = this.contentContainer.createDiv({
       cls: "idl-annotations",
     });
+    this.notesMainContainer = this.contentContainer.createDiv({
+      cls: "idl-annotations",
+    });
 
     await MarkdownRenderer.renderMarkdown(
       this.currentContent,
@@ -175,7 +179,7 @@ export class WritingView extends ItemView {
     );
 
     if (this.mode === "annotated") {
-      // await this.applyAnnotations(this.markdownContainer);
+      this.txLinkCounter = 0;
       await this.processAnnotations();
     }
   }
@@ -244,7 +248,7 @@ export class WritingView extends ItemView {
     return item;
   }
 
-  private getCommentData(annotation: IdealogsAnnotation): SimpleAnnotation {
+  private getAnnotationData(annotation: IdealogsAnnotation): SimpleAnnotation {
     const fromSource = annotation.sourceId === this.currentArticleId;
 
     if (fromSource) {
@@ -325,6 +329,44 @@ export class WritingView extends ItemView {
     targetSpan.appendChild(targetDiv);
   }
 
+  private getLinkText(articleId: string): string {
+    if (articleId.startsWith("Fx")) return "[?]";
+    if (articleId.startsWith("Ix")) return "[!]";
+    if (articleId.startsWith("Tx")) return `[${++this.txLinkCounter}]`;
+    return "";
+  }
+
+  private createNoteLinkContainer(spanId: string) {
+    const existing = document.getElementById(spanId);
+    if (existing) return existing;
+
+    // target span where notelinks will be teleported
+    const sibling = document.createElement("span");
+    sibling.className = "note-link-container";
+    sibling.id = spanId;
+    return sibling;
+  }
+
+  private insertNoteLinks() {
+    if (!this.notesMainContainer) return;
+
+    const children = Array.from(this.notesMainContainer.children);
+
+    for (const child of children) {
+      console.log(child);
+      const container = document.getElementById(
+        child.getAttribute("data-note-container") as string
+      );
+
+      if (!container) {
+        console.log("Note container not found");
+        continue;
+      }
+
+      container.appendChild(child);
+    }
+  }
+
   private async processAnnotations() {
     if (!this.apiService || !this.currentArticleId || !this.markdownContainer) {
       console.log("failed");
@@ -340,7 +382,7 @@ export class WritingView extends ItemView {
 
     for (const ann of annotations) {
       if (ann.kind === "Comment") {
-        const comment = this.getCommentData(ann);
+        const comment = this.getAnnotationData(ann);
         const displays = comment.textDisplay.split(" ");
         for (const display of displays) {
           const result = findTextQuote(this.markdownContainer, {
@@ -383,9 +425,66 @@ export class WritingView extends ItemView {
           acDiv?.appendChild(item);
         }
       } else if (ann.kind === "Note") {
-        //
+        const note = this.getAnnotationData(ann);
+
+        // Note does not have text data
+        if (!note.fullText) {
+          const linkText = this.getLinkText(note.articleId);
+
+          // only use last word
+          const lastDisplayText = note.textDisplay
+            .trim()
+            .split(" ")
+            .pop() as string;
+
+          const result = findTextQuote(this.markdownContainer, {
+            exact: lastDisplayText,
+            prefix: note.textStart,
+            suffix: note.textEnd,
+          });
+
+          if (!result) {
+            continue;
+          }
+
+          const { range, textStart, textEnd } = result;
+
+          const noteLinkContainerId = this.AWTargetSpanId(
+            this.AWSpanIdFromOffset(lastDisplayText, textStart, textEnd)
+          );
+
+          const noteLinkContainer =
+            this.createNoteLinkContainer(noteLinkContainerId);
+
+          range.collapse(false);
+          range.insertNode(noteLinkContainer);
+          range.collapse(true);
+
+          const linkEl = document.createElement("span");
+          linkEl.className = "idl-note-link";
+          linkEl.dataset.noteContainer = noteLinkContainerId;
+          linkEl.textContent = ` ${linkText} `;
+
+          linkEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!this.onFxIxClick || !this.onTxClick) return;
+            if (
+              note.articleId.startsWith("Fx") ||
+              note.articleId.startsWith("Ix")
+            ) {
+              this.onFxIxClick(note.articleId);
+            } else {
+              //its a writing
+              this.onTxClick(note.articleId);
+            }
+          });
+
+          this.notesMainContainer?.appendChild(linkEl);
+        }
       }
     }
+
+    this.insertNoteLinks();
   }
 
   private async applyAnnotations(container: HTMLElement): Promise<void> {
@@ -467,7 +566,7 @@ export class WritingView extends ItemView {
     annotation: IdealogsAnnotation
   ): Promise<void> {
     const isSource = annotation.sourceId === this.currentArticleId;
-    const linkType = this.getLinkType(
+    const linkType = this.getLinkText(
       isSource ? annotation.targetId : annotation.sourceId
     );
     const targetId = isSource ? annotation.targetId : annotation.sourceId;
@@ -525,13 +624,6 @@ export class WritingView extends ItemView {
         );
       }
     }
-  }
-
-  private getLinkType(articleId: string): string {
-    if (articleId.startsWith("Fx")) return "[?]";
-    if (articleId.startsWith("Ix")) return "[!]";
-    if (articleId.startsWith("Tx")) return `[${++this.txLinkCounter}]`;
-    return "";
   }
 
   // Robust context extraction
