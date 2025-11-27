@@ -733,6 +733,9 @@
   border-left: 3px solid var(--text-accent);
   /* line-height: 1.5; */
 }
+.idl-annotation-item.local {
+  background-color: var(--background-secondary);
+}
 
 .idl-annotation-item:last-child {
   margin-bottom: 0;
