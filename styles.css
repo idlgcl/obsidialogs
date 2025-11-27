@@ -712,6 +712,10 @@
 }
 
 /* Annotation Container */
+.idl-annotations {
+  display: none;
+}
+
 .idl-annotation-container {
   display: block;
   margin: 4px 0;
@@ -724,19 +728,12 @@
   margin-bottom: 6px;
   border-radius: 4px;
   font-size: 0.8em;
+  border-left: 3px solid var(--text-accent);
   /* line-height: 1.5; */
 }
 
 .idl-annotation-item:last-child {
   margin-bottom: 0;
-}
-
-.idl-annotation-comment {
-  border-left: 3px solid var(--text-accent);
-}
-
-.idl-annotation-note {
-  border-left: 3px solid var(--text-accent);
 }
 
 /* Active state for toggle button */
