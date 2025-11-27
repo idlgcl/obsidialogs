@@ -284,7 +284,6 @@ export class WritingView extends ItemView {
     const existingSpan = document.getElementById(spanId);
 
     if (existingSpan) {
-      console.log("Span already marked");
       return existingSpan;
     }
 
@@ -356,13 +355,15 @@ export class WritingView extends ItemView {
     const children = Array.from(this.notesMainContainer.children);
 
     for (const child of children) {
-      console.log(child);
       const container = document.getElementById(
         child.getAttribute("data-note-container") as string
       );
 
       if (!container) {
-        console.log("Note container not found");
+        console.error(
+          "Note container not found",
+          child.getAttribute("data-note-container")
+        );
         continue;
       }
 
@@ -372,7 +373,7 @@ export class WritingView extends ItemView {
 
   private async processAnnotations() {
     if (!this.apiService || !this.currentArticleId || !this.markdownContainer) {
-      console.log("failed");
+      console.error("Services are note setup!");
       return;
     }
 
@@ -412,9 +413,10 @@ export class WritingView extends ItemView {
           );
           const targetSpan = this.createTargetSpan(targetSpanId);
 
-          span.addEventListener("click", (e) => {
+          span.onclick = (e) => {
             this.onCommentedWordClick(e);
-          });
+          };
+
           span.after(targetSpan); // Insert targetSpan after AnnotatedWord span
 
           const acDiv = this.createACdiv(targetDivId);
@@ -513,9 +515,10 @@ export class WritingView extends ItemView {
             );
             const targetSpan = this.createTargetSpan(targetSpanId);
 
-            span.addEventListener("click", (e) => {
+            span.onclick = (e) => {
               this.onCommentedWordClick(e);
-            });
+            };
+
             span.after(targetSpan); // Insert targetSpan after AnnotatedWord span
 
             const acDiv = this.createACdiv(targetDivId);
