@@ -103,7 +103,14 @@ export default class IdealogsPlugin extends Plugin {
           const targetText =
             notes && notes.length > 0 ? notes[0].targetText : undefined;
 
-          this.handleWritingLinkClick(targetArticleId, true, "", -1, null, false);
+          this.handleWritingLinkClick(
+            targetArticleId,
+            true,
+            "",
+            -1,
+            null,
+            false
+          );
 
           // Flash the target text if we have a note
           if (targetText) {
@@ -134,19 +141,19 @@ export default class IdealogsPlugin extends Plugin {
         }
       }
 
-      // Process notes with source - bold sourceDisplay with click handler
-      for (const noteId in annotations.notes) {
-        const note = annotations.notes[noteId];
-        if (note.isValid && note.sourceDisplay) {
-          this.wrapAnnotationSourceText(
-            element,
-            note.sourceDisplay,
-            async () => {
-              await this.showTargetAndFlash(note.targetId, note.targetText);
-            }
-          );
-        }
-      }
+      // // Process notes with source - bold sourceDisplay with click handler
+      // for (const noteId in annotations.notes) {
+      //   const note = annotations.notes[noteId];
+      //   if (note.isValid && note.sourceDisplay) {
+      //     this.wrapAnnotationSourceText(
+      //       element,
+      //       note.sourceDisplay,
+      //       async () => {
+      //         await this.showTargetAndFlash(note.targetId, note.targetText);
+      //       }
+      //     );
+      //   }
+      // }
     });
 
     // Initialize file tracker
@@ -593,12 +600,20 @@ export default class IdealogsPlugin extends Plugin {
               pastedHexIds.add(hexIdLower);
             } else {
               // Conflict detected - generate new ID
-              finalHexId = generateNewHexId(counter, existingHexIds, pastedHexIds);
+              finalHexId = generateNewHexId(
+                counter,
+                existingHexIds,
+                pastedHexIds
+              );
               counter++;
             }
           } else {
             // Link has no hex ID - generate new one
-            finalHexId = generateNewHexId(counter, existingHexIds, pastedHexIds);
+            finalHexId = generateNewHexId(
+              counter,
+              existingHexIds,
+              pastedHexIds
+            );
             counter++;
           }
 
@@ -742,7 +757,11 @@ export default class IdealogsPlugin extends Plugin {
       const view = existingLeaves[0].view;
       if (view instanceof WritingView) {
         // Ensure services are set
-        view.setServices(this.apiService, this.linkTransformer, this.annotationService);
+        view.setServices(
+          this.apiService,
+          this.linkTransformer,
+          this.annotationService
+        );
         view.setOnTxClick((targetArticleId) =>
           this.handleAnnotatedModeNoteClick(targetArticleId)
         );
@@ -775,7 +794,11 @@ export default class IdealogsPlugin extends Plugin {
     const view = newLeaf.view;
     if (view instanceof WritingView) {
       // Set services on the newly created view
-      view.setServices(this.apiService, this.linkTransformer, this.annotationService);
+      view.setServices(
+        this.apiService,
+        this.linkTransformer,
+        this.annotationService
+      );
       view.setOnTxClick((targetArticleId) =>
         this.handleAnnotatedModeNoteClick(targetArticleId)
       );
