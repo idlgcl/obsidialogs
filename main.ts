@@ -742,12 +742,15 @@ export default class IdealogsPlugin extends Plugin {
       const view = existingLeaves[0].view;
       if (view instanceof WritingView) {
         // Ensure services are set
-        view.setServices(this.apiService, this.linkTransformer);
+        view.setServices(this.apiService, this.linkTransformer, this.annotationService);
         view.setOnTxClick((targetArticleId) =>
           this.handleAnnotatedModeNoteClick(targetArticleId)
         );
         view.setOnFxIxClick((targetArticleId) =>
           this.handleAnnotatedQIClick(targetArticleId)
+        );
+        view.setOnLocalFileClick((filePath) =>
+          this.app.workspace.openLinkText(filePath, "", false)
         );
         return view;
       }
@@ -772,12 +775,15 @@ export default class IdealogsPlugin extends Plugin {
     const view = newLeaf.view;
     if (view instanceof WritingView) {
       // Set services on the newly created view
-      view.setServices(this.apiService, this.linkTransformer);
+      view.setServices(this.apiService, this.linkTransformer, this.annotationService);
       view.setOnTxClick((targetArticleId) =>
         this.handleAnnotatedModeNoteClick(targetArticleId)
       );
       view.setOnFxIxClick((targetArticleId) =>
         this.handleAnnotatedQIClick(targetArticleId)
+      );
+      view.setOnLocalFileClick((filePath) =>
+        this.app.workspace.openLinkText(filePath, "", false)
       );
       return view;
     }
