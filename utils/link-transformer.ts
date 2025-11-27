@@ -87,7 +87,7 @@ export class LinkTransformer {
           link.addEventListener("click", async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            onTxClick(targetArticleId);
+            onTxClick(linkHref);
           });
         }
       }
