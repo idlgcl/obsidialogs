@@ -98,14 +98,24 @@ export default class IdealogsPlugin extends Plugin {
       this.linkTransformer.transformLinks(
         element,
         articleId,
-        (targetArticleId) => {
-          // Check if there's a note without source for this target
-          const notes = notesWithoutSource.get(targetArticleId);
-          const targetText =
-            notes && notes.length > 0 ? notes[0].targetText : undefined;
+        async (targetArticleId) => {
+          const noteTargetArticle = targetArticleId.slice(1).split(".")[0];
+          const noteHexId = targetArticleId.split(".").pop();
+          // Find note
+          if (!noteHexId) {
+            console.error("Note not found for ", targetArticleId);
+            return;
+          }
+
+          const note = await this.annotationService.findNoteByHexId(
+            file,
+            noteTargetArticle,
+            0, // line number but doesn't matter
+            noteHexId
+          );
 
           this.handleWritingLinkClick(
-            targetArticleId,
+            noteTargetArticle,
             true,
             "",
             -1,
@@ -114,11 +124,11 @@ export default class IdealogsPlugin extends Plugin {
           );
 
           // Flash the target text if we have a note
-          if (targetText) {
+          if (note?.targetText) {
             setTimeout(() => {
               const writingView = this.getWritingView();
               if (writingView) {
-                writingView.flashText(targetText);
+                writingView.flashText(note?.targetText);
               }
             }, 100);
           }
@@ -129,16 +139,9 @@ export default class IdealogsPlugin extends Plugin {
       for (const commentId in annotations.comments) {
         const comment = annotations.comments[commentId];
         if (comment.isValid && comment.sourceDisplay) {
-          this.wrapAnnotationWords(
-            element,
-            comment,
-            async () => {
-              await this.showTargetAndFlash(
-                comment.targetId,
-                comment.targetText
-              );
-            }
-          );
+          this.wrapAnnotationWords(element, comment, async () => {
+            await this.showTargetAndFlash(comment.targetId, comment.targetText);
+          });
         }
       }
 
