@@ -217,6 +217,9 @@ export class WritingView extends ItemView {
 
   private createTargetSpan(targetSpanId: string) {
     // target span where annotation container will be teleported
+    const existing = document.getElementById(targetSpanId);
+    if (existing) return existing;
+
     const sibling = document.createElement("span");
     sibling.className = "annotated-word-target";
     sibling.id = targetSpanId;
@@ -282,7 +285,7 @@ export class WritingView extends ItemView {
 
     if (existingSpan) {
       console.log("Span already marked");
-      return;
+      return existingSpan;
     }
 
     const span = document.createElement("span");
@@ -409,10 +412,10 @@ export class WritingView extends ItemView {
           );
           const targetSpan = this.createTargetSpan(targetSpanId);
 
-          span?.addEventListener("click", (e) => {
+          span.addEventListener("click", (e) => {
             this.onCommentedWordClick(e);
           });
-          span?.after(targetSpan); // Insert targetSpan after AnnotatedWord span
+          span.after(targetSpan); // Insert targetSpan after AnnotatedWord span
 
           const acDiv = this.createACdiv(targetDivId);
 
@@ -480,6 +483,51 @@ export class WritingView extends ItemView {
           });
 
           this.notesMainContainer?.appendChild(linkEl);
+        } else {
+          // TODO :: Duplicate with comment
+          // Note with text data
+          const note = this.getAnnotationData(ann);
+          const displays = note.textDisplay.split(" ");
+          for (const display of displays) {
+            const result = findTextQuote(this.markdownContainer, {
+              exact: display,
+              prefix: note.textStart,
+              suffix: note.textEnd,
+            });
+
+            if (!result) {
+              continue;
+            }
+            const { range, fullText, textStart, textEnd } = result;
+
+            // Setup IDs
+            const spanId = this.AWSpanIdFromOffset(display, textStart, textEnd);
+            const targetSpanId = this.AWTargetSpanId(spanId);
+            const targetDivId = this.AWTargetDivId(spanId);
+
+            const span = this.setupAnnotatedWord(
+              spanId,
+              targetSpanId,
+              targetDivId,
+              range
+            );
+            const targetSpan = this.createTargetSpan(targetSpanId);
+
+            span.addEventListener("click", (e) => {
+              this.onCommentedWordClick(e);
+            });
+            span.after(targetSpan); // Insert targetSpan after AnnotatedWord span
+
+            const acDiv = this.createACdiv(targetDivId);
+
+            const item = this.createAnnotationItem(
+              fullText,
+              note.articleId,
+              "comment"
+            );
+
+            acDiv?.appendChild(item);
+          }
         }
       }
     }
