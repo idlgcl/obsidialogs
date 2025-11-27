@@ -2,10 +2,19 @@ import { ItemView, WorkspaceLeaf, MarkdownRenderer, setIcon } from "obsidian";
 import { ApiService } from "../utils/api";
 import { LinkTransformer } from "../utils/link-transformer";
 import { IdealogsAnnotation } from "../types";
-import * as textQuote from "dom-anchor-text-quote";
+import { findTextQuote } from "../utils/text-finder";
 
 export const WRITING_VIEW_TYPE = "writing-view";
 type ViewMode = "read" | "annotated";
+
+interface SimpleAnnotation {
+  id: string | number;
+  textDisplay: string;
+  textStart: string;
+  textEnd: string;
+  fullText: string;
+  articleId: string;
+}
 
 // TODO comments dont work for source
 export class WritingView extends ItemView {
@@ -13,6 +22,8 @@ export class WritingView extends ItemView {
   private currentTitle = "";
   private currentContent = "";
   private contentContainer: HTMLElement | null = null;
+  private markdownContainer: HTMLElement | null = null;
+  private annotationsMainContainer: HTMLElement | null = null;
   private mode: ViewMode = "read";
   private apiService: ApiService | null = null;
   private linkTransformer: LinkTransformer | null = null;
@@ -149,19 +160,231 @@ export class WritingView extends ItemView {
     });
     titleEl.createEl("h1", { text: this.currentTitle, cls: "inline-title" });
 
-    const markdownContainer = this.contentContainer.createDiv({
+    this.markdownContainer = this.contentContainer.createDiv({
       cls: "writing-view-content markdown-preview-sizer markdown-preview-section",
+    });
+    this.annotationsMainContainer = this.contentContainer.createDiv({
+      cls: "idl-annotations",
     });
 
     await MarkdownRenderer.renderMarkdown(
       this.currentContent,
-      markdownContainer,
+      this.markdownContainer,
       "",
       this
     );
 
     if (this.mode === "annotated") {
-      await this.applyAnnotations(markdownContainer);
+      // await this.applyAnnotations(this.markdownContainer);
+      await this.processAnnotations();
+    }
+  }
+
+  // AW = Annotated word
+  private AWSpanIdFromOffset(
+    displayText: string,
+    textStart: number,
+    textEnd: number
+  ): string {
+    return `${textStart}_${displayText}_${textEnd}`;
+  }
+
+  private AWTargetSpanId(awID: string): string {
+    return `${awID}-target-span`;
+  }
+
+  private AWTargetDivId(awID: string): string {
+    return `${awID}-target-div`;
+  }
+
+  // AC = Annotation Container
+  private createACdiv(divId: string) {
+    if (!this.annotationsMainContainer) return;
+
+    const existing = document.getElementById(divId);
+    if (existing) return existing;
+
+    const ac = this.annotationsMainContainer.createDiv({
+      cls: "idl-annotation-container",
+    });
+    ac.id = divId;
+    return ac;
+  }
+
+  private createTargetSpan(targetSpanId: string) {
+    // target span where annotation container will be teleported
+    const sibling = document.createElement("span");
+    sibling.className = "annotated-word-target";
+    sibling.id = targetSpanId;
+    return sibling;
+  }
+
+  private createAnnotationItem(
+    annotationText: string,
+    annotationLink: string,
+    kind: string
+  ) {
+    const item = document.createElement("div");
+    item.className = `idl-annotation-item idl-${kind}`;
+    item.textContent = annotationText;
+    const linkDiv = document.createElement("div");
+    const link = document.createElement("a");
+    link.href = `@${annotationLink}`;
+    link.className = "internal-link";
+    link.textContent = `[${annotationLink}]`;
+    linkDiv.appendChild(link);
+    item.appendChild(linkDiv);
+    link.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      if (this.onTxClick) {
+        this.onTxClick(annotationLink);
+      }
+    });
+
+    return item;
+  }
+
+  private getCommentData(annotation: IdealogsAnnotation): SimpleAnnotation {
+    const fromSource = annotation.sourceId === this.currentArticleId;
+
+    if (fromSource) {
+      return {
+        id: annotation.id,
+        textDisplay: annotation.sTxtDisplay,
+        textStart: annotation.sTxtStart,
+        textEnd: annotation.sTxtEnd,
+        fullText: annotation.tTxt,
+        articleId: annotation.targetId,
+      };
+    }
+
+    return {
+      id: annotation.id,
+      textDisplay: annotation.tTxtDisplay,
+      textStart: annotation.tTxtStart,
+      textEnd: annotation.tTxtEnd,
+      fullText: annotation.sTxt,
+      articleId: annotation.sourceId,
+    };
+  }
+
+  private setupAnnotatedWord(
+    spanId: string,
+    targetSpanId: string,
+    targetDivId: string,
+    range: Range
+  ) {
+    const existingSpan = document.getElementById(spanId);
+
+    if (existingSpan) {
+      console.log("Span already marked");
+      return;
+    }
+
+    const span = document.createElement("span");
+    span.className = "idl-annotated-word";
+    span.id = spanId;
+    span.dataset["span"] = targetSpanId;
+    span.dataset["div"] = targetDivId;
+
+    const contents = range.extractContents();
+
+    span.appendChild(contents);
+
+    range.insertNode(span);
+
+    range.setStartAfter(span);
+    range.collapse(true);
+
+    return span;
+  }
+
+  private onCommentedWordClick(e: Event) {
+    const span = e.target as HTMLElement;
+    if (!span) return;
+
+    const targetSpanID = span.dataset.span;
+    if (!targetSpanID) return;
+
+    const targetDivId = span.dataset.div;
+    if (!targetDivId) return;
+
+    const targetDiv = document.getElementById(targetDivId);
+    if (!targetDiv) return;
+
+    const targetSpan = document.getElementById(targetSpanID);
+    if (!targetSpan) return;
+
+    const originalParent = this.annotationsMainContainer;
+
+    if (targetDiv.parentElement === targetSpan) {
+      originalParent?.appendChild(targetDiv);
+      return;
+    }
+
+    targetSpan.appendChild(targetDiv);
+  }
+
+  private async processAnnotations() {
+    if (!this.apiService || !this.currentArticleId || !this.markdownContainer) {
+      console.log("failed");
+      return;
+    }
+
+    const annotations = await this.apiService.fetchAnnotations(
+      this.currentArticleId,
+      this.currentArticleId
+    );
+
+    if (annotations.length === 0) return;
+
+    for (const ann of annotations) {
+      if (ann.kind === "Comment") {
+        const comment = this.getCommentData(ann);
+        const displays = comment.textDisplay.split(" ");
+        for (const display of displays) {
+          const result = findTextQuote(this.markdownContainer, {
+            exact: display,
+            prefix: comment.textStart,
+            suffix: comment.textEnd,
+          });
+
+          if (!result) {
+            continue;
+          }
+          const { range, fullText, textStart, textEnd } = result;
+
+          // Setup IDs
+          const spanId = this.AWSpanIdFromOffset(display, textStart, textEnd);
+          const targetSpanId = this.AWTargetSpanId(spanId);
+          const targetDivId = this.AWTargetDivId(spanId);
+
+          const span = this.setupAnnotatedWord(
+            spanId,
+            targetSpanId,
+            targetDivId,
+            range
+          );
+          const targetSpan = this.createTargetSpan(targetSpanId);
+
+          span?.addEventListener("click", (e) => {
+            this.onCommentedWordClick(e);
+          });
+          span?.after(targetSpan); // Insert targetSpan after AnnotatedWord span
+
+          const acDiv = this.createACdiv(targetDivId);
+
+          const item = this.createAnnotationItem(
+            fullText,
+            comment.articleId,
+            "comment"
+          );
+
+          acDiv?.appendChild(item);
+        }
+      } else if (ann.kind === "Note") {
+        //
+      }
     }
   }
 
