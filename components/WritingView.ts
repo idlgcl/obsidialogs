@@ -180,7 +180,7 @@ export class WritingView extends ItemView {
 
     if (this.mode === "annotated") {
       this.txLinkCounter = 0;
-      await this.processAnnotations();
+      await this.processWebAnnotations();
     }
   }
 
@@ -371,7 +371,7 @@ export class WritingView extends ItemView {
     }
   }
 
-  private async processAnnotations() {
+  private async processWebAnnotations() {
     if (!this.apiService || !this.currentArticleId || !this.markdownContainer) {
       console.error("Services are note setup!");
       return;
