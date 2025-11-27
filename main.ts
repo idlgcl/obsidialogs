@@ -25,6 +25,7 @@ import {
   MigrationResult,
 } from "./utils/annotation-service";
 import { LinkTransformer } from "./utils/link-transformer";
+import { findTextQuote } from "./utils/text-finder";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -128,9 +129,9 @@ export default class IdealogsPlugin extends Plugin {
       for (const commentId in annotations.comments) {
         const comment = annotations.comments[commentId];
         if (comment.isValid && comment.sourceDisplay) {
-          this.wrapAnnotationSourceText(
+          this.wrapAnnotationWords(
             element,
-            comment.sourceDisplay,
+            comment,
             async () => {
               await this.showTargetAndFlash(
                 comment.targetId,
@@ -826,58 +827,47 @@ export default class IdealogsPlugin extends Plugin {
     return null;
   }
 
-  private wrapAnnotationSourceText(
-    element: HTMLElement,
-    text: string,
+  private wrapAnnotationWords(
+    container: HTMLElement,
+    annotation: Annotation,
     onClick: () => void
   ): void {
-    // Find text in the element by walking through text nodes
-    const treeWalker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
+    const { sourceDisplay, sourceStart, sourceEnd } = annotation;
 
-    let node: Text | null;
-    let found = false;
+    if (!sourceDisplay) return;
 
-    while ((node = treeWalker.nextNode() as Text | null) && !found) {
-      const nodeText = node.textContent || "";
-      const index = nodeText.indexOf(text);
+    // Split into words, filter empty strings
+    const words = sourceDisplay.split(" ").filter((w) => w.trim());
 
-      if (index !== -1) {
-        found = true;
+    for (const word of words) {
+      // Find word using text-quote algorithm with context
+      const result = findTextQuote(container, {
+        exact: word,
+        prefix: sourceStart,
+        suffix: sourceEnd,
+      });
 
-        // Split the text node and wrap the matched text
-        const before = nodeText.substring(0, index);
-        const match = nodeText.substring(index, index + text.length);
-        const after = nodeText.substring(index + text.length);
+      if (!result) continue; // Skip words not found
 
-        const parent = node.parentNode;
-        if (!parent) {
-          continue;
-        }
+      const { range } = result;
 
-        // Create elements
-        const beforeNode = document.createTextNode(before);
-        const wrapperSpan = document.createElement("span");
-        wrapperSpan.className = "idl-annotation-source";
-        wrapperSpan.textContent = match;
-        wrapperSpan.style.fontWeight = "bold";
-        wrapperSpan.style.cursor = "pointer";
-        wrapperSpan.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onClick();
-        });
-        const afterNode = document.createTextNode(after);
+      // Create wrapper span
+      const span = document.createElement("span");
+      span.className = "idl-annotation-source";
+      span.style.fontWeight = "bold";
+      span.style.cursor = "pointer";
 
-        // Replace original node
-        parent.insertBefore(beforeNode, node);
-        parent.insertBefore(wrapperSpan, node);
-        parent.insertBefore(afterNode, node);
-        parent.removeChild(node);
-      }
+      // Extract contents and wrap
+      const contents = range.extractContents();
+      span.appendChild(contents);
+      range.insertNode(span);
+
+      // Attach click handler
+      span.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      });
     }
   }
 
