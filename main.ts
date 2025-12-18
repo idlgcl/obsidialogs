@@ -14,7 +14,7 @@ import { ArticleSearchModal } from "./components/ArticleSearchModal";
 import { CommonLinkHandler, patchLinkOpening } from "./utils/link-handlers";
 import { FileTracker } from "./utils/file-tracker";
 import { FileDeletionManager } from "./utils/file-deletion-manager";
-import { CommentParser } from "./utils/parsers";
+import { CommentParser, CommentWithPosition } from "./utils/parsers";
 import { FormView, FORM_VIEW_TYPE } from "./components/FormView";
 import { WritingView, WRITING_VIEW_TYPE } from "./components/WritingView";
 import { Logger } from "./utils/logger";
@@ -53,6 +53,7 @@ export default class IdealogsPlugin extends Plugin {
   private cursorCheckInterval: number | null = null;
   private lastCursorLine = -1;
   private lastCursorCh = -1;
+  private lastComment: CommentWithPosition | null = null;
   private editorChangeDebounceTimer: number | null = null;
 
   async onload() {
@@ -376,24 +377,41 @@ export default class IdealogsPlugin extends Plugin {
     );
 
     if (comment) {
-      if (this.settings.enableLogs) {
-        this.logger.log("Comment detected", {
-          title: comment.title,
-          body: comment.body,
-          filePath: comment.filePath,
-          line: cursorLine,
-          cursorChar: cursorCh,
-          startPos: comment.startPos,
-          endPos: comment.endPos,
-          lineText: lineText,
-        });
-      }
+      // Check if this is a different comment from the last one
+      const isCommentChanged =
+        !this.lastComment ||
+        this.lastComment.title !== comment.title ||
+        this.lastComment.body !== comment.body ||
+        this.lastComment.startPos !== comment.startPos ||
+        this.lastComment.endPos !== comment.endPos ||
+        this.lastComment.filePath !== comment.filePath;
 
-      // Update FormView if it exists
-      const formView = this.getFormView();
-      if (formView) {
-        formView.updateComment(comment);
+      if (isCommentChanged) {
+        if (this.settings.enableLogs) {
+          this.logger.log("Comment detected", {
+            title: comment.title,
+            body: comment.body,
+            filePath: comment.filePath,
+            line: cursorLine,
+            cursorChar: cursorCh,
+            startPos: comment.startPos,
+            endPos: comment.endPos,
+            lineText: lineText,
+          });
+        }
+
+        // Update FormView if it exists
+        const formView = this.getFormView();
+        if (formView) {
+          formView.updateComment(comment);
+        }
+
+        // Update lastComment to current comment
+        this.lastComment = comment;
       }
+    } else {
+      // Cursor is not in a comment, clear lastComment
+      this.lastComment = null;
     }
   }
 
