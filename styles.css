@@ -763,3 +763,17 @@
 .idl-spacer {
   flex: 1;
 }
+
+/* Note quote blocks in reading mode */
+.idl-note-quote {
+  border-left: 4px solid var(--interactive-accent);
+}
+
+.idl-note-quote p:first-child {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.idl-note-quote p:last-child {
+  font-size: 0.9em;
+}

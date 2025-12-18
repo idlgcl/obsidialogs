@@ -133,7 +133,8 @@ export default class IdealogsPlugin extends Plugin {
               }
             }, 100);
           }
-        }
+        },
+        notesWithoutSource
       );
 
       // Process comments - bold sourceDisplay with click handler
