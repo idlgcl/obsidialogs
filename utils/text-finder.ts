@@ -1,29 +1,62 @@
 export interface TextQuoteSelector {
-  /** Context text that should appear before the target (optional, improves accuracy) */
   prefix?: string;
-  /** The exact text to find and select */
   exact: string;
-  /** Context text that should appear after the target (optional, improves accuracy) */
   suffix?: string;
 }
 
+export interface WordPosition {
+  word: string;
+  index: number;
+}
+
 export interface TextQuoteSelectorResult {
-  /** Range covering only the 'exact' text */
   range: Range;
-  /** The full matched text including context (prefix + exact + suffix) */
   fullText: string;
-  /** Character offset where the exact match starts in the flattened text (stable across DOM changes) */
   textStart: number;
-  /** Character offset where the exact match ends in the flattened text (stable across DOM changes) */
   textEnd: number;
+}
+
+export interface WordRangeInfo {
+  word: string;
+  startOffset: number;
+  endOffset: number;
+  range: Range;
+}
+
+export interface AnnotationTextRanges {
+  fullRange: Range;
+  fullText: string;
+  displayRange: Range | null;
+  wordRanges: Range[];
+  displayWordInfo: WordRangeInfo[];
+  startOffset: number;
+  endOffset: number;
+  displayOffset: number;
+  error: null | {
+    code: "START_END_NOT_FOUND" | "DISPLAY_NOT_IN_RANGE" | "DISPLAY_NOT_FOUND";
+    message: string;
+  };
 }
 
 interface TextNodePosition {
   node: Text;
-  /** Start offset of this text node's content in the flattened text */
   start: number;
-  /** End offset (exclusive) of this text node's content in the flattened text */
   end: number;
+}
+
+export function splitIntoWords(textDisplay: string): WordPosition[] {
+  const words: WordPosition[] = [];
+  let currentIndex = 0;
+
+  const parts = textDisplay.split(/(\s+)/);
+  for (const part of parts) {
+    if (part.trim()) {
+      words.push({ word: part, index: currentIndex });
+    }
+    currentIndex += part.length;
+  }
+
+  return words;
 }
 
 /**
@@ -54,6 +87,72 @@ function collectTextNodes(root: Node): TextNodePosition[] {
 }
 
 /**
+ * Finds the containing block element for a node, skipping inline formatting elements.
+ * Walks up the parent chain until finding a block-level element.
+ */
+function getContainingBlock(node: Node, root: Node): Node | null {
+  let current = node.parentElement;
+
+  while (current && current !== root) {
+    const display = window.getComputedStyle(current).display;
+
+    // Stop at block-level elements
+    if (
+      display !== "inline" &&
+      display !== "inline-block" &&
+      display !== "inline-flex" &&
+      display !== "inline-grid"
+    ) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return root;
+}
+
+/**
+ * Collects text nodes grouped by their containing block element.
+ * Skips inline formatting elements like <strong>, <em>, <span>, etc.
+ * Each group contains text nodes that share the same containing block.
+ */
+function collectTextNodesByParent(root: Node): Map<Node, TextNodePosition[]> {
+  const groups = new Map<Node, TextNodePosition[]>();
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    const length = node.nodeValue?.length ?? 0;
+    if (length > 0) {
+      // Find the containing block, not the immediate parent
+      const parent = getContainingBlock(node, root);
+
+      if (parent) {
+        if (!groups.has(parent)) {
+          groups.set(parent, []);
+        }
+
+        const group = groups.get(parent)!;
+        const currentOffset = group.reduce(
+          (sum, pos) => sum + (pos.end - pos.start),
+          0
+        );
+
+        group.push({
+          node,
+          start: currentOffset,
+          end: currentOffset + length,
+        });
+      }
+    }
+  }
+
+  return groups;
+}
+
+/**
  * Converts a character offset in the flattened text to a (node, offset) pair.
  * This is the critical bridge between "position in string" and "position in DOM".
  */
@@ -64,8 +163,16 @@ function offsetToNodePosition(
   // Handle edge case: offset at the very end
   if (positions.length === 0) return null;
 
-  for (const pos of positions) {
-    if (offset >= pos.start && offset <= pos.end) {
+  for (let i = 0; i < positions.length; i++) {
+    const pos = positions[i];
+    const isLast = i === positions.length - 1;
+
+    // Use < for end boundary to avoid matching boundary positions to previous node
+    // Exception: Allow <= for the last node to handle end-of-text positions
+    if (
+      offset >= pos.start &&
+      (offset < pos.end || (isLast && offset === pos.end))
+    ) {
       return {
         node: pos.node,
         offset: offset - pos.start,
@@ -103,7 +210,7 @@ function normalizeWhitespace(text: string): string {
 
 /**
  * Finds all occurrences of the selector pattern in the text using context-based matching.
- * Prefix and suffix can appear anywhere before/after the exact text (not necessarily adjacent).
+ * Prefix and suffix can appear anywhere before/after the exact text.
  * Returns the character ranges for each match.
  */
 function findMatches(
@@ -132,10 +239,10 @@ function findMatches(
   if (prefix && prefix.includes(exact)) {
     const lastIndex = prefix.lastIndexOf(exact);
     if (lastIndex + exact.length === prefix.length) {
-      // Prefix ends with exact word - trim it
+      // Prefix ends with exact word
       prefix = prefix.substring(0, lastIndex).trim();
     } else {
-      // Exact word is in the middle or beginning - remove it and everything after
+      // Exact word is in the middle or beginning
       prefix = prefix.substring(0, lastIndex).trim();
     }
   }
@@ -144,10 +251,10 @@ function findMatches(
   if (suffix && suffix.includes(exact)) {
     const firstIndex = suffix.indexOf(exact);
     if (firstIndex === 0) {
-      // Suffix starts with exact word - trim it
+      // Suffix starts with exact word
       suffix = suffix.substring(exact.length).trim();
     } else {
-      // Exact word is later in suffix - remove it and everything before
+      // Exact word is later in suffix
       suffix = suffix.substring(firstIndex + exact.length).trim();
     }
   }
@@ -167,20 +274,15 @@ function findMatches(
       const exactStart = idx;
       const exactEnd = idx + normExact.length;
 
-      // Check if prefix exists before this match (if prefix is specified)
       const hasPrefixMatch =
-        !normPrefix ||
-        (exactStart > 0 &&
-          normText.substring(0, exactStart).includes(normPrefix));
+        !normPrefix || normText.substring(0, exactStart).includes(normPrefix);
 
-      // Check if suffix exists after this match (if suffix is specified)
       const hasSuffixMatch =
         !normSuffix ||
         (exactEnd < normText.length &&
           normText.substring(exactEnd).includes(normSuffix));
 
       if (hasPrefixMatch && hasSuffixMatch) {
-        // Find the actual prefix and suffix positions for context
         let contextStart = exactStart;
         let contextEnd = exactEnd;
 
@@ -209,7 +311,6 @@ function findMatches(
       searchStart = idx + 1;
     }
   } else {
-    // Find all occurrences of exact text
     let searchStart = 0;
     let idx: number;
 
@@ -217,18 +318,14 @@ function findMatches(
       const exactStart = idx;
       const exactEnd = idx + exact.length;
 
-      // Check if prefix exists before this match (if prefix is specified)
       const hasPrefixMatch =
-        !prefix ||
-        (exactStart > 0 && text.substring(0, exactStart).includes(prefix));
+        !prefix || text.substring(0, exactStart).includes(prefix);
 
-      // Check if suffix exists after this match (if suffix is specified)
       const hasSuffixMatch =
         !suffix ||
         (exactEnd < text.length && text.substring(exactEnd).includes(suffix));
 
       if (hasPrefixMatch && hasSuffixMatch) {
-        // Find the actual prefix and suffix positions for context
         let contextStart = exactStart;
         let contextEnd = exactEnd;
 
@@ -262,6 +359,136 @@ function findMatches(
 }
 
 /**
+ * Finds text quote matches constrained to single parent elements.
+ * Searches within each containing block separately.
+ */
+function findTextQuoteInParents(
+  container: Node,
+  selector: TextQuoteSelector,
+  options: {
+    matchIndex: number;
+    normalizeWs: boolean;
+    requireUnique: boolean;
+    useFullRange?: boolean;
+  }
+): TextQuoteSelectorResult | null {
+  const {
+    matchIndex,
+    normalizeWs,
+    requireUnique,
+    useFullRange = false,
+  } = options;
+
+  // Collect text nodes grouped by parent
+  const parentGroups = collectTextNodesByParent(container);
+
+  if (parentGroups.size === 0) {
+    return null;
+  }
+
+  // Search within each parent group
+  const allMatches: Array<{
+    match: {
+      fullStart: number;
+      fullEnd: number;
+      exactStart: number;
+      exactEnd: number;
+    };
+    positions: TextNodePosition[];
+  }> = [];
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  for (const [_parent, positions] of Array.from(parentGroups.entries())) {
+    const text = buildTextFromPositions(positions);
+    const matches = findMatches(text, selector, { normalizeWs });
+
+    for (const match of matches) {
+      allMatches.push({ match, positions });
+    }
+  }
+
+  // Fallback to normalized matching if no matches found
+  if (allMatches.length === 0 && !normalizeWs) {
+    const normalizedMatches: typeof allMatches = [];
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for (const [_parent, positions] of Array.from(parentGroups.entries())) {
+      const text = buildTextFromPositions(positions);
+      const matches = findMatches(text, selector, { normalizeWs: true });
+
+      for (const match of matches) {
+        normalizedMatches.push({ match, positions });
+      }
+    }
+
+    if (normalizedMatches.length > 0) {
+      return findTextQuoteInParents(container, selector, {
+        ...options,
+        normalizeWs: true,
+      });
+    }
+
+    return null;
+  }
+
+  if (allMatches.length === 0) {
+    return null;
+  }
+
+  // Check uniqueness requirement
+  if (requireUnique && allMatches.length > 1) {
+    console.warn(
+      `findTextQuote: Found ${allMatches.length} matches, but requireUnique is true`
+    );
+    return null;
+  }
+
+  // Select the requested match
+  if (matchIndex < 0 || matchIndex >= allMatches.length) {
+    console.warn(
+      `findTextQuote: matchIndex ${matchIndex} out of bounds (${allMatches.length} matches)`
+    );
+    return null;
+  }
+
+  const { match, positions } = allMatches[matchIndex];
+
+  // Convert character offsets to DOM positions
+  // Use fullStart/fullEnd if useFullRange is true, otherwise use exactStart/exactEnd
+  const rangeStart = useFullRange ? match.fullStart : match.exactStart;
+  const rangeEnd = useFullRange ? match.fullEnd : match.exactEnd;
+
+  const startPos = offsetToNodePosition(positions, rangeStart);
+  const endPos = offsetToNodePosition(positions, rangeEnd);
+
+  if (!startPos || !endPos) {
+    console.warn("findTextQuote: Failed to map offsets to DOM positions");
+    return null;
+  }
+
+  // Create the Range
+  const range = document.createRange();
+  try {
+    range.setStart(startPos.node, startPos.offset);
+    range.setEnd(endPos.node, endPos.offset);
+  } catch (e) {
+    console.warn("findTextQuote: Failed to create Range:", e);
+    return null;
+  }
+
+  // Extract the full matched text from the parent's content
+  const text = buildTextFromPositions(positions);
+  const matchedFullText = text.slice(match.fullStart, match.fullEnd);
+
+  return {
+    range,
+    fullText: matchedFullText,
+    textStart: match.exactStart,
+    textEnd: match.exactEnd,
+  };
+}
+
+/**
  * Builds a position map from normalized text positions to original positions.
  */
 function buildNormalizedPositionMap(original: string): number[] {
@@ -274,17 +501,15 @@ function buildNormalizedPositionMap(original: string): number[] {
 
     if (isWs) {
       if (!inWhitespace) {
-        map.push(i); // First whitespace char becomes a space
+        map.push(i);
         inWhitespace = true;
       }
-      // Skip subsequent whitespace
     } else {
       map.push(i);
       inWhitespace = false;
     }
   }
 
-  // Add end position for mapping the end offset
   map.push(original.length);
 
   return map;
@@ -319,6 +544,21 @@ export interface FindTextQuoteOptions {
    * Default: false
    */
   requireUnique?: boolean;
+
+  /**
+   * If true, only match text that is contained entirely within a single parent element.
+   * The range from prefix start to suffix end must not cross sibling boundaries.
+   * Default: false
+   */
+  sameParentOnly?: boolean;
+
+  /**
+   * If true, the returned range will include the prefix and suffix context.
+   * By default, the range only covers the exact match, and prefix/suffix are used for disambiguation.
+   * Set this to true when you want to highlight from the start of the prefix to the end of the suffix.
+   * Default: false
+   */
+  useFullRange?: boolean;
 }
 
 /**
@@ -357,12 +597,24 @@ export function findTextQuote(
     matchIndex = 0,
     normalizeWhitespace: normalizeWs = false,
     requireUnique = false,
+    sameParentOnly = false,
+    useFullRange = false,
   } = options;
 
   // Validate input
   if (!selector.exact) {
     console.warn("findTextQuote: exact string is required");
     return null;
+  }
+
+  // Use parent-constrained search if requested
+  if (sameParentOnly) {
+    return findTextQuoteInParents(container, selector, {
+      matchIndex,
+      normalizeWs,
+      requireUnique,
+      useFullRange,
+    });
   }
 
   // Collect all text nodes with their positions
@@ -441,59 +693,179 @@ export function findTextQuote(
   };
 }
 
-/**
- * Finds ALL matches of a TextQuoteSelector within a container.
- * Useful for highlighting all occurrences.
- *
- * @param container - The DOM node to search within
- * @param selector - Object containing prefix, exact, and suffix strings
- * @param options - Optional configuration (matchIndex is ignored)
- * @returns Array of results, one for each match
- */
-export function findAllTextQuotes(
+export function findAnnotationTextRanges(
   container: Node,
-  selector: TextQuoteSelector,
-  options: Omit<FindTextQuoteOptions, "matchIndex" | "requireUnique"> = {}
-): TextQuoteSelectorResult[] {
-  const results: TextQuoteSelectorResult[] = [];
-  const { normalizeWhitespace: normalizeWs = false } = options;
+  textStart: string,
+  textEnd: string,
+  textDisplay: string,
+  options: {
+    sameParentOnly?: boolean;
+    normalizeWhitespace?: boolean;
+    matchIndex?: number;
+  } = {}
+): AnnotationTextRanges | null {
+  const {
+    sameParentOnly = false,
+    normalizeWhitespace: normalizeWs = false,
+    matchIndex = 0,
+  } = options;
 
-  if (!selector.exact) return results;
+  if (!textStart || !textEnd || !textDisplay) return null;
 
-  const textPositions = collectTextNodes(container);
-  if (textPositions.length === 0) return results;
+  const parentGroups = sameParentOnly
+    ? collectTextNodesByParent(container)
+    : new Map([[container, collectTextNodes(container)]]);
 
-  const fullText = buildTextFromPositions(textPositions);
-  let matches = findMatches(fullText, selector, { normalizeWs });
+  if (parentGroups.size === 0) return null;
 
-  // Fallback to normalized matching
-  if (matches.length === 0 && !normalizeWs) {
-    matches = findMatches(fullText, selector, { normalizeWs: true });
-  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  for (const [_parent, positions] of Array.from(parentGroups.entries())) {
+    const text = buildTextFromPositions(positions);
 
-  for (const match of matches) {
-    const startPos = offsetToNodePosition(textPositions, match.exactStart);
-    const endPos = offsetToNodePosition(textPositions, match.exactEnd);
+    let matches = findMatches(
+      text,
+      { exact: textStart, suffix: textEnd },
+      { normalizeWs }
+    );
 
-    if (!startPos || !endPos) continue;
+    if (matches.length === 0 && !normalizeWs) {
+      matches = findMatches(
+        text,
+        { exact: textStart, suffix: textEnd },
+        { normalizeWs: true }
+      );
+    }
 
-    const range = document.createRange();
-    try {
-      range.setStart(startPos.node, startPos.offset);
-      range.setEnd(endPos.node, endPos.offset);
-    } catch {
+    if (matches.length === 0) continue;
+    if (matchIndex >= matches.length) continue;
+
+    const match = matches[matchIndex];
+    const fullText = text.slice(match.fullStart, match.fullEnd);
+
+    const displayIndex = fullText.indexOf(textDisplay);
+    if (displayIndex === -1) {
+      const startPos = offsetToNodePosition(positions, match.fullStart);
+      const endPos = offsetToNodePosition(positions, match.fullEnd);
+
+      if (!startPos || !endPos) continue;
+
+      const fullRange = document.createRange();
+      try {
+        fullRange.setStart(startPos.node, startPos.offset);
+        fullRange.setEnd(endPos.node, endPos.offset);
+      } catch {
+        continue;
+      }
+
+      return {
+        fullRange,
+        fullText,
+        displayRange: null,
+        wordRanges: [],
+        displayWordInfo: [],
+        startOffset: match.exactStart - match.fullStart,
+        endOffset: match.exactEnd - match.fullStart,
+        displayOffset: -1,
+        error: {
+          code: "DISPLAY_NOT_IN_RANGE",
+          message: `Text display "${textDisplay}" not found within start→end range`,
+        },
+      };
+    }
+
+    const displayStartGlobal = match.fullStart + displayIndex;
+    const displayEndGlobal =
+      match.fullStart + displayIndex + textDisplay.length;
+
+    const fullStartPos = offsetToNodePosition(positions, match.fullStart);
+    const fullEndPos = offsetToNodePosition(positions, match.fullEnd);
+    const displayStartPos = offsetToNodePosition(positions, displayStartGlobal);
+    const displayEndPos = offsetToNodePosition(positions, displayEndGlobal);
+
+    if (!fullStartPos || !fullEndPos || !displayStartPos || !displayEndPos) {
       continue;
     }
 
-    results.push({
-      range,
-      fullText: fullText.slice(match.fullStart, match.fullEnd),
-      textStart: match.exactStart,
-      textEnd: match.exactEnd,
-    });
+    const fullRange = document.createRange();
+    const displayRange = document.createRange();
+
+    try {
+      fullRange.setStart(fullStartPos.node, fullStartPos.offset);
+      fullRange.setEnd(fullEndPos.node, fullEndPos.offset);
+
+      displayRange.setStart(displayStartPos.node, displayStartPos.offset);
+      displayRange.setEnd(displayEndPos.node, displayEndPos.offset);
+    } catch (e) {
+      console.warn("Failed to create ranges:", e);
+      continue;
+    }
+
+    // Find ranges for each word in textDisplay
+    const words = splitIntoWords(textDisplay);
+    const wordRanges: Range[] = [];
+    const displayWordInfo: WordRangeInfo[] = [];
+
+    for (const { word, index } of words) {
+      // Calculate word position relative to displayStartGlobal
+      const wordStartGlobal = displayStartGlobal + index;
+      const wordEndGlobal = wordStartGlobal + word.length;
+
+      const wordStartPos = offsetToNodePosition(positions, wordStartGlobal);
+      const wordEndPos = offsetToNodePosition(positions, wordEndGlobal);
+
+      if (wordStartPos && wordEndPos) {
+        try {
+          const wordRange = document.createRange();
+          wordRange.setStart(wordStartPos.node, wordStartPos.offset);
+          wordRange.setEnd(wordEndPos.node, wordEndPos.offset);
+          wordRanges.push(wordRange);
+
+          // Add detailed word info (use global offsets relative to the parent text)
+          displayWordInfo.push({
+            word,
+            startOffset: wordStartGlobal,
+            endOffset: wordEndGlobal,
+            range: wordRange,
+          });
+        } catch (e) {
+          console.warn("Failed to create word range for:", word, e);
+          // Continue with other words even if one fails
+        }
+      }
+    }
+
+    return {
+      fullRange,
+      fullText,
+      displayRange,
+      wordRanges,
+      displayWordInfo,
+      startOffset: match.exactStart - match.fullStart,
+      endOffset: match.exactEnd - match.fullStart,
+      displayOffset: displayIndex,
+      error: null,
+    };
   }
 
-  return results;
+  return null;
+}
+
+export function highlightRange(range: Range, name: string): void {
+  if (!CSS.highlights) {
+    console.warn("CSS Custom Highlight API is not supported in this browser");
+    return;
+  }
+
+  const highlight = new Highlight(range);
+  CSS.highlights.set(name, highlight);
+}
+
+export function clearTextHighlights(highlightNames: string[]): void {
+  if (CSS.highlights) {
+    for (const name of highlightNames) {
+      CSS.highlights.delete(name);
+    }
+  }
 }
 
 // Default export for convenience
