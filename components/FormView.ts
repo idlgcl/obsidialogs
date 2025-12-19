@@ -127,6 +127,7 @@ export class FormView extends ItemView {
         hexId: hexId,
         onArticleSelected: this.onArticleSelectedCallback || undefined,
         onFlashText: this.onFlashTextCallback || undefined,
+        onGetArticleContainer: this.onGetArticleContainerCallback || undefined,
       });
       this.noteForm.load();
     }

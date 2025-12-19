@@ -953,6 +953,7 @@ export default class IdealogsPlugin extends Plugin {
     targetId: string,
     targetText: string
   ): Promise<void> {
+    console.log("Trying to Flash", targetId, targetText);
     try {
       // Fetch article data
       const articleData = await this.apiService.fetchArticleById(targetId);

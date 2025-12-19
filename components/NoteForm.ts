@@ -2,7 +2,7 @@ import { Component, App, Notice, setIcon } from "obsidian";
 import { Article } from "../types";
 import { AnnotationService, Annotation } from "../utils/annotation-service";
 import { ApiService } from "../utils/api";
-import { validateTextRange } from "../utils/text-validator";
+import { findAnnotationTextRanges } from "../utils/text-finder";
 import { v4 as uuidv4 } from "uuid";
 
 export interface NoteFormOptions {
@@ -18,6 +18,7 @@ export interface NoteFormOptions {
   hexId: string | null;
   onArticleSelected?: (article: Article) => void;
   onFlashText?: (text: string) => void;
+  onGetArticleContainer?: (article: Article) => Promise<HTMLElement | null>;
 }
 
 export class NoteForm extends Component {
@@ -196,11 +197,22 @@ export class NoteForm extends Component {
     this.saveButton.addEventListener("click", () => this.handleSave());
   }
 
-  private handleShowTarget(): void {
-    if (this.options.onArticleSelected) {
-      this.options.onArticleSelected(this.targetArticle);
+  private async handleShowTarget(): Promise<void> {
+    if (this.options.onGetArticleContainer) {
+      const container = await this.options.onGetArticleContainer(
+        this.targetArticle
+      );
+      if (container) {
+        new Notice(`Target article "${this.targetArticle.title}" is displayed`);
+      } else {
+        new Notice("Failed to display target article");
+      }
+    } else {
+      if (this.options.onArticleSelected) {
+        this.options.onArticleSelected(this.targetArticle);
+      }
+      new Notice(`Target article "${this.targetArticle.title}" is displayed`);
     }
-    new Notice(`Target article "${this.targetArticle.title}" is displayed`);
   }
 
   private showValidationError(message: string): void {
@@ -321,21 +333,32 @@ export class NoteForm extends Component {
     }
 
     try {
-      // Fetch target article content for validation
-      const targetContent = await this.apiService.fetchFileContent(
-        this.targetArticle.id
+      // Ensure WritingView is showing the target
+      if (!this.options.onGetArticleContainer) {
+        new Notice("Failed to get article container.");
+        return;
+      }
+
+      const articleContainer = await this.options.onGetArticleContainer(
+        this.targetArticle
       );
 
-      // Validate target text fields
-      const validation = validateTextRange(
-        targetContent,
+      if (!articleContainer) {
+        new Notice("Failed to get article container. Please try again.");
+        return;
+      }
+
+      const result = findAnnotationTextRanges(
+        articleContainer,
         targetTextStart,
         targetTextEnd,
         targetTextDisplay
       );
 
-      if (!validation.valid) {
-        new Notice(validation.error || "Target validation failed");
+      if (!result || result.error) {
+        const errorMsg =
+          result?.error?.message || "Text range not found in article";
+        new Notice(errorMsg);
         return;
       }
 
@@ -347,7 +370,7 @@ export class NoteForm extends Component {
         targetStart: targetTextStart,
         targetEnd: targetTextEnd,
         targetDisplay: targetTextDisplay,
-        targetText: validation.rangeText || "",
+        targetText: result.fullText || "",
         sourceId: this.sourceFilePath,
         sourceStart: sourceTextStart,
         sourceEnd: sourceTextEnd,
