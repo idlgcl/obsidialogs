@@ -142,6 +142,10 @@ export class WritingView extends ItemView {
     return this.currentArticleId;
   }
 
+  getMarkdownContainer(): HTMLElement | null {
+    return this.markdownContainer;
+  }
+
   async updateContent(
     articleId: string,
     title: string,

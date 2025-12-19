@@ -279,6 +279,9 @@ export default class IdealogsPlugin extends Plugin {
             writingView.flashText(text);
           }
         });
+        formView.setOnGetArticleContainer((article) =>
+          this.ensureArticleDisplayed(article)
+        );
       }
       return;
     }
@@ -307,6 +310,9 @@ export default class IdealogsPlugin extends Plugin {
             writingView.flashText(text);
           }
         });
+        formView.setOnGetArticleContainer((article) =>
+          this.ensureArticleDisplayed(article)
+        );
       }
     }
   }
@@ -675,6 +681,56 @@ export default class IdealogsPlugin extends Plugin {
     } catch (error) {
       console.error("[Idealogs] Error handling article selection:", error);
       new Notice("Failed to load article");
+    }
+  }
+
+  private async ensureArticleDisplayed(
+    article: Article
+  ): Promise<HTMLElement | null> {
+    try {
+      // Check if WritingView has the correct article
+      const existingWritingView = this.getWritingView();
+      if (
+        existingWritingView &&
+        existingWritingView.getCurrentArticleId() === article.id
+      ) {
+        // Article displayed, return container
+        return existingWritingView.getMarkdownContainer();
+      }
+
+      // Need to display the article in WritingView
+      const content = await this.apiService.fetchFileContent(article.id);
+
+      // Get or create markdown leaf
+      let activeLeaf =
+        this.app.workspace.getActiveViewOfType(MarkdownView)?.leaf;
+
+      if (!activeLeaf) {
+        activeLeaf = this.app.workspace.getLeaf(false);
+      }
+
+      if (!activeLeaf) {
+        console.error("[Idealogs] Could not find a suitable leaf");
+        return null;
+      }
+
+      // Get or create WritingView
+      const writingView = await this.getOrCreateWritingView(activeLeaf);
+      if (!writingView) {
+        console.error("[Idealogs] Failed to get or create WritingView");
+        return null;
+      }
+
+      // Update content
+      await writingView.updateContent(article.id, article.title, content);
+
+      // wait for rendering
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      return writingView.getMarkdownContainer();
+    } catch (error) {
+      console.error("[Idealogs] Error ensuring article displayed:", error);
+      return null;
     }
   }
 

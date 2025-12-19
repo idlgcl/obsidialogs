@@ -4,7 +4,7 @@ import { ArticleAutocompleteField } from "./ArticleAutocompleteField";
 import { Article } from "../types";
 import { AnnotationService, Annotation } from "../utils/annotation-service";
 import { ApiService } from "../utils/api";
-import { validateTextRange } from "../utils/text-validator";
+import { findAnnotationTextRanges } from "../utils/text-finder";
 import { v4 as uuidv4 } from "uuid";
 
 export interface CommentFormOptions {
@@ -15,6 +15,7 @@ export interface CommentFormOptions {
   comment: Comment;
   onArticleSelected?: (article: Article) => void;
   onFlashText?: (text: string) => void;
+  onGetArticleContainer?: (article: Article) => Promise<HTMLElement | null>;
 }
 
 export class CommentForm extends Component {
@@ -138,13 +139,31 @@ export class CommentForm extends Component {
     this.saveButton.addEventListener("click", () => this.handleSave());
   }
 
-  private handleShowTarget(): void {
+  private async handleShowTarget(): Promise<void> {
     if (!this.selectedArticle) {
       new Notice("Please select a target article first");
       return;
     }
-    // The article is already shown via the onArticleSelected callback
-    new Notice(`Target article "${this.selectedArticle.title}" is displayed`);
+
+    // WritingView must be showing the target article
+    if (this.options.onGetArticleContainer) {
+      const container = await this.options.onGetArticleContainer(
+        this.selectedArticle
+      );
+      if (container) {
+        new Notice(
+          `Target article "${this.selectedArticle.title}" is displayed`
+        );
+      } else {
+        new Notice("Failed to display target article");
+      }
+    } else {
+      // Fallback
+      if (this.options.onArticleSelected) {
+        this.options.onArticleSelected(this.selectedArticle);
+      }
+      new Notice(`Target article "${this.selectedArticle.title}" is displayed`);
+    }
   }
 
   private async handleSave(): Promise<void> {
@@ -176,25 +195,35 @@ export class CommentForm extends Component {
     }
 
     try {
-      // Fetch target article content for validation
-      const targetContent = await this.apiService.fetchFileContent(
-        this.selectedArticle.id
+      if (!this.options.onGetArticleContainer) {
+        new Notice("Failed to get article container.");
+        return;
+      }
+
+      const articleContainer = await this.options.onGetArticleContainer(
+        this.selectedArticle
       );
 
-      // Validate target text fields
-      const validation = validateTextRange(
-        targetContent,
+      if (!articleContainer) {
+        new Notice("Failed to get article container. Please try again.");
+        return;
+      }
+
+      const result = findAnnotationTextRanges(
+        articleContainer,
         targetTextStart,
         targetTextEnd,
         targetTextDisplay
       );
 
-      if (!validation.valid) {
-        new Notice(validation.error || "Validation failed");
+      if (!result || result.error) {
+        const errorMsg =
+          result?.error?.message || "Text range not found in article";
+        new Notice(errorMsg);
         return;
       }
 
-      // Create annotation (use existing ID if updating, otherwise create new)
+      // Create annotation
       const annotation: Annotation = {
         id: this.savedAnnotation?.id || uuidv4(),
         kind: "Comment",
@@ -202,7 +231,7 @@ export class CommentForm extends Component {
         targetStart: targetTextStart,
         targetEnd: targetTextEnd,
         targetDisplay: targetTextDisplay,
-        targetText: validation.rangeText || "",
+        targetText: result.fullText || "",
         sourceId: this.currentComment.filePath,
         sourceStart: this.currentComment.title.split(" ")[0],
         sourceEnd:
@@ -219,7 +248,6 @@ export class CommentForm extends Component {
       const action = this.savedAnnotation ? "updated" : "saved";
       new Notice(`Comment ${action} successfully`);
 
-      // Update savedAnnotation for subsequent saves
       this.savedAnnotation = annotation;
 
       this.clearForm();
