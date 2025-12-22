@@ -458,6 +458,13 @@ export class AnnotationService {
         };
       }
 
+      const hasSourceData =
+        annotation.sourceText && annotation.sourceText.trim() !== "";
+
+      if (!hasSourceData) {
+        return this.validateNoteTargetOnly(annotation);
+      }
+
       if (
         !annotation.sourceStart ||
         !annotation.sourceEnd ||
@@ -562,6 +569,59 @@ export class AnnotationService {
       };
     } catch (error) {
       console.error(`Error validating note: ${error}`);
+      return {
+        isValid: false,
+        message: `Error validating: ${error.message}`,
+      };
+    }
+  }
+
+  private async validateNoteTargetOnly(annotation: Annotation): Promise<{
+    isValid: boolean;
+    message?: string;
+    lineIndex?: number;
+  }> {
+    try {
+      const sourceId = annotation.sourceId;
+
+      if (!(await this.app.vault.adapter.exists(sourceId))) {
+        return {
+          isValid: false,
+          message: `Source document not found: ${sourceId}`,
+        };
+      }
+
+      const sourceContent = await this.app.vault.adapter.read(sourceId);
+
+      const expectedLink = `[[@${annotation.targetId}.${annotation.hexId}]]`;
+
+      const lines = sourceContent.split("\n");
+      const lineIndex = annotation.lineIndex;
+
+      if (lineIndex === undefined || lineIndex >= lines.length) {
+        return {
+          isValid: false,
+          message: `Invalid line index: ${lineIndex}`,
+        };
+      }
+
+      const lineContent = lines[lineIndex];
+
+      if (!lineContent.includes(expectedLink)) {
+        return {
+          isValid: false,
+          message: `Expected link "${expectedLink}" not found on line ${
+            lineIndex + 1
+          }`,
+        };
+      }
+
+      return {
+        isValid: true,
+        lineIndex,
+      };
+    } catch (error) {
+      console.error(`Error validating target-only note: ${error}`);
       return {
         isValid: false,
         message: `Error validating: ${error.message}`,
