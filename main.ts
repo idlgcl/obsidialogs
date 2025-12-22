@@ -71,7 +71,7 @@ export default class IdealogsPlugin extends Plugin {
     // Initialize core services
     this.apiService = new ApiService();
     this.annotationService = new AnnotationService(this.app);
-    this.linkTransformer = new LinkTransformer();
+    this.linkTransformer = new LinkTransformer(this.apiService);
 
     // Register markdown post processor for reading mode
     this.registerMarkdownPostProcessor(async (element, context) => {
@@ -96,7 +96,7 @@ export default class IdealogsPlugin extends Plugin {
       }
 
       // Transform links in reading mode with flash support for notes without source
-      this.linkTransformer.transformLinks(
+      await this.linkTransformer.transformLinks(
         element,
         articleId,
         async (targetArticleId) => {

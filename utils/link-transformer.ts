@@ -1,9 +1,12 @@
 import { Annotation } from "./annotation-service";
+import { ApiService } from "./api";
 
 export class LinkTransformer {
   private writingLinkCounters: Map<string, Map<string, number>>;
+  private apiService: ApiService;
 
-  constructor() {
+  constructor(apiService: ApiService) {
+    this.apiService = apiService;
     this.writingLinkCounters = new Map();
   }
 
@@ -15,12 +18,12 @@ export class LinkTransformer {
    * @param onTxClick - Callback when @Tx link is clicked
    * @param notesWithoutSource - Optional map of targetId to notes without source (for quote block transformation)
    */
-  transformLinks(
+  async transformLinks(
     container: HTMLElement,
     articleId: string,
     onTxClick: (targetArticleId: string) => void,
     notesWithoutSource?: Map<string, Annotation[]>
-  ): void {
+  ): Promise<void> {
     const links = container.querySelectorAll("a.internal-link");
 
     for (const link of Array.from(links)) {
@@ -67,6 +70,20 @@ export class LinkTransformer {
       } else if (targetArticleId.startsWith("Ix")) {
         newLinkText = "[!]";
       } else if (targetArticleId.startsWith("Tx")) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        if (!this.writingLinkCounters.has(articleId)) {
+          this.writingLinkCounters.set(articleId, new Map());
+        }
+
+        const TXLinkCounter = this.writingLinkCounters.get(articleId)!;
+
+        if (!TXLinkCounter.has(targetArticleId)) {
+          TXLinkCounter.set(targetArticleId, TXLinkCounter.size + 1);
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        const count = TXLinkCounter.get(targetArticleId)!;
+
         // note quote block
         if (notesWithoutSource) {
           const hexMatch = (linkHref + linkText).match(/@Tx[^.\]]+\.(\w+)/);
@@ -78,7 +95,19 @@ export class LinkTransformer {
               targetArticleId,
               hexId
             );
-            link.textContent = `[[${targetArticleId}]]`;
+            // Try to fetch article and use its title; fallback to [[id]] on error
+            try {
+              const article = await this.apiService.fetchArticleById(
+                targetArticleId
+              );
+              link.textContent =
+                `${article?.title} [${count}]` ||
+                `${targetArticleId} [${count}]`;
+            } catch (err) {
+              // If fetching fails, keep a readable fallback
+              link.textContent = `${targetArticleId} [${count}]`;
+              console.error("Failed to fetch article for link title:", err);
+            }
 
             const clickHandler = async (e: MouseEvent) => {
               e.preventDefault();
@@ -99,20 +128,7 @@ export class LinkTransformer {
           }
         }
 
-        // Normal Tx transformation (to [1], [2], etc.)
-        // Get or create counter for this article
-        if (!this.writingLinkCounters.has(articleId)) {
-          this.writingLinkCounters.set(articleId, new Map());
-        }
-        const fileCounters = this.writingLinkCounters.get(articleId)!;
-
-        if (!fileCounters.has(targetArticleId)) {
-          // Next counter number
-          fileCounters.set(targetArticleId, fileCounters.size + 1);
-        }
-
-        const counter = fileCounters.get(targetArticleId)!;
-        newLinkText = `[${counter}]`;
+        newLinkText = `[${count}]`;
       }
 
       // Update the link text
