@@ -343,6 +343,20 @@ export class WritingView extends ItemView {
     };
   }
 
+  private findExistingAnnotationSpan(range: Range): HTMLElement | null {
+    let node: Node | null = range.startContainer;
+    while (node && node !== this.markdownContainer) {
+      if (
+        node instanceof HTMLElement &&
+        node.classList.contains("idl-annotated-word")
+      ) {
+        return node;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+
   private setupAnnotatedWord(
     spanId: string,
     targetSpanId: string,
@@ -523,34 +537,35 @@ export class WritingView extends ItemView {
         continue;
       }
 
-      const spanId = this.AWSpanIdFromOffset(
-        wordInfo.word,
-        wordInfo.startOffset,
-        wordInfo.endOffset
-      );
-      const targetSpanId = this.AWTargetSpanId(spanId);
-      const targetDivId = this.AWTargetDivId(spanId);
+      const existingSpan = this.findExistingAnnotationSpan(wordInfo.range);
 
-      if (
-        annotation.id === "e51f0ac0-32ba-459b-94c1-9b001f85f768" ||
-        annotation.id === 326
-      ) {
-        console.log("Span ID", spanId);
-        console.log("targetSpanId ID", targetSpanId);
-        console.log("targetDivId ID", targetDivId);
+      let annotatedWordSpan: HTMLElement;
+      let targetDivId: string;
+
+      if (existingSpan) {
+        annotatedWordSpan = existingSpan;
+        targetDivId = existingSpan.dataset.div as string;
+      } else {
+        const spanId = this.AWSpanIdFromOffset(
+          wordInfo.word,
+          wordInfo.startOffset,
+          wordInfo.endOffset
+        );
+        const targetSpanId = this.AWTargetSpanId(spanId);
+        targetDivId = this.AWTargetDivId(spanId);
+
+        annotatedWordSpan = this.setupAnnotatedWord(
+          spanId,
+          targetSpanId,
+          targetDivId,
+          wordInfo.range
+        );
+
+        const targetSpan = this.createTargetSpan(targetSpanId);
+        annotatedWordSpan.after(targetSpan);
+
+        annotatedWordSpan.onclick = (e) => this.onAnnotatedWordClick(e);
       }
-
-      const annotatedWordSpan = this.setupAnnotatedWord(
-        spanId,
-        targetSpanId,
-        targetDivId,
-        wordInfo.range
-      );
-
-      const targetSpan = this.createTargetSpan(targetSpanId);
-      annotatedWordSpan.after(targetSpan);
-
-      annotatedWordSpan.onclick = (e) => this.onAnnotatedWordClick(e);
 
       const acDiv = this.createACdiv(targetDivId);
 
@@ -681,8 +696,6 @@ export class WritingView extends ItemView {
       ...Object.values(annotationsFile.comments),
     ];
 
-    console.log(annotations);
-
     if (annotations.length === 0) return;
 
     for (const ann of annotations) {
@@ -696,7 +709,6 @@ export class WritingView extends ItemView {
         const note = this.simplifyObsidianAnnotation(ann);
 
         if (note.fullText.length > 0) {
-          // TODO :: BUG
           this.processWordAnnotation(note);
         }
       }
