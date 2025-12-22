@@ -92,7 +92,7 @@ export class CommentParser {
 
         comments.push({
           title: title.trim() + ".",
-          body: description.trim(),
+          body: description.trim() + ":",
           source: filename,
           filePath: fullPath,
           startPos: segmentStart,

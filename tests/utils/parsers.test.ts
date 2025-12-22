@@ -70,7 +70,7 @@ describe("CommentParser", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].title).toBe("This is a title.");
-      expect(result[0].body).toBe("This is the body");
+      expect(result[0].body).toBe("This is the body:");
       expect(result[0].startPos).toBe(0);
       expect(result[0].endPos).toBe(34);
     });
@@ -85,9 +85,9 @@ describe("CommentParser", () => {
 
       expect(result).toHaveLength(2);
       expect(result[0].title).toBe("First title.");
-      expect(result[0].body).toBe("First body");
+      expect(result[0].body).toBe("First body:");
       expect(result[1].title).toBe("Second title.");
-      expect(result[1].body).toBe("Second body");
+      expect(result[1].body).toBe("Second body:");
     });
 
     it("should return empty array for lines starting with #", () => {
@@ -122,7 +122,7 @@ describe("CommentParser", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].title).toBe("Title.");
-      expect(result[0].body).toBe("Body text");
+      expect(result[0].body).toBe("Body text:");
     });
 
     it("should correctly calculate positions for multiple comments", () => {
@@ -153,7 +153,7 @@ describe("CommentParser", () => {
 
       expect(result).not.toBeNull();
       expect(result?.title).toBe("This is a title.");
-      expect(result?.body).toBe("This is the body");
+      expect(result?.body).toBe("This is the body:");
     });
 
     it("should return null when position is outside comments", () => {
