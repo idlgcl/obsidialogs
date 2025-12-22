@@ -55,6 +55,7 @@ export default class IdealogsPlugin extends Plugin {
   private lastCursorCh = -1;
   private lastComment: CommentWithPosition | null = null;
   private editorChangeDebounceTimer: number | null = null;
+  private flashCleanupTimeout: number | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -1020,6 +1021,11 @@ export default class IdealogsPlugin extends Plugin {
       return;
     }
 
+    if (this.flashCleanupTimeout !== null) {
+      window.clearTimeout(this.flashCleanupTimeout);
+      this.flashCleanupTimeout = null;
+    }
+
     this.cleanupFlashHighlights(writingView.markdownContainer);
 
     const result = findAnnotationTextRanges(
@@ -1054,8 +1060,9 @@ export default class IdealogsPlugin extends Plugin {
 
     innerSpan.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    setTimeout(() => {
+    this.flashCleanupTimeout = window.setTimeout(() => {
       this.cleanupFlashHighlights(writingView.markdownContainer);
+      this.flashCleanupTimeout = null;
     }, 2500);
   }
 
@@ -1097,6 +1104,11 @@ export default class IdealogsPlugin extends Plugin {
     // Clear debounce timer if pending
     if (this.editorChangeDebounceTimer !== null) {
       window.clearTimeout(this.editorChangeDebounceTimer);
+    }
+
+    // Clear flash cleanup timer if pending
+    if (this.flashCleanupTimeout !== null) {
+      window.clearTimeout(this.flashCleanupTimeout);
     }
 
     // Clear all pending deletion timers
