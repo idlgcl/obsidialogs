@@ -538,29 +538,29 @@ export class AnnotationService {
       }
 
       // Construct expected link with hex ID
-      const expectedLink = `[[@${annotation.targetId}.${annotation.hexId}]]`;
+      // const expectedLink = `[[@${annotation.targetId}.${annotation.hexId}]]`;
 
       // Get the line at lineIndex and check if link exists on that line
-      const lines = sourceContent.split("\n");
+      // const lines = sourceContent.split("\n");
       const lineIndex = annotation.lineIndex;
 
-      if (lineIndex === undefined || lineIndex >= lines.length) {
-        return {
-          isValid: false,
-          message: `Invalid line index: ${lineIndex}`,
-        };
-      }
+      // if (lineIndex === undefined || lineIndex >= lines.length) {
+      //   return {
+      //     isValid: false,
+      //     message: `Invalid line index: ${lineIndex}`,
+      //   };
+      // }
 
-      const lineContent = lines[lineIndex];
+      // const lineContent = lines[lineIndex];
 
-      if (!lineContent.includes(expectedLink)) {
-        return {
-          isValid: false,
-          message: `Expected link "${expectedLink}" not found on the same line (${
-            lineIndex + 1
-          }) with source data.`,
-        };
-      }
+      // if (!lineContent.includes(expectedLink)) {
+      //   return {
+      //     isValid: false,
+      //     message: `Expected link "${expectedLink}" not found on the same line (${
+      //       lineIndex + 1
+      //     }) with source data.`,
+      //   };
+      // }
 
       return {
         isValid: true,
@@ -591,30 +591,30 @@ export class AnnotationService {
         };
       }
 
-      const sourceContent = await this.app.vault.adapter.read(sourceId);
+      // const sourceContent = await this.app.vault.adapter.read(sourceId);
 
-      const expectedLink = `[[@${annotation.targetId}.${annotation.hexId}]]`;
+      // const expectedLink = `[[@${annotation.targetId}.${annotation.hexId}]]`;
 
-      const lines = sourceContent.split("\n");
+      // const lines = sourceContent.split("\n");
       const lineIndex = annotation.lineIndex;
 
-      if (lineIndex === undefined || lineIndex >= lines.length) {
-        return {
-          isValid: false,
-          message: `Invalid line index: ${lineIndex}`,
-        };
-      }
+      // if (lineIndex === undefined || lineIndex >= lines.length) {
+      //   return {
+      //     isValid: false,
+      //     message: `Invalid line index: ${lineIndex}`,
+      //   };
+      // }
 
-      const lineContent = lines[lineIndex];
+      // const lineContent = lines[lineIndex];
 
-      if (!lineContent.includes(expectedLink)) {
-        return {
-          isValid: false,
-          message: `Expected link "${expectedLink}" not found on line ${
-            lineIndex + 1
-          }`,
-        };
-      }
+      // if (!lineContent.includes(expectedLink)) {
+      //   return {
+      //     isValid: false,
+      //     message: `Expected link "${expectedLink}" not found on line ${
+      //       lineIndex + 1
+      //     }`,
+      //   };
+      // }
 
       return {
         isValid: true,
