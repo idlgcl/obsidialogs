@@ -420,17 +420,6 @@ export class WritingView extends ItemView {
     return "";
   }
 
-  private createNoteLinkContainer(spanId: string) {
-    const existing = document.getElementById(spanId);
-    if (existing) return existing;
-
-    // target span where notelinks will be teleported
-    const sibling = document.createElement("span");
-    sibling.className = "note-link-container";
-    sibling.id = spanId;
-    return sibling;
-  }
-
   private insertNoteLinks() {
     if (!this.notesMainContainer) return;
 
@@ -631,9 +620,15 @@ export class WritingView extends ItemView {
     const linkText = this.getLinkText(annotation.articleId);
     const link = document.createElement("a");
     link.href = `/${annotation.articleId}`;
-    link.className = "idl-note-link";
+    link.className = "idl-note-link test";
     link.textContent = ` ${linkText} `;
     link.dataset.noteContainer = noteLinkContainerId;
+    link.addEventListener("click", (evt) => {
+      evt.preventDefault();
+      if (this.onTxClick) {
+        this.onTxClick(annotation.articleId);
+      }
+    });
 
     this.notesMainContainer?.appendChild(link);
   }
