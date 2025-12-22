@@ -3,7 +3,7 @@ import { ApiService } from "../utils/api";
 import { LinkTransformer } from "../utils/link-transformer";
 import { AnnotationService, Annotation } from "../utils/annotation-service";
 import { IdealogsAnnotation } from "../types";
-import { findTextQuote } from "../utils/text-finder";
+import { findAnnotationTextRanges, WordRangeInfo } from "../utils/text-finder";
 
 export const WRITING_VIEW_TYPE = "writing-view";
 type ViewMode = "read" | "annotated";
@@ -15,6 +15,8 @@ interface SimpleAnnotation {
   textEnd: string;
   fullText: string;
   articleId: string;
+  kind: string;
+  fromSource: boolean;
 }
 
 // TODO comments dont work for source
@@ -196,8 +198,8 @@ export class WritingView extends ItemView {
 
     if (this.mode === "annotated") {
       this.txLinkCounter = 0;
-      await this.processWebAnnotations();
-      await this.processLocalAnnotations();
+      await this.applyWebAnnotations();
+      await this.applyObsidianAnnotations();
     }
   }
 
@@ -279,27 +281,33 @@ export class WritingView extends ItemView {
     return item;
   }
 
-  private getAnnotationData(annotation: IdealogsAnnotation): SimpleAnnotation {
+  private simplifyWebAnnotation(
+    annotation: IdealogsAnnotation
+  ): SimpleAnnotation {
     const fromSource = annotation.sourceId === this.currentArticleId;
 
     if (fromSource) {
       return {
         id: annotation.id,
-        textDisplay: annotation.sTxtDisplay,
-        textStart: annotation.sTxtStart,
-        textEnd: annotation.sTxtEnd,
-        fullText: annotation.tTxt,
+        textDisplay: annotation.sourceTextDisplay,
+        textStart: annotation.sourceTextStart,
+        textEnd: annotation.sourceTextEnd,
+        fullText: annotation.targetText,
         articleId: annotation.targetId,
+        kind: annotation.kind,
+        fromSource: fromSource,
       };
     }
 
     return {
       id: annotation.id,
-      textDisplay: annotation.tTxtDisplay,
-      textStart: annotation.tTxtStart,
-      textEnd: annotation.tTxtEnd,
-      fullText: annotation.sTxt,
+      textDisplay: annotation.targetTextDisplay,
+      textStart: annotation.targetTextStart,
+      textEnd: annotation.targetTextEnd,
+      fullText: annotation.sourceText,
       articleId: annotation.sourceId,
+      kind: annotation.kind,
+      fromSource: fromSource,
     };
   }
 
@@ -307,7 +315,7 @@ export class WritingView extends ItemView {
     return id.endsWith(".md") ? id.slice(0, -3) : id;
   }
 
-  private getLocalAnnotationData(annotation: Annotation): SimpleAnnotation {
+  private simplifyObsidianAnnotation(annotation: Annotation): SimpleAnnotation {
     const fromSource = annotation.sourceId === this.currentArticleId;
 
     if (fromSource) {
@@ -318,6 +326,8 @@ export class WritingView extends ItemView {
         textEnd: annotation.sourceEnd || "",
         fullText: annotation.targetText || "",
         articleId: this.removeMD(annotation.targetId),
+        kind: annotation.kind,
+        fromSource: fromSource,
       };
     }
 
@@ -328,6 +338,8 @@ export class WritingView extends ItemView {
       textEnd: annotation.targetEnd,
       fullText: annotation.sourceText || "",
       articleId: this.removeMD(annotation.sourceId),
+      kind: annotation.kind,
+      fromSource: fromSource,
     };
   }
 
@@ -361,7 +373,7 @@ export class WritingView extends ItemView {
     return span;
   }
 
-  private onCommentedWordClick(e: Event) {
+  private onAnnotatedWordClick(e: Event) {
     const span = e.target as HTMLElement;
     if (!span) return;
 
@@ -427,7 +439,200 @@ export class WritingView extends ItemView {
     }
   }
 
-  private async processWebAnnotations() {
+  private commentSpanId(
+    displayText: string,
+    commentId: number | string
+  ): string {
+    const slug = displayText
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return `comment-${commentId}_${slug}`;
+  }
+
+  private processCommentFromSource(comment: SimpleAnnotation) {
+    const result = findAnnotationTextRanges(
+      this.markdownContainer as HTMLElement,
+      comment.textStart,
+      comment.textEnd,
+      comment.textDisplay,
+      { sameParentOnly: true }
+    );
+
+    if (!result || result.error) {
+      console.warn("Failed to find comment: ", comment.id, result?.error);
+    }
+
+    const spanId = this.commentSpanId(comment.textDisplay, comment.id);
+    const targetSpanId = this.AWTargetSpanId(spanId);
+    const targetDivId = this.AWTargetDivId(spanId);
+
+    const annotatedWordSpan = this.setupAnnotatedWord(
+      spanId,
+      targetSpanId,
+      targetDivId,
+      result?.displayRange as Range
+    );
+
+    const targetSpan = this.createTargetSpan(targetSpanId);
+    annotatedWordSpan.after(targetSpan);
+
+    annotatedWordSpan.onclick = (e) => this.onAnnotatedWordClick(e);
+
+    const acDiv = this.createACdiv(targetDivId);
+
+    const item = this.createAnnotationItem(
+      comment.fullText,
+      comment.articleId,
+      comment.kind
+    );
+
+    acDiv?.appendChild(item);
+  }
+
+  private processWordAnnotation(annotation: SimpleAnnotation) {
+    if (annotation.kind === "Comment" && annotation.fromSource) {
+      return;
+    }
+    const result = findAnnotationTextRanges(
+      this.markdownContainer as HTMLElement,
+      annotation.textStart,
+      annotation.textEnd,
+      annotation.textDisplay,
+      { sameParentOnly: true }
+    );
+
+    if (!result) {
+      console.warn("Could not find annotation range", annotation);
+      return;
+    }
+
+    if (result.error) {
+      console.warn("Error finding annotation:", result.error.message);
+      return;
+    }
+
+    const { displayWordInfo } = result;
+
+    for (const wordInfo of displayWordInfo) {
+      if (!wordInfo.range) {
+        console.warn("No range found for word:", wordInfo.word, annotation.id);
+        continue;
+      }
+
+      const spanId = this.AWSpanIdFromOffset(
+        wordInfo.word,
+        wordInfo.startOffset,
+        wordInfo.endOffset
+      );
+      const targetSpanId = this.AWTargetSpanId(spanId);
+      const targetDivId = this.AWTargetDivId(spanId);
+
+      if (
+        annotation.id === "e51f0ac0-32ba-459b-94c1-9b001f85f768" ||
+        annotation.id === 326
+      ) {
+        console.log("Span ID", spanId);
+        console.log("targetSpanId ID", targetSpanId);
+        console.log("targetDivId ID", targetDivId);
+      }
+
+      const annotatedWordSpan = this.setupAnnotatedWord(
+        spanId,
+        targetSpanId,
+        targetDivId,
+        wordInfo.range
+      );
+
+      const targetSpan = this.createTargetSpan(targetSpanId);
+      annotatedWordSpan.after(targetSpan);
+
+      annotatedWordSpan.onclick = (e) => this.onAnnotatedWordClick(e);
+
+      const acDiv = this.createACdiv(targetDivId);
+
+      const item = this.createAnnotationItem(
+        annotation.fullText,
+        annotation.articleId,
+        annotation.kind
+      );
+
+      acDiv?.appendChild(item);
+    }
+  }
+
+  private processNoteLink(annotation: SimpleAnnotation) {
+    const result = findAnnotationTextRanges(
+      this.markdownContainer as HTMLElement,
+      annotation.textStart,
+      annotation.textEnd,
+      annotation.textDisplay,
+      { sameParentOnly: true }
+    );
+
+    if (!result) {
+      console.warn("Could not find text start and end for note link");
+      return;
+    }
+
+    const textDisplayIndex = result.fullText.indexOf(annotation.textDisplay);
+
+    if (textDisplayIndex === -1) {
+      console.warn(
+        "Text display not found within start-end range for note link"
+      );
+      return;
+    }
+
+    const { displayWordInfo } = result;
+    const lastWordInfo = displayWordInfo.pop() as WordRangeInfo;
+
+    const noteLinkContainerId = this.AWTargetSpanId(
+      this.AWSpanIdFromOffset(
+        lastWordInfo.word as string,
+        lastWordInfo.startOffset,
+        lastWordInfo.endOffset
+      )
+    );
+
+    let noteLinkContainer = document.getElementById(
+      noteLinkContainerId
+    ) as HTMLElement | null;
+
+    if (!noteLinkContainer) {
+      noteLinkContainer = document.createElement("span");
+      noteLinkContainer.className = "note-links-container";
+      noteLinkContainer.id = noteLinkContainerId;
+
+      lastWordInfo.range.collapse(false);
+      lastWordInfo.range.insertNode(noteLinkContainer);
+      // range.collapse(true);
+    }
+
+    const linkText = this.getLinkText(annotation.articleId);
+    const link = document.createElement("a");
+    link.href = `/${annotation.articleId}`;
+    link.className = "idl-note-link";
+    link.textContent = ` ${linkText} `;
+    link.dataset.noteContainer = noteLinkContainerId;
+
+    this.notesMainContainer?.appendChild(link);
+  }
+
+  private processWebNoteAnnotation(annotation: SimpleAnnotation) {
+    if (!annotation.fullText || annotation.fullText.trim() === "") {
+      this.processNoteLink(annotation);
+    } else {
+      this.processWordAnnotation(annotation);
+    }
+
+    this.insertNoteLinks();
+  }
+
+  private async applyWebAnnotations() {
     if (!this.apiService || !this.currentArticleId || !this.markdownContainer) {
       console.error("Services are note setup!");
       return;
@@ -442,159 +647,22 @@ export class WritingView extends ItemView {
 
     for (const ann of annotations) {
       if (ann.kind === "Comment") {
-        const comment = this.getAnnotationData(ann);
-        const displays = comment.textDisplay.split(" ");
-        for (const display of displays) {
-          const result = findTextQuote(this.markdownContainer, {
-            exact: display,
-            prefix: comment.textStart,
-            suffix: comment.textEnd,
-          });
-
-          if (!result) {
-            continue;
-          }
-          const { range, textStart, textEnd } = result;
-
-          // Setup IDs
-          const spanId = this.AWSpanIdFromOffset(display, textStart, textEnd);
-          const targetSpanId = this.AWTargetSpanId(spanId);
-          const targetDivId = this.AWTargetDivId(spanId);
-
-          const span = this.setupAnnotatedWord(
-            spanId,
-            targetSpanId,
-            targetDivId,
-            range
-          );
-          const targetSpan = this.createTargetSpan(targetSpanId);
-
-          span.onclick = (e) => {
-            this.onCommentedWordClick(e);
-          };
-
-          span.after(targetSpan); // Insert targetSpan after AnnotatedWord span
-
-          const acDiv = this.createACdiv(targetDivId);
-
-          const item = this.createAnnotationItem(
-            comment.fullText,
-            comment.articleId,
-            "comment"
-          );
-
-          acDiv?.appendChild(item);
+        const comment = this.simplifyWebAnnotation(ann);
+        if (comment.fromSource) {
+          this.processCommentFromSource(comment);
+        } else {
+          this.processWordAnnotation(comment);
         }
       } else if (ann.kind === "Note") {
-        const note = this.getAnnotationData(ann);
-
-        // Note does not have text data
-        if (!note.fullText) {
-          const linkText = this.getLinkText(note.articleId);
-
-          // only use last word
-          const lastDisplayText = note.textDisplay
-            .trim()
-            .split(" ")
-            .pop() as string;
-
-          const result = findTextQuote(this.markdownContainer, {
-            exact: lastDisplayText,
-            prefix: note.textStart,
-            suffix: note.textEnd,
-          });
-
-          if (!result) {
-            continue;
-          }
-
-          const { range, textStart, textEnd } = result;
-
-          const noteLinkContainerId = this.AWTargetSpanId(
-            this.AWSpanIdFromOffset(lastDisplayText, textStart, textEnd)
-          );
-
-          const noteLinkContainer =
-            this.createNoteLinkContainer(noteLinkContainerId);
-
-          range.collapse(false);
-          range.insertNode(noteLinkContainer);
-          range.collapse(true);
-
-          const linkEl = document.createElement("span");
-          linkEl.className = "idl-note-link";
-          linkEl.dataset.noteContainer = noteLinkContainerId;
-          linkEl.textContent = ` ${linkText} `;
-
-          linkEl.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (!this.onFxIxClick || !this.onTxClick) return;
-            if (
-              note.articleId.startsWith("Fx") ||
-              note.articleId.startsWith("Ix")
-            ) {
-              this.onFxIxClick(note.articleId);
-            } else {
-              //its a writing
-              this.onTxClick(note.articleId);
-            }
-          });
-
-          this.notesMainContainer?.appendChild(linkEl);
-        } else {
-          // TODO :: Duplicate with comment
-          // Note with text data
-          const note = this.getAnnotationData(ann);
-          const displays = note.textDisplay.split(" ");
-          for (const display of displays) {
-            const result = findTextQuote(this.markdownContainer, {
-              exact: display,
-              prefix: note.textStart,
-              suffix: note.textEnd,
-            });
-
-            if (!result) {
-              continue;
-            }
-            const { range, textStart, textEnd } = result;
-
-            // Setup IDs
-            const spanId = this.AWSpanIdFromOffset(display, textStart, textEnd);
-            const targetSpanId = this.AWTargetSpanId(spanId);
-            const targetDivId = this.AWTargetDivId(spanId);
-
-            const span = this.setupAnnotatedWord(
-              spanId,
-              targetSpanId,
-              targetDivId,
-              range
-            );
-            const targetSpan = this.createTargetSpan(targetSpanId);
-
-            span.onclick = (e) => {
-              this.onCommentedWordClick(e);
-            };
-
-            span.after(targetSpan); // Insert targetSpan after AnnotatedWord span
-
-            const acDiv = this.createACdiv(targetDivId);
-
-            const item = this.createAnnotationItem(
-              note.fullText,
-              note.articleId,
-              "comment"
-            );
-
-            acDiv?.appendChild(item);
-          }
-        }
+        const note = this.simplifyWebAnnotation(ann);
+        this.processWebNoteAnnotation(note);
       }
     }
 
     this.insertNoteLinks();
   }
 
-  private async processLocalAnnotations() {
+  private async applyObsidianAnnotations() {
     if (
       !this.annotationService ||
       !this.currentArticleId ||
@@ -613,155 +681,26 @@ export class WritingView extends ItemView {
       ...Object.values(annotationsFile.comments),
     ];
 
+    console.log(annotations);
+
     if (annotations.length === 0) return;
 
     for (const ann of annotations) {
-      // Skip invalid
       if (ann.isValid === false) continue;
 
       if (ann.kind === "Comment") {
-        const comment = this.getLocalAnnotationData(ann);
+        const comment = this.simplifyObsidianAnnotation(ann);
 
-        // Only process comments with source text
-        if (comment.textDisplay && comment.textStart && comment.textEnd) {
-          const displays = comment.textDisplay.split(" ");
-          for (const display of displays) {
-            const result = findTextQuote(this.markdownContainer, {
-              exact: display,
-              prefix: comment.textStart,
-              suffix: comment.textEnd,
-            });
-
-            if (!result) continue;
-
-            const { range, textStart, textEnd } = result;
-
-            const spanId = this.AWSpanIdFromOffset(display, textStart, textEnd);
-            const targetSpanId = this.AWTargetSpanId(spanId);
-            const targetDivId = this.AWTargetDivId(spanId);
-
-            const span = this.setupAnnotatedWord(
-              spanId,
-              targetSpanId,
-              targetDivId,
-              range
-            );
-            const targetSpan = this.createTargetSpan(targetSpanId);
-
-            span.onclick = (e) => {
-              this.onCommentedWordClick(e);
-            };
-
-            span.after(targetSpan);
-
-            const acDiv = this.createACdiv(targetDivId);
-            const item = this.createAnnotationItem(
-              comment.fullText,
-              comment.articleId,
-              "comment",
-              true
-            );
-
-            acDiv?.appendChild(item);
-          }
-        }
+        this.processWordAnnotation(comment);
       } else if (ann.kind === "Note") {
-        const note = this.getLocalAnnotationData(ann);
+        const note = this.simplifyObsidianAnnotation(ann);
 
-        if (!note.fullText || !note.textDisplay) {
-          const linkText = this.getLinkText(note.articleId);
-          const lastDisplayText = note.textDisplay
-            ? note.textDisplay.trim().split(" ").pop() || ""
-            : "";
-
-          if (!lastDisplayText) continue;
-
-          const result = findTextQuote(this.markdownContainer, {
-            exact: lastDisplayText,
-            prefix: note.textStart,
-            suffix: note.textEnd,
-          });
-
-          if (!result) continue;
-
-          const { range, textStart, textEnd } = result;
-
-          const noteLinkContainerId = this.AWTargetSpanId(
-            this.AWSpanIdFromOffset(lastDisplayText, textStart, textEnd)
-          );
-
-          const noteLinkContainer =
-            this.createNoteLinkContainer(noteLinkContainerId);
-
-          range.collapse(false);
-          range.insertNode(noteLinkContainer);
-          range.collapse(true);
-
-          const linkEl = document.createElement("span");
-          linkEl.className = "idl-note-link";
-          linkEl.dataset.noteContainer = noteLinkContainerId;
-          linkEl.textContent = ` ${linkText} `;
-
-          linkEl.addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (!this.onFxIxClick || !this.onTxClick) return;
-            if (
-              note.articleId.startsWith("Fx") ||
-              note.articleId.startsWith("Ix")
-            ) {
-              this.onFxIxClick(note.articleId);
-            } else {
-              this.onTxClick(note.articleId);
-            }
-          });
-
-          this.notesMainContainer?.appendChild(linkEl);
-        } else {
-          const displays = note.textDisplay.split(" ");
-          for (const display of displays) {
-            const result = findTextQuote(this.markdownContainer, {
-              exact: display,
-              prefix: note.textStart,
-              suffix: note.textEnd,
-            });
-
-            if (!result) continue;
-
-            const { range, textStart, textEnd } = result;
-
-            const spanId = this.AWSpanIdFromOffset(display, textStart, textEnd);
-            const targetSpanId = this.AWTargetSpanId(spanId);
-            const targetDivId = this.AWTargetDivId(spanId);
-
-            const span = this.setupAnnotatedWord(
-              spanId,
-              targetSpanId,
-              targetDivId,
-              range
-            );
-            const targetSpan = this.createTargetSpan(targetSpanId);
-
-            span.onclick = (e) => {
-              this.onCommentedWordClick(e);
-            };
-
-            span.after(targetSpan);
-
-            const acDiv = this.createACdiv(targetDivId);
-            const item = this.createAnnotationItem(
-              note.fullText,
-              note.articleId,
-              "note",
-              true
-            );
-
-            acDiv?.appendChild(item);
-          }
+        if (note.fullText.length > 0) {
+          // TODO :: BUG
+          this.processWordAnnotation(note);
         }
       }
     }
-
-    this.insertNoteLinks();
   }
 
   flashText(text: string): void {
