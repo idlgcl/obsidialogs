@@ -507,7 +507,7 @@ export class WritingView extends ItemView {
     acDiv?.appendChild(item);
   }
 
-  private processWordAnnotation(annotation: SimpleAnnotation) {
+  private processWordAnnotation(annotation: SimpleAnnotation, local = false) {
     if (annotation.kind === "Comment" && annotation.fromSource) {
       return;
     }
@@ -572,7 +572,8 @@ export class WritingView extends ItemView {
       const item = this.createAnnotationItem(
         annotation.fullText,
         annotation.articleId,
-        annotation.kind
+        annotation.kind,
+        local
       );
 
       acDiv?.appendChild(item);
@@ -704,12 +705,12 @@ export class WritingView extends ItemView {
       if (ann.kind === "Comment") {
         const comment = this.simplifyObsidianAnnotation(ann);
 
-        this.processWordAnnotation(comment);
+        this.processWordAnnotation(comment, true);
       } else if (ann.kind === "Note") {
         const note = this.simplifyObsidianAnnotation(ann);
 
         if (note.fullText.length > 0) {
-          this.processWordAnnotation(note);
+          this.processWordAnnotation(note, true);
         }
       }
     }
