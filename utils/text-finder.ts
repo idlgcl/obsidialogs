@@ -850,23 +850,5 @@ export function findAnnotationTextRanges(
   return null;
 }
 
-export function highlightRange(range: Range, name: string): void {
-  if (!CSS.highlights) {
-    console.warn("CSS Custom Highlight API is not supported in this browser");
-    return;
-  }
-
-  const highlight = new Highlight(range);
-  CSS.highlights.set(name, highlight);
-}
-
-export function clearTextHighlights(highlightNames: string[]): void {
-  if (CSS.highlights) {
-    for (const name of highlightNames) {
-      CSS.highlights.delete(name);
-    }
-  }
-}
-
 // Default export for convenience
 export default findTextQuote;
