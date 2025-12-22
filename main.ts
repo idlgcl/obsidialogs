@@ -25,7 +25,7 @@ import {
   MigrationResult,
 } from "./utils/annotation-service";
 import { LinkTransformer } from "./utils/link-transformer";
-import { findTextQuote } from "./utils/text-finder";
+import { findTextQuote, findAnnotationTextRanges } from "./utils/text-finder";
 
 interface IdealogsSettings {
   enableLogs: boolean;
@@ -127,10 +127,11 @@ export default class IdealogsPlugin extends Plugin {
           // Flash the target text if we have a note
           if (note?.targetText) {
             setTimeout(() => {
-              const writingView = this.getWritingView();
-              if (writingView) {
-                writingView.flashText(note?.targetText);
-              }
+              this.flashText(
+                note.targetStart,
+                note.targetEnd,
+                note.targetDisplay
+              );
             }, 100);
           }
         },
@@ -142,7 +143,13 @@ export default class IdealogsPlugin extends Plugin {
         const comment = annotations.comments[commentId];
         if (comment.isValid && comment.sourceDisplay) {
           this.wrapAnnotationWords(element, comment, async () => {
-            await this.showTargetAndFlash(comment.targetId, comment.targetText);
+            await this.showTargetAndFlash(
+              comment.targetId,
+              comment.targetText,
+              comment.targetStart,
+              comment.targetEnd,
+              comment.targetDisplay
+            );
           });
         }
       }
@@ -273,11 +280,12 @@ export default class IdealogsPlugin extends Plugin {
         formView.setOnArticleSelected((article) =>
           this.handleArticleSelected(article)
         );
-        formView.setOnFlashText((text) => {
-          const writingView = this.getWritingView();
-          if (writingView) {
-            writingView.flashText(text);
-          }
+        formView.setOnFlashText((annotation) => {
+          this.flashText(
+            annotation.targetStart,
+            annotation.targetEnd,
+            annotation.targetDisplay
+          );
         });
         formView.setOnGetArticleContainer((article) =>
           this.ensureArticleDisplayed(article)
@@ -304,11 +312,12 @@ export default class IdealogsPlugin extends Plugin {
         formView.setOnArticleSelected((article) =>
           this.handleArticleSelected(article)
         );
-        formView.setOnFlashText((text) => {
-          const writingView = this.getWritingView();
-          if (writingView) {
-            writingView.flashText(text);
-          }
+        formView.setOnFlashText((annotation) => {
+          this.flashText(
+            annotation.targetStart,
+            annotation.targetEnd,
+            annotation.targetDisplay
+          );
         });
         formView.setOnGetArticleContainer((article) =>
           this.ensureArticleDisplayed(article)
@@ -951,7 +960,10 @@ export default class IdealogsPlugin extends Plugin {
 
   private async showTargetAndFlash(
     targetId: string,
-    targetText: string
+    targetText: string,
+    targetStart?: string,
+    targetEnd?: string,
+    targetDisplay?: string
   ): Promise<void> {
     console.log("Trying to Flash", targetId, targetText);
     try {
@@ -972,13 +984,108 @@ export default class IdealogsPlugin extends Plugin {
 
         // Flash the target text after content is rendered
         setTimeout(() => {
-          writingView.flashText(targetText);
+          if (targetStart && targetEnd && targetDisplay) {
+            this.flashText(targetStart, targetEnd, targetDisplay);
+          } else {
+            console.warn(
+              "Missing annotation parameters for flash - cannot flash without textStart, textEnd, textDisplay"
+            );
+          }
         }, 100);
       }
     } catch (error) {
       console.error("[Idealogs] Error showing target and flash:", error);
       new Notice("Failed to load target article");
     }
+  }
+
+  private flashText(
+    textStart: string,
+    textEnd: string,
+    textDisplay: string,
+    options: { matchIndex?: number } = {}
+  ): void {
+    this.flashInWritingView(textStart, textEnd, textDisplay, options);
+  }
+
+  private flashInWritingView(
+    textStart: string,
+    textEnd: string,
+    textDisplay: string,
+    options: { matchIndex?: number } = {}
+  ): void {
+    const writingView = this.getWritingView();
+    if (!writingView || !writingView.markdownContainer) {
+      console.warn("WritingView not found for flash");
+      return;
+    }
+
+    this.cleanupFlashHighlights(writingView.markdownContainer);
+
+    const result = findAnnotationTextRanges(
+      writingView.markdownContainer,
+      textStart,
+      textEnd,
+      textDisplay,
+      {
+        sameParentOnly: true,
+        matchIndex: options.matchIndex ?? 0,
+      }
+    );
+
+    if (!result || result.error || !result.displayRange) {
+      console.warn("Could not find text ranges in WritingView");
+      return;
+    }
+
+    // bold textDisplay
+    const innerSpan = document.createElement("span");
+    innerSpan.className = "idl-flash-inner";
+    const displayContents = result.displayRange.extractContents();
+    innerSpan.appendChild(displayContents);
+    result.displayRange.insertNode(innerSpan);
+
+    // Flash targetText
+    const outerSpan = document.createElement("span");
+    outerSpan.className = "idl-flash-outer";
+    const fullContents = result.fullRange.extractContents();
+    outerSpan.appendChild(fullContents);
+    result.fullRange.insertNode(outerSpan);
+
+    innerSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    setTimeout(() => {
+      this.cleanupFlashHighlights(writingView.markdownContainer);
+    }, 2500);
+  }
+
+  private cleanupFlashHighlights(container?: HTMLElement | null): void {
+    if (!container) {
+      const writingView = this.getWritingView();
+      if (writingView?.markdownContainer) {
+        this.cleanupFlashHighlights(writingView.markdownContainer);
+      }
+      return;
+    }
+
+    const selectors = [
+      ".idl-target-flash",
+      ".idl-flash-outer",
+      ".idl-flash-inner",
+    ];
+
+    selectors.forEach((selector) => {
+      container.querySelectorAll(selector).forEach((el) => {
+        const parent = el.parentNode;
+        if (parent) {
+          parent.replaceChild(
+            document.createTextNode(el.textContent || ""),
+            el
+          );
+          parent.normalize();
+        }
+      });
+    });
   }
 
   onunload() {

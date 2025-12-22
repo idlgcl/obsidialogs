@@ -698,6 +698,28 @@
   }
 }
 
+.idl-flash-outer {
+  background-color: rgba(255, 255, 0, 0.6);
+  animation: flashHighlight 1s ease-in-out forwards;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.idl-flash-inner {
+  font-weight: bold;
+  animation: flashBold 3s ease-in-out forwards;
+}
+
+@keyframes flashBold {
+  0%,
+  80% {
+    font-weight: bold;
+  }
+  100% {
+    font-weight: normal;
+  }
+}
+
 /* Annotated Mode Styles */
 .idl-annotated-word {
   cursor: pointer;

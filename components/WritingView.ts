@@ -25,7 +25,7 @@ export class WritingView extends ItemView {
   private currentTitle = "";
   private currentContent = "";
   private contentContainer: HTMLElement | null = null;
-  private markdownContainer: HTMLElement | null = null;
+  public markdownContainer: HTMLElement | null = null;
   private annotationsMainContainer: HTMLElement | null = null;
   private notesMainContainer: HTMLElement | null = null;
   private mode: ViewMode = "read";
@@ -708,53 +708,6 @@ export class WritingView extends ItemView {
           this.processWordAnnotation(note, true);
         }
       }
-    }
-  }
-
-  flashText(text: string): void {
-    if (!this.contentContainer || !text) return;
-
-    this.contentContainer
-      .querySelectorAll(".idl-target-flash")
-      .forEach((el) => {
-        const parent = el.parentNode;
-        if (parent)
-          parent.replaceChild(
-            document.createTextNode(el.textContent || ""),
-            el
-          );
-        parent?.normalize();
-      });
-
-    const walker = document.createTreeWalker(
-      this.contentContainer,
-      NodeFilter.SHOW_TEXT
-    );
-    let node: Text | null;
-    while ((node = walker.nextNode() as Text | null)) {
-      const idx = node.textContent?.indexOf(text);
-      if (idx === undefined || idx === -1) continue;
-
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const before = node.textContent!.substring(0, idx);
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const match = node.textContent!.substring(idx, idx + text.length);
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const after = node.textContent!.substring(idx + text.length);
-
-      const span = document.createElement("span");
-      span.className = "idl-target-flash";
-      span.textContent = match;
-
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const parent = node.parentNode!;
-      parent.insertBefore(document.createTextNode(before), node);
-      parent.insertBefore(span, node);
-      parent.insertBefore(document.createTextNode(after), node);
-      parent.removeChild(node);
-
-      span.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
     }
   }
 }

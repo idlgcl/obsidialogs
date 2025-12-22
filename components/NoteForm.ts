@@ -17,7 +17,11 @@ export interface NoteFormOptions {
   lineIndex: number;
   hexId: string | null;
   onArticleSelected?: (article: Article) => void;
-  onFlashText?: (text: string) => void;
+  onFlashText?: (annotation: {
+    targetStart: string;
+    targetEnd: string;
+    targetDisplay: string;
+  }) => void;
   onGetArticleContainer?: (article: Article) => Promise<HTMLElement | null>;
 }
 
@@ -265,10 +269,13 @@ export class NoteForm extends Component {
 
     // Flash the target text in WritingView
     if (this.options.onFlashText && note.targetText) {
-      const textToFlash = note.targetText;
       setTimeout(() => {
         if (this.options.onFlashText) {
-          this.options.onFlashText(textToFlash);
+          this.options.onFlashText({
+            targetStart: note.targetStart,
+            targetEnd: note.targetEnd,
+            targetDisplay: note.targetDisplay,
+          });
         }
       }, 100);
     }

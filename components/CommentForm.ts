@@ -14,7 +14,11 @@ export interface CommentFormOptions {
   annotationService: AnnotationService;
   comment: Comment;
   onArticleSelected?: (article: Article) => void;
-  onFlashText?: (text: string) => void;
+  onFlashText?: (annotation: {
+    targetStart: string;
+    targetEnd: string;
+    targetDisplay: string;
+  }) => void;
   onGetArticleContainer?: (article: Article) => Promise<HTMLElement | null>;
 }
 
@@ -318,11 +322,19 @@ export class CommentForm extends Component {
       }
 
       // Flash the target text in WritingView after content is rendered
-      if (this.options.onFlashText && this.savedAnnotation.targetText) {
-        const textToFlash = this.savedAnnotation.targetText;
+      if (
+        this.options.onFlashText &&
+        this.savedAnnotation &&
+        this.savedAnnotation.targetText
+      ) {
+        const annotation = this.savedAnnotation;
         setTimeout(() => {
           if (this.options.onFlashText) {
-            this.options.onFlashText(textToFlash);
+            this.options.onFlashText({
+              targetStart: annotation.targetStart,
+              targetEnd: annotation.targetEnd,
+              targetDisplay: annotation.targetDisplay,
+            });
           }
         }, 100);
       }

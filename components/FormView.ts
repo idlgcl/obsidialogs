@@ -13,7 +13,13 @@ export class FormView extends ItemView {
   private noteForm: NoteForm | null = null;
   private container: HTMLElement | null = null;
   private onArticleSelectedCallback: ((article: Article) => void) | null = null;
-  private onFlashTextCallback: ((text: string) => void) | null = null;
+  private onFlashTextCallback:
+    | ((annotation: {
+        targetStart: string;
+        targetEnd: string;
+        targetDisplay: string;
+      }) => void)
+    | null = null;
   private onGetArticleContainerCallback:
     | ((article: Article) => Promise<HTMLElement | null>)
     | null = null;
@@ -63,7 +69,13 @@ export class FormView extends ItemView {
     this.onArticleSelectedCallback = callback;
   }
 
-  setOnFlashText(callback: (text: string) => void): void {
+  setOnFlashText(
+    callback: (annotation: {
+      targetStart: string;
+      targetEnd: string;
+      targetDisplay: string;
+    }) => void
+  ): void {
     this.onFlashTextCallback = callback;
   }
 
