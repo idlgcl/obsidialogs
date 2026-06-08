@@ -4,6 +4,7 @@ const API_ENDPOINT = API_ENDPOINT_VALUE;
 const ANNOTATION_ENDPOINT = ANNOTATION_ENDPOINT_VALUE;
 
 import { Article, ArticleResponse, IdealogsAnnotation } from "../types";
+import type { Annotation } from "./annotation-service";
 
 export interface AnnotationsResponse {
   total: number;
@@ -15,6 +16,47 @@ export interface AnnotationsResponse {
   nextPage: number;
   previousPage: number;
   items: IdealogsAnnotation[];
+}
+
+export interface ApiAnnotationPayload {
+  kind: string;
+  sourceId: string;
+  targetId: string;
+  sourceTextStart: string;
+  sourceTextEnd: string;
+  sourceTextDisplay: string;
+  sourceText: string;
+  targetTextStart: string;
+  targetTextEnd: string;
+  targetTextDisplay: string;
+  targetText: string;
+  isLocal: boolean;
+  localOwner: string;
+  sourceVault: string;
+  isDeleted?: boolean;
+}
+
+export function toApiAnnotation(
+  a: Annotation,
+  ownerToken: string,
+  vault = ""
+): ApiAnnotationPayload {
+  return {
+    kind: a.kind,
+    sourceId: a.sourceId,
+    targetId: a.targetId,
+    sourceTextStart: a.sourceStart ?? "",
+    sourceTextEnd: a.sourceEnd ?? "",
+    sourceTextDisplay: a.sourceDisplay ?? "",
+    sourceText: a.sourceText ?? "",
+    targetTextStart: a.targetStart,
+    targetTextEnd: a.targetEnd,
+    targetTextDisplay: a.targetDisplay,
+    targetText: a.targetText,
+    isLocal: true,
+    localOwner: ownerToken,
+    sourceVault: vault,
+  };
 }
 
 interface CacheEntry<T> {
@@ -227,6 +269,41 @@ export class ApiService {
     } catch (error) {
       console.error("Error fetching annotations:", error);
       return [];
+    }
+  }
+
+  async upsertLocalAnnotation(
+    annotation: Annotation,
+    ownerToken: string,
+    vault = ""
+  ): Promise<void> {
+    const url = `${ANNOTATION_ENDPOINT}/annotations/${annotation.id}`;
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toApiAnnotation(annotation, ownerToken, vault)),
+    });
+    if (!response.ok) {
+      throw new Error(`Send failed: ${response.status} ${response.statusText}`);
+    }
+  }
+
+  async deleteLocalAnnotation(
+    annotation: Annotation,
+    ownerToken: string,
+    vault = ""
+  ): Promise<void> {
+    const url = `${ANNOTATION_ENDPOINT}/annotations/${annotation.id}`;
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...toApiAnnotation(annotation, ownerToken, vault),
+        isDeleted: true,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Remove failed: ${response.status} ${response.statusText}`);
     }
   }
 }
