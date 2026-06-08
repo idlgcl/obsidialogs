@@ -194,6 +194,13 @@ export class CommentForm extends Component {
         return;
       }
 
+      // Keep the trailing ":" so the web recognises the "Title. body:" comment
+      // shape and bolds the title.
+      const baseSourceText = `${this.currentComment.title} ${this.currentComment.body}`;
+      const sourceText = baseSourceText.endsWith(":")
+        ? baseSourceText
+        : `${baseSourceText}:`;
+
       // Create annotation (use existing ID if updating, otherwise create new)
       const annotation: Annotation = {
         id: this.savedAnnotation?.id || uuidv4(),
@@ -209,7 +216,7 @@ export class CommentForm extends Component {
           this.currentComment.body.split(" ").pop() ||
           this.currentComment.title,
         sourceDisplay: this.currentComment.title,
-        sourceText: `${this.currentComment.title} ${this.currentComment.body}`,
+        sourceText,
         isValid: true,
       };
 
