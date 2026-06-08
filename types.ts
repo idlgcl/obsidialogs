@@ -40,22 +40,19 @@ export interface IdealogsAnnotation {
     kind: string;
     commitId: number;
     isValid: boolean;
+    isDeleted: boolean;
     commitIsMerged: boolean;
-    validationMessage?: string;
+    errorSource?: string | null;
 
     sourceId: string;
-    sTxtStart: string;
-    sTxtEnd: string;
-    sTxtDisplay: string;
-    sTxt: string;
-    sTxtDisplayRange: number[];
-    sTxtRange: number[];
+    sourceTextStart: string;
+    sourceTextEnd: string;
+    sourceTextDisplay: string;
+    sourceText: string;
 
     targetId: string;
-    tTxtStart: string;
-    tTxtEnd: string;
-    tTxtDisplay: string;
-    tTxt: string;
-    tTxtDisplayRange: number[];
-    tTxtRange: number[];
+    targetTextStart: string;
+    targetTextEnd: string;
+    targetTextDisplay: string;
+    targetText: string;
 }

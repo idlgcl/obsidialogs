@@ -281,20 +281,20 @@ export class WritingView extends ItemView {
     if (fromSource) {
       return {
         id: annotation.id,
-        textDisplay: annotation.sTxtDisplay,
-        textStart: annotation.sTxtStart,
-        textEnd: annotation.sTxtEnd,
-        fullText: annotation.tTxt,
+        textDisplay: annotation.sourceTextDisplay,
+        textStart: annotation.sourceTextStart,
+        textEnd: annotation.sourceTextEnd,
+        fullText: annotation.targetText,
         articleId: annotation.targetId,
       };
     }
 
     return {
       id: annotation.id,
-      textDisplay: annotation.tTxtDisplay,
-      textStart: annotation.tTxtStart,
-      textEnd: annotation.tTxtEnd,
-      fullText: annotation.sTxt,
+      textDisplay: annotation.targetTextDisplay,
+      textStart: annotation.targetTextStart,
+      textEnd: annotation.targetTextEnd,
+      fullText: annotation.sourceText,
       articleId: annotation.sourceId,
     };
   }
@@ -439,6 +439,9 @@ export class WritingView extends ItemView {
     for (const ann of annotations) {
       if (ann.kind === "Comment") {
         const comment = this.getAnnotationData(ann);
+        // Skip records without display text so one bad annotation
+        // doesn't break the whole overlay
+        if (!comment.textDisplay) continue;
         const displays = comment.textDisplay.split(" ");
         for (const display of displays) {
           const result = findTextQuote(this.markdownContainer, {
@@ -483,6 +486,7 @@ export class WritingView extends ItemView {
         }
       } else if (ann.kind === "Note") {
         const note = this.getAnnotationData(ann);
+        if (!note.textDisplay) continue;
 
         // Note does not have text data
         if (!note.fullText) {
