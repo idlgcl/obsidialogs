@@ -350,6 +350,30 @@ export class AnnotationService {
     return this.loadAnnotations(sourceId);
   }
 
+  async getAllLocalAnnotations(): Promise<Annotation[]> {
+    await this.ensureAnnotationsDirectory();
+
+    const folder = normalizePath(this.ANNOTATIONS_FOLDER);
+    const byId = new Map<string, Annotation>();
+
+    const listing = await this.app.vault.adapter.list(folder);
+    for (const filePath of listing.files) {
+      if (!filePath.endsWith(".json")) continue;
+      try {
+        const raw = await this.app.vault.adapter.read(filePath);
+        const data = JSON.parse(raw) as AnnotationsFile;
+        for (const id in data.notes) byId.set(data.notes[id].id, data.notes[id]);
+        for (const id in data.comments) {
+          byId.set(data.comments[id].id, data.comments[id]);
+        }
+      } catch (error) {
+        console.error(`Error reading ${filePath}: ${error}`);
+      }
+    }
+
+    return Array.from(byId.values());
+  }
+
   private escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
@@ -395,7 +419,7 @@ export class AnnotationService {
       }
 
       const endRegex = new RegExp(
-        `\\b${this.escapeRegExp(annotation.sourceEnd)}(?:\\s|$)`,
+        `\\b${this.escapeRegExp(annotation.sourceEnd)}(?:\\W|$)`,
         "g"
       );
       const endMatch = endRegex.exec(content);
@@ -408,13 +432,19 @@ export class AnnotationService {
       }
 
       const startIndex = startMatch.index;
-      const endIndex = endMatch.index + annotation.sourceEnd.length;
+      let endIndex = endMatch.index + annotation.sourceEnd.length;
 
       if (endIndex < startIndex) {
         return {
           isValid: false,
           message: "Text end appears before text start",
         };
+      }
+
+      // Keep the trailing ":" comment delimiter in the bounded text so the web
+      // renderer, which recognises comments by the "Title. body:" shape, matches.
+      if (content[endIndex] === ":") {
+        endIndex += 1;
       }
 
       const boundedText = content.substring(startIndex, endIndex);
