@@ -31,12 +31,14 @@ interface IdealogsSettings {
   enableLogs: boolean;
   trackedFiles?: object;
   deletionDelay?: number;
+  idealogsOwnerToken?: string;
 }
 
 const DEFAULT_SETTINGS: IdealogsSettings = {
   enableLogs: false,
   trackedFiles: {},
   deletionDelay: 5,
+  idealogsOwnerToken: "",
 };
 
 export default class IdealogsPlugin extends Plugin {
@@ -195,6 +197,12 @@ export default class IdealogsPlugin extends Plugin {
     // Settings tab
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
 
+    this.addCommand({
+      id: "idealogs-sync-local-annotations",
+      name: "Sync local annotations to Idealogs",
+      callback: () => this.syncLocalAnnotations(),
+    });
+
     // Automatically open FormView in right panel
     this.app.workspace.onLayoutReady(() => {
       this.activateFormView();
@@ -257,6 +265,44 @@ export default class IdealogsPlugin extends Plugin {
   async saveTracking() {
     this.settings.trackedFiles = this.fileTracker.toJSON();
     await this.saveSettings();
+  }
+
+  async syncLocalAnnotations() {
+    const token = this.settings.idealogsOwnerToken?.trim();
+    if (!token) {
+      new Notice("Set your Idealogs owner token in settings before sending.");
+      return;
+    }
+
+    const annotations = await this.annotationService.getAllLocalAnnotations();
+    if (annotations.length === 0) {
+      new Notice("No local annotations to send.");
+      return;
+    }
+
+    const vault = this.app.vault.getName();
+    const errors: string[] = [];
+    let sent = 0;
+    for (const annotation of annotations) {
+      try {
+        await this.apiService.upsertLocalAnnotation(annotation, token, vault);
+        sent++;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(message);
+        console.error(`Failed to send annotation ${annotation.id}:`, error);
+      }
+    }
+
+    if (errors.length === 0) {
+      new Notice(`✓ Synced ${sent} annotation${sent === 1 ? "" : "s"} to Idealogs.`);
+    } else {
+      const unique = [...new Set(errors)];
+      new Notice(
+        `Synced ${sent}, ${errors.length} failed:\n${unique.join("\n")}`,
+        10000
+      );
+    }
   }
 
   async activateFormView(): Promise<void> {
@@ -940,6 +986,24 @@ class IdealogsSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "Idealogs Settings" });
+
+    // Local Annotations section
+    containerEl.createEl("h3", { text: "Local Annotations" });
+
+    new Setting(containerEl)
+      .setName("Idealogs owner token")
+      .setDesc(
+        "Paste the token from the Idealogs site (Local annotations page). Required to send annotations to Idealogs."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("paste token")
+          .setValue(this.plugin.settings.idealogsOwnerToken ?? "")
+          .onChange(async (value) => {
+            this.plugin.settings.idealogsOwnerToken = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
 
     // File Management section
     containerEl.createEl("h3", { text: "File Management" });
