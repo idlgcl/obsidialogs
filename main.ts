@@ -6,6 +6,9 @@ import {
   Notice,
   MarkdownView,
   TFile,
+  TFolder,
+  TAbstractFile,
+  Menu,
   WorkspaceLeaf,
 } from "obsidian";
 import { EditorView } from "@codemirror/view";
@@ -26,19 +29,21 @@ import {
 } from "./utils/annotation-service";
 import { LinkTransformer } from "./utils/link-transformer";
 import { findTextQuote } from "./utils/text-finder";
+import { buildImportUrl, MAX_IMPORT_URL_LENGTH } from "./utils/local-sync";
+
+// @ts-ignore
+const SITE_URL = SITE_URL_VALUE;
 
 interface IdealogsSettings {
   enableLogs: boolean;
   trackedFiles?: object;
   deletionDelay?: number;
-  idealogsOwnerToken?: string;
 }
 
 const DEFAULT_SETTINGS: IdealogsSettings = {
   enableLogs: false,
   trackedFiles: {},
   deletionDelay: 5,
-  idealogsOwnerToken: "",
 };
 
 export default class IdealogsPlugin extends Plugin {
@@ -197,11 +202,17 @@ export default class IdealogsPlugin extends Plugin {
     // Settings tab
     this.addSettingTab(new IdealogsSettingTab(this.app, this));
 
-    this.addCommand({
-      id: "idealogs-sync-local-annotations",
-      name: "Sync local annotations to Idealogs",
-      callback: () => this.syncLocalAnnotations(),
-    });
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
+        if (!this.canSyncAnnotations(file)) return;
+        menu.addItem((item) =>
+          item
+            .setTitle("Sync annotations to Idealogs")
+            .setIcon("upload")
+            .onClick(() => this.syncAnnotationsFor(file))
+        );
+      })
+    );
 
     // Automatically open FormView in right panel
     this.app.workspace.onLayoutReady(() => {
@@ -267,42 +278,55 @@ export default class IdealogsPlugin extends Plugin {
     await this.saveSettings();
   }
 
-  async syncLocalAnnotations() {
-    const token = this.settings.idealogsOwnerToken?.trim();
-    if (!token) {
-      new Notice("Set your Idealogs owner token in settings before sending.");
-      return;
+  private canSyncAnnotations(file: TAbstractFile): boolean {
+    if (file instanceof TFolder) return true;
+    return (
+      file instanceof TFile &&
+      file.extension === "md" &&
+      !this.fileTracker.isTracked(file.name)
+    );
+  }
+
+  private isUnderFolder(sourceId: string, folder: TFolder): boolean {
+    if (folder.isRoot()) return true;
+    return sourceId.startsWith(`${folder.path}/`);
+  }
+
+  async syncAnnotationsFor(file: TAbstractFile) {
+    const all = await this.annotationService.getAllLocalAnnotations();
+
+    let scope: string[];
+    let annotations: Annotation[];
+    if (file instanceof TFolder) {
+      annotations = all.filter((a) => this.isUnderFolder(a.sourceId, file));
+      scope = [...new Set(annotations.map((a) => a.sourceId))];
+    } else {
+      scope = [file.path];
+      annotations = all.filter((a) => a.sourceId === file.path);
     }
 
-    const annotations = await this.annotationService.getAllLocalAnnotations();
-    if (annotations.length === 0) {
-      new Notice("No local annotations to send.");
+    if (scope.length === 0) {
+      new Notice("No annotations to sync here.");
       return;
     }
 
     const vault = this.app.vault.getName();
-    const errors: string[] = [];
-    let sent = 0;
-    for (const annotation of annotations) {
-      try {
-        await this.apiService.upsertLocalAnnotation(annotation, token, vault);
-        sent++;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(message);
-        console.error(`Failed to send annotation ${annotation.id}:`, error);
-      }
-    }
+    const url = buildImportUrl(SITE_URL, vault, scope, annotations);
 
-    if (errors.length === 0) {
-      new Notice(`✓ Synced ${sent} annotation${sent === 1 ? "" : "s"} to Idealogs.`);
-    } else {
-      const unique = [...new Set(errors)];
+    if (url.length > MAX_IMPORT_URL_LENGTH) {
+      await navigator.clipboard.writeText(url);
       new Notice(
-        `Synced ${sent}, ${errors.length} failed:\n${unique.join("\n")}`,
+        "Import link too long to open directly — copied to clipboard. Paste it into your browser's address bar.",
         10000
       );
+      return;
     }
+
+    window.open(url);
+    const count = annotations.length;
+    new Notice(
+      `Opening Idealogs to import ${count} annotation${count === 1 ? "" : "s"}.`
+    );
   }
 
   async activateFormView(): Promise<void> {
@@ -986,24 +1010,6 @@ class IdealogsSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     containerEl.createEl("h2", { text: "Idealogs Settings" });
-
-    // Local Annotations section
-    containerEl.createEl("h3", { text: "Local Annotations" });
-
-    new Setting(containerEl)
-      .setName("Idealogs owner token")
-      .setDesc(
-        "Paste the token from the Idealogs site (Local annotations page). Required to send annotations to Idealogs."
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("paste token")
-          .setValue(this.plugin.settings.idealogsOwnerToken ?? "")
-          .onChange(async (value) => {
-            this.plugin.settings.idealogsOwnerToken = value.trim();
-            await this.plugin.saveSettings();
-          })
-      );
 
     // File Management section
     containerEl.createEl("h3", { text: "File Management" });

@@ -19,6 +19,7 @@ export interface AnnotationsResponse {
 }
 
 export interface ApiAnnotationPayload {
+  id: string;
   kind: string;
   sourceId: string;
   targetId: string;
@@ -31,17 +32,15 @@ export interface ApiAnnotationPayload {
   targetTextDisplay: string;
   targetText: string;
   isLocal: boolean;
-  localOwner: string;
   sourceVault: string;
-  isDeleted?: boolean;
 }
 
 export function toApiAnnotation(
   a: Annotation,
-  ownerToken: string,
   vault = ""
 ): ApiAnnotationPayload {
   return {
+    id: a.id,
     kind: a.kind,
     sourceId: a.sourceId,
     targetId: a.targetId,
@@ -54,7 +53,6 @@ export function toApiAnnotation(
     targetTextDisplay: a.targetDisplay,
     targetText: a.targetText,
     isLocal: true,
-    localOwner: ownerToken,
     sourceVault: vault,
   };
 }
@@ -272,38 +270,4 @@ export class ApiService {
     }
   }
 
-  async upsertLocalAnnotation(
-    annotation: Annotation,
-    ownerToken: string,
-    vault = ""
-  ): Promise<void> {
-    const url = `${ANNOTATION_ENDPOINT}/annotations/${annotation.id}`;
-    const response = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toApiAnnotation(annotation, ownerToken, vault)),
-    });
-    if (!response.ok) {
-      throw new Error(`Send failed: ${response.status} ${response.statusText}`);
-    }
-  }
-
-  async deleteLocalAnnotation(
-    annotation: Annotation,
-    ownerToken: string,
-    vault = ""
-  ): Promise<void> {
-    const url = `${ANNOTATION_ENDPOINT}/annotations/${annotation.id}`;
-    const response = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...toApiAnnotation(annotation, ownerToken, vault),
-        isDeleted: true,
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`Remove failed: ${response.status} ${response.statusText}`);
-    }
-  }
 }
