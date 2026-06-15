@@ -2,6 +2,13 @@
 // @ts-ignore
 global.fetch = jest.fn();
 
+// jsdom does not provide TextEncoder/TextDecoder
+import { TextEncoder, TextDecoder } from "util";
+if (typeof global.TextEncoder === "undefined") {
+    (global as any).TextEncoder = TextEncoder;
+    (global as any).TextDecoder = TextDecoder;
+}
+
 // Define API endpoint constants for tests
 (global as any).API_ENDPOINT_VALUE = "https://api.test.com";
 (global as any).ANNOTATION_ENDPOINT_VALUE = "https://annotations.test.com";

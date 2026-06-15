@@ -16,6 +16,7 @@ const prod = (process.argv[2] === "production");
 
 const API_ENDPOINT = process.env.API_ENDPOINT || 'http://localhost:8002/api';
 const ANNOTATION_ENDPOINT = process.env.ANNOTATION_ENDPOINT || 'http://localhost:8003/api';
+const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 
 const context = await esbuild.context({
 	banner: {
@@ -48,6 +49,7 @@ const context = await esbuild.context({
 	define: {
 		'API_ENDPOINT_VALUE': JSON.stringify(API_ENDPOINT),
 		'ANNOTATION_ENDPOINT_VALUE': JSON.stringify(ANNOTATION_ENDPOINT),
+		'SITE_URL_VALUE': JSON.stringify(SITE_URL),
 	},
 });
 

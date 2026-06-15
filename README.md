@@ -29,7 +29,7 @@ Article kinds are identified by an ID prefix: `Tx` = Writing, `Fx` = Question, `
 
 ### Send to Idealogs ("just for me")
 
-- Push your local annotations to Idealogs and see them rendered on the site — **visible only to you**, scoped by a per-account owner token.
+- Push your local annotations to Idealogs and see them rendered on the site — **visible only to you**. They live in your browser's localStorage and are never stored on the Idealogs servers.
 - A management page on Idealogs (your profile → **Obsidian Integration**) lists what you've sent, with links back into your vault notes.
 
 ### File management
@@ -41,7 +41,6 @@ Article kinds are identified by an ID prefix: `Tx` = Writing, `Fx` = Question, `
 ## Getting started
 
 1. Install and enable **Idealogs Annotator** from Obsidian's Community Plugins.
-2. (Optional, for the sync workflow) Add your owner token — see below.
 
 ---
 
@@ -49,21 +48,18 @@ Article kinds are identified by an ID prefix: `Tx` = Writing, `Fx` = Question, `
 
 This is the workflow for authoring annotations in Obsidian and viewing them on the Idealogs site.
 
-1. **Get your owner token.** On Idealogs, go to your profile → the **Obsidian Integration** tab and copy the **Owner token**. It's tied to your account and is the same in every browser you sign into.
-2. **Paste it into Obsidian.** Settings → **Idealogs Annotator** → **Local Annotations** → paste into **Idealogs owner token**. (Sending is blocked until this is set.)
-3. **Create annotations** as usual:
+1. **Create annotations** as usual:
    - A **comment** is a `Title. body:` line. Put your cursor inside it, fill in the Comment form (target article + text range), and save.
    - A **note** is created by clicking inside a `[[@Tx…]]` link and filling in the Note form.
-4. **Sync.** Run the command palette command **"Sync local annotations to Idealogs"**. You'll get a confirmation notice (e.g. `✓ Synced 3 annotations to Idealogs`).
-5. **View on Idealogs.** Open the annotated article — your annotations appear on the **bolded words** (click to reveal), with your own sorted to the top. Each one links back to its source note in your vault. Manage everything from the **Obsidian Integration** tab.
+2. **Sync.** Right-click a note (or a folder) in the file explorer and choose **"Sync annotations to Idealogs"**. Your default browser opens the Idealogs import page, which stores the annotations in that browser's localStorage. A sync re-uploads the latest for the notes it covers, so edits and deletions in those notes come across automatically. (The option doesn't appear on downloaded Idealogs article files.)
+3. **View on Idealogs.** Open the annotated article — your annotations appear on the **bolded words** (click to reveal), with your own sorted to the top. Each one links back to its source note in your vault. Manage everything from the **Obsidian Integration** tab.
 
-> Annotations are private to you: they're kept out of the public article view and surfaced only to your account.
+> Annotations are private to you: they exist only in the browser you synced them into and are never sent to or stored on the Idealogs servers. Re-run the sync in each browser where you want to see them.
 
 ---
 
 ## Settings
 
-- **Idealogs owner token** — paste from the Idealogs site to enable syncing.
 - **Auto-delete delay** — how long downloaded Idealogs files linger before being trashed (2–5s).
 - **Clear API cache** — drop cached article/annotation responses.
 - **Enable logs** — opt-in in-memory logging with copy/clear buttons.
@@ -71,9 +67,9 @@ This is the workflow for authoring annotations in Obsidian and viewing them on t
 
 ---
 
-## Commands
+## Context menu
 
-- **Sync local annotations to Idealogs** — sends every local annotation in your vault to Idealogs (requires the owner token).
+- **Sync annotations to Idealogs** — right-click a note to sync that note's annotations, or a folder to sync every note under it. Opens Idealogs in your browser and replaces the imported set for the synced notes only. Not shown on downloaded Idealogs article files.
 
 ---
 
